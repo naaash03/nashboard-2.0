@@ -1,5 +1,21 @@
 ﻿# FIX REPORT
 
+## Changelog (2026-03-01)
+- Widget category refactor:
+  - `player_card` and `watchlist` moved to `UTILITIES` for metadata/category grouping.
+  - Widget Library display label now shows `Misc` while internal category key remains `Utilities`.
+- MLB widgets (live + fixture):
+  - Added real MLB provider stack (`lib/providers/mlb/client.ts`, `teamMap.ts`, `provider.ts`) backed by MLB Stats API (`https://statsapi.mlb.com/api/v1`).
+  - Added `MLB Next 7 Games` and `MLB Pitcher Arsenal` routes + UI widgets with persistent config, metadata footer, and report-bug bundle payloads.
+  - Added MLB fixtures under `tests/fixtures/mlb/` and widget route tests under `tests/widgets/`.
+- NBA widgets (live ESPN + fixture):
+  - Added ESPN NBA provider (`lib/providers/espn/nba.ts`) using scoreboard + standings endpoints.
+  - Added `NBA Tonight's Slate` and `NBA Standings Snapshot` routes + UI widgets with persistent config and standardized envelope metadata.
+  - Added NBA fixtures under `tests/fixtures/espn/nba/` and route tests under `tests/widgets/`.
+- Fixture mode usage:
+  - Set `NASHBOARD_DATA_MODE=fixture` to force fixture responses.
+  - Run all tests with `npm test`.
+
 ## What Changed
 - Guest watchlist correctness:
   - Added `lib/guest/watchlist.ts` session-only store with add/remove/load and max-5 enforcement.
