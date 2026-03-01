@@ -5,8 +5,8 @@ import { buildPlayerSearchUrl, selectTopPlayerResult } from "@/components/widget
 describe("PlayerCardWidget search wiring", () => {
   it("builds local API search URL with encoded q parameter", () => {
     const url = buildPlayerSearchUrl("daniel jones", "live", 8);
-    expect(url.startsWith("/api/search/players?")).toBe(true);
-    expect(url).toContain("sport=NFL");
+    expect(url.startsWith("/api/players/search?")).toBe(true);
+    expect(url).toContain("sport=nfl");
     expect(url).toContain("q=daniel+jones");
     expect(url).toContain("limit=8");
     expect(url).toContain("dataMode=live");

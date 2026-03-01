@@ -1,63 +1,98 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import SportTabs from "@/components/widgets/shared/SportTabs";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
+import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
 
-type SearchResult = {
-  playerId: string;
-  fullName: string;
-  teamName?: string;
-  position?: string;
-  jersey?: string;
-  headshotUrl?: string;
-  teamLogoUrl?: string;
-};
+type PlayerBySportConfig = Partial<Record<SportKey, { playerId: string; playerName?: string }>>;
 
-type CardData = {
-  playerId: string;
-  fullName: string;
-  team?: string;
-  position?: string;
-  jersey?: string;
-  headshotUrl?: string;
-  teamLogoUrl?: string;
-  weightLbs?: number;
-  whyItMatters?: string;
-  tooltip?: string;
-  stats?: Record<string, string | number | null>;
-  learnMore?: string;
-};
-
-type SearchDiagnostics = {
-  provider?: string;
-  requestId?: string;
-  finalUrl?: string | null;
-  attemptedUrls?: string[];
-  endpointAttempts?: Array<Record<string, unknown>>;
-  userFacingMessage?: string;
-};
-
-type SearchResponse = {
-  results?: SearchResult[];
-  userFacingMessage?: string | null;
-  diagnostics?: SearchDiagnostics;
-  meta?: WidgetMeta;
-  error?: string;
-};
-type PlayerCardResponse = { data?: CardData | null; meta?: WidgetMeta; error?: string };
+type SearchResponse = Envelope<PlayerSearchResult[]>;
+type PlayerProfileResponse = Envelope<PlayerProfile>;
 
 const isDev = process.env.NODE_ENV !== "production";
 
-export function buildPlayerSearchUrl(query: string, dataMode: "live" | "fixture", limit = 8): string {
+function normalizeSportKey(input: unknown): SportKey {
+  if (input === "mlb" || input === "nba" || input === "nfl") {
+    return input;
+  }
+  return "nfl";
+}
+
+function sportLabel(sportKey: SportKey): string {
+  return sportKey.toUpperCase();
+}
+
+function normalizePlayerBySport(raw: unknown): PlayerBySportConfig {
+  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const output: PlayerBySportConfig = {};
+
+  for (const sport of ["nfl", "mlb", "nba"] as const) {
+    const entry = source[sport];
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const typedEntry = entry as Record<string, unknown>;
+    const playerId = typeof typedEntry.playerId === "string" ? typedEntry.playerId : "";
+    const playerName = typeof typedEntry.playerName === "string" ? typedEntry.playerName : undefined;
+    if (!playerId) {
+      continue;
+    }
+
+    output[sport] = {
+      playerId,
+      playerName,
+    };
+  }
+
+  return output;
+}
+
+function selectedPlayerIdFromConfig(config: Record<string, unknown>, sportKey: SportKey): string {
+  const playerBySport = normalizePlayerBySport(config.playerBySport);
+  const fromSport = playerBySport[sportKey]?.playerId;
+  if (fromSport) {
+    return fromSport;
+  }
+
+  const configSport = normalizeSportKey(config.sportKey);
+  if (configSport === sportKey && typeof config.playerId === "string") {
+    return config.playerId;
+  }
+
+  return "";
+}
+
+function selectedPlayerNameFromConfig(config: Record<string, unknown>, sportKey: SportKey): string {
+  const playerBySport = normalizePlayerBySport(config.playerBySport);
+  const fromSport = playerBySport[sportKey]?.playerName;
+  if (fromSport) {
+    return fromSport;
+  }
+
+  const configSport = normalizeSportKey(config.sportKey);
+  if (configSport === sportKey && typeof config.playerName === "string") {
+    return config.playerName;
+  }
+
+  return "";
+}
+
+export function buildPlayerSearchUrl(
+  query: string,
+  dataMode: "live" | "fixture",
+  limit = 8,
+  sport: SportKey = "nfl",
+): string {
   const params = new URLSearchParams();
-  params.set("sport", "NFL");
+  params.set("sport", sport);
   params.set("q", query);
   params.set("limit", String(limit));
   params.set("dataMode", dataMode);
-  return `/api/search/players?${params.toString()}`;
+  return `/api/players/search?${params.toString()}`;
 }
 
-export function selectTopPlayerResult(results: SearchResult[]): SearchResult | null {
+export function selectTopPlayerResult(results: PlayerSearchResult[]): PlayerSearchResult | null {
   return results[0] ?? null;
 }
 
@@ -67,51 +102,62 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+function displayWeight(profile: PlayerProfile): string {
+  return profile.weight ?? "-";
+}
+
 export default function PlayerCardWidget(props: WidgetCommonProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string>((props.config.playerId as string) ?? "");
-  const [data, setData] = useState<CardData | null>(null);
+  const [results, setResults] = useState<PlayerSearchResult[]>([]);
+  const [sportKey, setSportKey] = useState<SportKey>(normalizeSportKey(props.config.sportKey));
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>(selectedPlayerIdFromConfig(props.config, normalizeSportKey(props.config.sportKey)));
+  const [data, setData] = useState<PlayerProfile | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastSearchRaw, setLastSearchRaw] = useState<SearchResponse | null>(null);
-  const [searchDiagnostics, setSearchDiagnostics] = useState<SearchDiagnostics | null>(null);
   const [showRawSearch, setShowRawSearch] = useState(false);
 
   const trimmed = useMemo(() => query.trim(), [query]);
 
-  const runSearch = useCallback(async (value: string): Promise<SearchResult[]> => {
+  useEffect(() => {
+    const nextSport = normalizeSportKey(props.config.sportKey);
+    const nextPlayerId = selectedPlayerIdFromConfig(props.config, nextSport);
+
+    if (nextSport !== sportKey) {
+      setSportKey(nextSport);
+    }
+
+    if (nextPlayerId !== selectedPlayerId) {
+      setSelectedPlayerId(nextPlayerId);
+    }
+  }, [props.config, selectedPlayerId, sportKey]);
+
+  const runSearch = useCallback(async (value: string): Promise<PlayerSearchResult[]> => {
     if (value.length < 3) {
       setLastSearchRaw(null);
-      setSearchDiagnostics(null);
       return [];
     }
-    const endpointUrl = buildPlayerSearchUrl(value, props.dataMode, 8);
+
+    const endpointUrl = buildPlayerSearchUrl(value, props.dataMode, 8, sportKey);
     setEndpoint(endpointUrl);
     const response = await fetch(endpointUrl, { cache: "no-store" });
     const json = (await response.json()) as SearchResponse;
     setLastSearchRaw(json);
-    setSearchDiagnostics(json.diagnostics ?? null);
-    setMeta(json.meta ?? null);
 
-    const message = json.userFacingMessage ?? json.meta?.warning ?? null;
-    if (!response.ok) {
-      setWarning(message ?? json.error ?? "Search is temporarily unavailable.");
+    if (!response.ok || json.error) {
+      setWarning(json.error?.message ?? "Search is temporarily unavailable.");
       return [];
     }
 
-    if ((json.results ?? []).length === 0) {
-      setWarning(message ?? "No results from ESPN. Try full first and last name.");
-    } else {
-      setWarning(null);
-    }
-    return json.results ?? [];
-  }, [props.dataMode]);
+    setWarning(json.meta.warning ?? null);
+    return json.data ?? [];
+  }, [props.dataMode, sportKey]);
 
   useEffect(() => {
     let cancelled = false;
+
     const id = window.setTimeout(() => {
       void (async () => {
         try {
@@ -129,29 +175,36 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         }
       })();
     }, 250);
+
     return () => {
       cancelled = true;
       window.clearTimeout(id);
     };
   }, [trimmed, runSearch]);
 
-  const loadPlayer = useCallback(async (playerId: string): Promise<{ data: CardData | null; meta: WidgetMeta | null }> => {
-    const mode = props.mode.toLowerCase();
-    const endpointUrl = `/api/widgets/player-card?sport=NFL&playerId=${encodeURIComponent(playerId)}&mode=${mode}&dataMode=${props.dataMode}`;
+  const loadPlayer = useCallback(async (playerId: string): Promise<{ data: PlayerProfile | null; meta: WidgetMeta | null }> => {
+    const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
     setEndpoint(endpointUrl);
     const response = await fetch(endpointUrl, { cache: "no-store" });
-    const json = (await response.json()) as PlayerCardResponse;
-    if (!response.ok) {
-      throw new Error(json.error ?? "Failed to load player card");
+    const json = (await response.json()) as PlayerProfileResponse;
+
+    if (!response.ok || json.error) {
+      throw new Error(json.error?.message ?? "Failed to load player card");
     }
+
     return {
       data: json.data ?? null,
       meta: json.meta ?? null,
     };
-  }, [props.mode, props.dataMode]);
+  }, [props.dataMode, sportKey]);
 
   useEffect(() => {
-    if (!selectedPlayerId) return;
+    if (!selectedPlayerId) {
+      setData(null);
+      setMeta(null);
+      return;
+    }
+
     let cancelled = false;
     void (async () => {
       try {
@@ -159,11 +212,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         if (cancelled) return;
         setData(result.data);
         setMeta(result.meta);
+        setWarning(result.meta?.warning ?? null);
         setLastError(null);
       } catch (error) {
         if (!cancelled) {
           setWarning(String(error));
           setLastError(String(error));
+          setData(null);
         }
       }
     })();
@@ -171,13 +226,29 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     return () => {
       cancelled = true;
     };
-  }, [selectedPlayerId, loadPlayer, props.refreshTick]);
+  }, [loadPlayer, props.refreshTick, selectedPlayerId]);
 
-  const onSelect = async (player: SearchResult) => {
+  const onSelect = async (player: PlayerSearchResult) => {
     setSelectedPlayerId(player.playerId);
     setQuery(player.fullName);
     setResults([]);
-    await props.onPersist({ config: { ...props.config, playerId: player.playerId }, playerId: player.playerId });
+
+    const playerBySport = normalizePlayerBySport(props.config.playerBySport);
+    playerBySport[sportKey] = {
+      playerId: player.playerId,
+      playerName: player.fullName,
+    };
+
+    await props.onPersist({
+      config: {
+        ...props.config,
+        sportKey,
+        playerId: player.playerId,
+        playerName: player.fullName,
+        playerBySport,
+      },
+      playerId: player.playerId,
+    });
   };
 
   const onEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -189,8 +260,35 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     }
   };
 
+  const onSportChange = async (nextSportKey: SportKey) => {
+    if (nextSportKey === sportKey) {
+      return;
+    }
+
+    const playerBySport = normalizePlayerBySport(props.config.playerBySport);
+    const nextSelectedPlayerId = playerBySport[nextSportKey]?.playerId ?? "";
+    const nextSelectedName = playerBySport[nextSportKey]?.playerName ?? "";
+
+    setSportKey(nextSportKey);
+    setSelectedPlayerId(nextSelectedPlayerId);
+    setQuery(nextSelectedName);
+    setResults([]);
+    setWarning(null);
+
+    await props.onPersist({
+      config: {
+        ...props.config,
+        sportKey: nextSportKey,
+        playerId: nextSelectedPlayerId,
+        playerName: nextSelectedName,
+        playerBySport,
+      },
+      playerId: nextSelectedPlayerId || undefined,
+    });
+  };
+
   const addFavorite = async () => {
-    if (!data) return;
+    if (!data || sportKey !== "nfl") return;
     await fetch("/api/favorites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,11 +311,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
+      <SportTabs value={sportKey} onChange={(next) => void onSportChange(next)} disabled={props.locked} />
+
       <input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={onEnter}
-        placeholder="Search NFL player (3+ chars)"
+        placeholder={`Search ${sportLabel(sportKey)} player (3+ chars)`}
         className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
       />
 
@@ -226,10 +326,15 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       {results.length > 0 ? (
         <div className="max-h-44 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
           {results.map((result) => (
-            <button key={result.playerId} type="button" onClick={() => void onSelect(result)} className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-neutral-800">
-              <img src={result.headshotUrl || result.teamLogoUrl || "/globe.svg"} alt="player" className="h-8 w-8 rounded object-cover" />
+            <button
+              key={`${sportKey}-${result.playerId}`}
+              type="button"
+              onClick={() => void onSelect(result)}
+              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-neutral-800"
+            >
+              <img src={result.headshot || "/globe.svg"} alt="player" className="h-8 w-8 rounded object-cover" />
               <span>
-                {result.fullName} · {result.teamName ?? "-"} · {result.position ?? "-"} #{result.jersey ?? "-"}
+                {result.fullName} · {result.teamName ?? "-"} · {result.position ?? "-"}
               </span>
             </button>
           ))}
@@ -239,20 +344,27 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       {data ? (
         <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
           <div className="flex items-center gap-2">
-            <img src={data.headshotUrl || data.teamLogoUrl || "/globe.svg"} alt="headshot" className="h-10 w-10 rounded object-cover" />
+            <img src={data.headshot || "/globe.svg"} alt="headshot" className="h-10 w-10 rounded object-cover" />
             <div>
               <p className="font-medium">{data.fullName}</p>
-              <p>{data.team} · {data.position} #{data.jersey} · {data.weightLbs ? `${data.weightLbs} lbs` : "-"}</p>
+              <p>
+                {data.teamName ?? "-"} · {data.position ?? "-"} #{data.jersey ?? "-"} · {displayWeight(data)}
+              </p>
+              <p>{data.height ?? "-"} · Age {typeof data.age === "number" ? data.age : "-"}</p>
             </div>
           </div>
-          <p className="mt-1 text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p>
+          {data.whyItMatters ? <p className="mt-1 text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
           {props.mode === "ADVANCED" && data.stats ? (
             <pre className="mt-1 overflow-auto rounded bg-black/40 p-1 text-[10px]">{JSON.stringify(data.stats, null, 2)}</pre>
           ) : null}
-          {props.mode === "ADVANCED" && data.learnMore ? <a href={data.learnMore} target="_blank" rel="noreferrer" className="text-blue-300 underline">Learn more</a> : null}
-          <div className="mt-1">
-            <button type="button" onClick={() => void addFavorite()} className="text-[11px] underline text-neutral-300">Favorite Player</button>
-          </div>
+          {props.mode === "ADVANCED" && data.learnMore ? (
+            <a href={data.learnMore} target="_blank" rel="noreferrer" className="text-blue-300 underline">Learn more</a>
+          ) : null}
+          {sportKey === "nfl" ? (
+            <div className="mt-1">
+              <button type="button" onClick={() => void addFavorite()} className="text-[11px] underline text-neutral-300">Favorite Player</button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="text-neutral-400">No player selected.</p>
@@ -266,9 +378,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       <details className="rounded border border-neutral-700 bg-black/20 p-2">
         <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
         <p>Local API URL: {endpoint}</p>
-        <p>Provider: {searchDiagnostics?.provider ?? "-"}</p>
-        <p>Request ID: {searchDiagnostics?.requestId ?? meta?.requestId ?? "-"}</p>
-        <p>Final upstream URL: {searchDiagnostics?.finalUrl ?? "-"}</p>
+        <p>Sport: {sportKey.toUpperCase()}</p>
+        <p>Request ID: {meta?.requestId ?? "-"}</p>
+        <p>Final upstream URL: {meta?.endpointUrl ?? "-"}</p>
         <p>Last error: {lastError ?? "none"}</p>
         {isDev ? (
           <label className="mt-1 flex items-center gap-2 text-[11px]">
@@ -277,23 +389,30 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
               checked={showRawSearch}
               onChange={(event) => setShowRawSearch(event.target.checked)}
             />
-            Show raw /api/search/players JSON
+            Show raw /api/players/search JSON
           </label>
         ) : null}
         {isDev && showRawSearch ? (
           <pre className="overflow-auto text-[10px]">{JSON.stringify(lastSearchRaw, null, 2)}</pre>
         ) : null}
-        <pre className="overflow-auto text-[10px]">{JSON.stringify({ meta, searchDiagnostics }, null, 2)}</pre>
+        <pre className="overflow-auto text-[10px]">{JSON.stringify({ meta }, null, 2)}</pre>
       </details>
 
       <button
         type="button"
         className="text-[10px] text-neutral-400 underline"
-        onClick={() => props.onReportBug({ widgetId: props.widgetId, meta, warning, playerId: selectedPlayerId, endpoint, lastError })}
+        onClick={() => props.onReportBug({
+          widgetId: props.widgetId,
+          sportKey,
+          meta,
+          warning,
+          playerId: selectedPlayerId,
+          endpoint,
+          lastError,
+        })}
       >
         Report a bug
       </button>
     </div>
   );
 }
-
