@@ -18,6 +18,8 @@ export type PlayerProfile = {
   age?: number;
   height?: string;
   weight?: string;
+  bats?: string;
+  throws?: string;
   whyItMatters?: string;
   tooltip?: string;
   stats?: Record<string, string | number | null>;

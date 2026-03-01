@@ -293,6 +293,19 @@ function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profil
     profile.weight = weight;
   }
 
+  const battingHand = asObject(athlete.battingHand) ?? asObject(athlete.batHand) ?? asObject(athlete.batSide);
+  const throwingHand = asObject(athlete.throwingHand) ?? asObject(athlete.pitchHand);
+
+  const bats = readString(battingHand?.abbreviation) ?? readString(battingHand?.displayName) ?? readString(battingHand?.name) ?? readString(athlete.bats);
+  if (bats) {
+    profile.bats = bats;
+  }
+
+  const throws = readString(throwingHand?.abbreviation) ?? readString(throwingHand?.displayName) ?? readString(throwingHand?.name) ?? readString(athlete.throws);
+  if (throws) {
+    profile.throws = throws;
+  }
+
   const warning = !profile.teamName && !profile.position && !profile.headshot
     ? "Profile loaded with limited fields from upstream."
     : undefined;
@@ -413,7 +426,7 @@ async function fetchProfilePayload(sport: SportKey, playerId: string, dataMode: 
 
     return {
       payload: fallback.data,
-      meta: mergeWarning(fallback.meta, `Primary sport-specific athlete profile endpoint is unavailable for ${sport.toUpperCase()}; used ESPN core athlete fallback.`),
+      meta: mergeWarning(fallback.meta, "Using ESPN core athlete profile (site athlete endpoint returned 404 for this league)."),
     };
   }
 }

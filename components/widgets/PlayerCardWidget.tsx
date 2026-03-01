@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import SportTabs from "@/components/widgets/shared/SportTabs";
+import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
 
@@ -11,6 +11,12 @@ type SearchResponse = Envelope<PlayerSearchResult[]>;
 type PlayerProfileResponse = Envelope<PlayerProfile>;
 
 const isDev = process.env.NODE_ENV !== "production";
+
+const SPORT_TABS = [
+  { key: "nfl", label: "NFL" },
+  { key: "mlb", label: "MLB" },
+  { key: "nba", label: "NBA" },
+] as const;
 
 function normalizeSportKey(input: unknown): SportKey {
   if (input === "mlb" || input === "nba" || input === "nfl") {
@@ -63,21 +69,6 @@ function selectedPlayerIdFromConfig(config: Record<string, unknown>, sportKey: S
   return "";
 }
 
-function selectedPlayerNameFromConfig(config: Record<string, unknown>, sportKey: SportKey): string {
-  const playerBySport = normalizePlayerBySport(config.playerBySport);
-  const fromSport = playerBySport[sportKey]?.playerName;
-  if (fromSport) {
-    return fromSport;
-  }
-
-  const configSport = normalizeSportKey(config.sportKey);
-  if (configSport === sportKey && typeof config.playerName === "string") {
-    return config.playerName;
-  }
-
-  return "";
-}
-
 export function buildPlayerSearchUrl(
   query: string,
   dataMode: "live" | "fixture",
@@ -102,8 +93,46 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function displayWeight(profile: PlayerProfile): string {
-  return profile.weight ?? "-";
+function compactLine(parts: Array<string | undefined>): string {
+  const filtered = parts.map((value) => value?.trim()).filter(Boolean) as string[];
+  return filtered.length > 0 ? filtered.join(" · ") : "-";
+}
+
+function profilePhysicalLine(profile: PlayerProfile): string | null {
+  const age = typeof profile.age === "number" ? `Age ${profile.age}` : undefined;
+  const line = compactLine([profile.height, profile.weight, age]);
+  return line === "-" ? null : line;
+}
+
+function sportExtraRows(profile: PlayerProfile, sport: SportKey): Array<{ label: string; value: string }> {
+  if (sport === "mlb") {
+    const batsThrows = compactLine([
+      profile.bats ? `Bats ${profile.bats}` : undefined,
+      profile.throws ? `Throws ${profile.throws}` : undefined,
+    ]);
+    if (batsThrows !== "-") {
+      return [{ label: "Handedness", value: batsThrows }];
+    }
+
+    if (profile.jersey) {
+      return [{ label: "Jersey", value: `#${profile.jersey}` }];
+    }
+    return [];
+  }
+
+  if (sport === "nba") {
+    return [
+      profile.jersey ? { label: "Jersey", value: `#${profile.jersey}` } : null,
+      profile.position ? { label: "Position", value: profile.position } : null,
+      profile.teamName ? { label: "Team", value: profile.teamName } : null,
+    ].filter((row): row is { label: string; value: string } => row !== null);
+  }
+
+  return [
+    profile.jersey ? { label: "Jersey", value: `#${profile.jersey}` } : null,
+    profile.position ? { label: "Position", value: profile.position } : null,
+    profile.teamName ? { label: "Team", value: profile.teamName } : null,
+  ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
 export default function PlayerCardWidget(props: WidgetCommonProps) {
@@ -296,9 +325,12 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     });
   };
 
+  const extraRows = data ? sportExtraRows(data, sportKey) : [];
+  const physicalLine = data ? profilePhysicalLine(data) : null;
+
   return (
     <div className="space-y-2 text-xs">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-2">
         <span className="font-medium">Player Card</span>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
@@ -311,15 +343,23 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
-      <SportTabs value={sportKey} onChange={(next) => void onSportChange(next)} disabled={props.locked} />
+      <div className="space-y-2">
+        <TabsRow
+          items={SPORT_TABS.map((item) => ({ key: item.key, label: item.label }))}
+          value={sportKey}
+          onChange={(next) => void onSportChange(next as SportKey)}
+          disabled={props.locked}
+          size="sm"
+        />
 
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={onEnter}
-        placeholder={`Search ${sportLabel(sportKey)} player (3+ chars)`}
-        className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
-      />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onEnter}
+          placeholder={`Search ${sportLabel(sportKey)} player (3+ chars)`}
+          className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+        />
+      </div>
 
       {trimmed.length < 3 ? <p className="text-neutral-400">Type 3+ chars to search.</p> : null}
 
@@ -342,26 +382,36 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       ) : null}
 
       {data ? (
-        <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
+        <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
           <div className="flex items-center gap-2">
-            <img src={data.headshot || "/globe.svg"} alt="headshot" className="h-10 w-10 rounded object-cover" />
+            <img src={data.headshot || "/globe.svg"} alt="headshot" className="h-11 w-11 rounded object-cover" />
             <div>
               <p className="font-medium">{data.fullName}</p>
-              <p>
-                {data.teamName ?? "-"} · {data.position ?? "-"} #{data.jersey ?? "-"} · {displayWeight(data)}
-              </p>
-              <p>{data.height ?? "-"} · Age {typeof data.age === "number" ? data.age : "-"}</p>
+              <p>{compactLine([data.teamName, data.position])}</p>
+              {physicalLine ? <p className="text-neutral-300">{physicalLine}</p> : null}
             </div>
           </div>
-          {data.whyItMatters ? <p className="mt-1 text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
+
+          {extraRows.length > 0 ? (
+            <div className="rounded border border-neutral-800 bg-black/20 p-2">
+              <p className="mb-1 text-[11px] uppercase tracking-wide text-neutral-400">{sportLabel(sportKey)} Details</p>
+              <div className="space-y-1">
+                {extraRows.map((row) => (
+                  <p key={row.label}><span className="text-neutral-400">{row.label}:</span> {row.value}</p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {data.whyItMatters ? <p className="text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
           {props.mode === "ADVANCED" && data.stats ? (
-            <pre className="mt-1 overflow-auto rounded bg-black/40 p-1 text-[10px]">{JSON.stringify(data.stats, null, 2)}</pre>
+            <pre className="overflow-auto rounded bg-black/40 p-1 text-[10px]">{JSON.stringify(data.stats, null, 2)}</pre>
           ) : null}
           {props.mode === "ADVANCED" && data.learnMore ? (
             <a href={data.learnMore} target="_blank" rel="noreferrer" className="text-blue-300 underline">Learn more</a>
           ) : null}
           {sportKey === "nfl" ? (
-            <div className="mt-1">
+            <div>
               <button type="button" onClick={() => void addFavorite()} className="text-[11px] underline text-neutral-300">Favorite Player</button>
             </div>
           ) : null}
