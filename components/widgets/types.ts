@@ -6,6 +6,12 @@ export type WidgetMeta = {
   warnings?: string[];
   warning?: string;
   requestId?: string;
+  endpointUrl?: string;
+  upstreamStatus?: number;
+  upstreamMessage?: string;
+  cacheHit?: boolean;
+  cacheAgeSeconds?: number;
+  dataMode?: "live" | "fixture";
 };
 
 export type WidgetCommonProps = {

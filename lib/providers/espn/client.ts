@@ -7,6 +7,7 @@ type FetchOptions = {
   endpoint: string;
   params?: Record<string, string | number | undefined | null>;
   fixtureFile?: string;
+  fixtureSubdir?: string;
   ttlSeconds?: number;
   dataMode?: "live" | "fixture";
 };
@@ -87,10 +88,10 @@ function trackError(endpoint: string, message: string, status?: number, url?: st
   });
 }
 
-async function loadFixture<T>(fixtureFile: string): Promise<T> {
-  const filePath = path.join(process.cwd(), "tests", "fixtures", "espn", "nfl", fixtureFile);
+async function loadFixture<T>(fixtureFile: string, fixtureSubdir = "nfl"): Promise<T> {
+  const filePath = path.join(process.cwd(), "tests", "fixtures", "espn", fixtureSubdir, fixtureFile);
   const content = await readFile(filePath, "utf8");
-  return JSON.parse(content) as T;
+  return JSON.parse(content.replace(/^\uFEFF/, "")) as T;
 }
 
 async function storePersistentCache<T>(provider: string, endpoint: string, params: FetchOptions["params"], payload: T, sourceUsed: DataSource, requestId: string, ttlSeconds: number, warning?: string): Promise<void> {
@@ -178,7 +179,7 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
     if (!options.fixtureFile) {
       throw new Error(`Fixture file missing for endpoint ${options.endpoint}`);
     }
-    const payload = await loadFixture<T>(options.fixtureFile);
+    const payload = await loadFixture<T>(options.fixtureFile, options.fixtureSubdir ?? "nfl");
     trackSuccess(options.endpoint, "fixture", url, 200, false, 0);
     return {
       data: payload,
