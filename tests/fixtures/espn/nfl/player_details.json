@@ -1,0 +1,12 @@
+{
+  "athlete": {
+    "id": "42",
+    "displayName": "Saquon Barkley",
+    "jersey": "26",
+    "team": { "abbreviation": "PHI", "displayName": "Philadelphia Eagles", "logos": [{"href":"https://a.espncdn.com/i/teamlogos/nfl/500/phi.png"}] },
+    "position": { "abbreviation": "RB" },
+    "headshot": { "href": "https://a.espncdn.com/i/headshots/nfl/players/full/42.png" },
+    "displayHeight": "6' 0\"",
+    "displayWeight": "233 lbs"
+  }
+}

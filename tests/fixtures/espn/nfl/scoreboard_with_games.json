@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "id": "401",
+      "date": "2026-09-10T20:20:00Z",
+      "season": { "type": 2 },
+      "status": { "type": { "description": "Scheduled" } },
+      "competitions": [
+        {
+          "broadcasts": [{ "names": ["NBC"] }],
+          "competitors": [
+            { "homeAway": "away", "team": { "abbreviation": "DAL", "displayName": "Dallas Cowboys" }, "records": [{ "summary": "10-7" }] },
+            { "homeAway": "home", "team": { "abbreviation": "PHI", "displayName": "Philadelphia Eagles" }, "records": [{ "summary": "12-5" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

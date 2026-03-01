@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum Sport {
+  NFL
+  NBA
+  MLB
+  UTILITIES
+}
+
+enum WidgetMode {
+  BEGINNER
+  ADVANCED
+}
+
+enum DataSource {
+  ESPN
+  FIXTURE
+  DEMO
+  CACHE
+}
+
+enum ShareScope {
+  PRIVATE
+  LINK_VIEW
+  INVITED_EMAILS
+}
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String?       @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole      @default(USER)
+
+  accounts      Account[]
+  sessions      Session[]
+  dashboard     Dashboard?
+  watchlist     WatchlistTeam[]
+  favorites     FavoritePlayer[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Dashboard {
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  sport          Sport            @default(NFL)
+  isPrivate      Boolean          @default(true)
+  shareScope     ShareScope       @default(PRIVATE)
+  shareToken     String?          @unique
+  invitedEmails  Json?
+  layoutLocked   Boolean          @default(false)
+  widgetInstances WidgetInstance[]
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model WidgetInstance {
+  id            String      @id @default(cuid())
+  dashboardId   String
+  dashboard     Dashboard   @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  widgetType    String
+  sport         Sport
+  mode          WidgetMode  @default(BEGINNER)
+  x             Int         @default(0)
+  y             Int         @default(0)
+  w             Int         @default(1)
+  h             Int         @default(1)
+  playerId      String?
+  config        Json?
+  sourceUsed    DataSource?
+  lastUpdatedAt DateTime?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([dashboardId])
+  @@unique([dashboardId, widgetType, playerId])
+}
+
+model WatchlistTeam {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport     Sport    @default(NFL)
+  teamKey   String
+  teamName  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, sport, teamKey])
+}
+
+model FavoritePlayer {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport       Sport    @default(NFL)
+  playerId    String
+  playerName  String
+  createdAt   DateTime @default(now())
+
+  @@index([userId, sport])
+}
+
+model GlossaryTerm {
+  id              String   @id @default(cuid())
+  sport           Sport
+  key             String   @unique
+  label           String
+  plainDefinition String
+  whyItMatters    String
+  advancedNotes   String?
+  learnMoreUrl    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CachedResponse {
+  id            String    @id @default(cuid())
+  provider      String
+  endpoint      String
+  paramsHash    String
+  payload       Json
+  sourceUsed    DataSource
+  fetchedAt     DateTime  @default(now())
+  expiresAt     DateTime
+  requestId     String?
+  warning       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([provider, endpoint, paramsHash], name: "provider_endpoint_paramsHash")
+  @@index([provider, endpoint])
+}
+

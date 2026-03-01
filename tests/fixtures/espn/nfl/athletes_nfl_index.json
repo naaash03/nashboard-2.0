@@ -1,0 +1,68 @@
+{
+  "items": [
+    {
+      "id": "42",
+      "fullName": "Saquon Barkley",
+      "firstName": "Saquon",
+      "lastName": "Barkley",
+      "displayName": "Saquon Barkley",
+      "shortName": "S. Barkley",
+      "team": {
+        "abbreviation": "PHI",
+        "displayName": "Philadelphia Eagles"
+      },
+      "position": {
+        "abbreviation": "RB",
+        "displayName": "Running Back"
+      }
+    },
+    {
+      "id": "99",
+      "fullName": "Patrick Mahomes",
+      "firstName": "Patrick",
+      "lastName": "Mahomes",
+      "displayName": "Patrick Mahomes",
+      "shortName": "P. Mahomes",
+      "team": {
+        "abbreviation": "KC",
+        "displayName": "Kansas City Chiefs"
+      },
+      "position": {
+        "abbreviation": "QB",
+        "displayName": "Quarterback"
+      }
+    },
+    {
+      "id": "101",
+      "fullName": "Daniel Jones",
+      "firstName": "Daniel",
+      "lastName": "Jones",
+      "displayName": "Daniel Jones",
+      "shortName": "D. Jones",
+      "team": {
+        "abbreviation": "NYG",
+        "displayName": "New York Giants"
+      },
+      "position": {
+        "abbreviation": "QB",
+        "displayName": "Quarterback"
+      }
+    },
+    {
+      "id": "102",
+      "fullName": "Mac Jones",
+      "firstName": "Mac",
+      "lastName": "Jones",
+      "displayName": "Mac Jones",
+      "shortName": "M. Jones",
+      "team": {
+        "abbreviation": "JAX",
+        "displayName": "Jacksonville Jaguars"
+      },
+      "position": {
+        "abbreviation": "QB",
+        "displayName": "Quarterback"
+      }
+    }
+  ]
+}

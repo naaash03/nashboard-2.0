@@ -1,0 +1,21 @@
+{
+  "nextDateISO": "2026-09-10",
+  "schedulePosted": true,
+  "events": [
+    {
+      "id": "402",
+      "date": "2026-09-10T20:20:00Z",
+      "season": { "type": 2 },
+      "status": { "type": { "description": "Scheduled" } },
+      "competitions": [
+        {
+          "broadcasts": [{ "names": ["ESPN"] }],
+          "competitors": [
+            { "homeAway": "away", "team": { "abbreviation": "BUF", "displayName": "Buffalo Bills" }, "records": [{ "summary": "11-6" }] },
+            { "homeAway": "home", "team": { "abbreviation": "MIA", "displayName": "Miami Dolphins" }, "records": [{ "summary": "9-8" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

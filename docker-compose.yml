@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: nashboard-postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: nashboard
+    volumes:
+      - nashboard_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  nashboard_postgres_data:

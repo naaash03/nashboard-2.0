@@ -1,0 +1,15 @@
+{
+  "teamKey": "PHI",
+  "teamName": "Philadelphia Eagles",
+  "runningBacks": [
+    {
+      "playerId": "42",
+      "fullName": "Saquon Barkley",
+      "attempts": 19,
+      "yards": 98,
+      "ypc": 5.2,
+      "tds": 1,
+      "explosiveRuns": 3
+    }
+  ]
+}
