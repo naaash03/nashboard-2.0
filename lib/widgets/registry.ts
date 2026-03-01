@@ -19,15 +19,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "player_card",
     name: "Player Card",
-    description: "Choose an NFL player from search results and track profile/stats.",
-    sportCategory: "NFL",
+    description: "Choose a player from search results and track profile/stats.",
+    sportCategory: "UTILITIES",
     defaultSize: { w: 1, h: 1 },
   },
   {
     key: "watchlist",
     name: "Watchlist",
-    description: "NFL teams only, max 5.",
-    sportCategory: "NFL",
+    description: "Teams watchlist (MVP: NFL only), max 5.",
+    sportCategory: "UTILITIES",
     defaultSize: { w: 1, h: 1 },
   },
   {
@@ -40,15 +40,29 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "mlb_next_7_games",
     name: "MLB Next 7 Games",
-    description: "Data source to be added.",
+    description: "Upcoming MLB games for a selected team.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
   },
   {
     key: "mlb_pitcher_arsenal",
     name: "Pitcher Arsenal",
-    description: "Data source to be added.",
+    description: "Pitch mix snapshot for a selected MLB pitcher.",
     sportCategory: "MLB",
+    defaultSize: { w: 1, h: 1 },
+  },
+  {
+    key: "nba_tonights_slate",
+    name: "NBA Tonight's Slate",
+    description: "Today-first NBA slate using ESPN scoreboard data.",
+    sportCategory: "NBA",
+    defaultSize: { w: 1, h: 1 },
+  },
+  {
+    key: "nba_standings",
+    name: "NBA Standings",
+    description: "East/West standings snapshot with beginner/advanced depth.",
+    sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
   },
   {

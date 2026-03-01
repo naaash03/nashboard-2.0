@@ -33,11 +33,11 @@ export default function WidgetLibrary({
 
   if (!open) return null;
 
-  const sections: Array<{ title: keyof Categories; items: WidgetDefinition[] }> = [
-    { title: "NFL", items: categories.NFL },
-    { title: "MLB", items: categories.MLB },
-    { title: "NBA", items: categories.NBA },
-    { title: "Utilities", items: categories.Utilities },
+  const sections: Array<{ key: keyof Categories; label: string; items: WidgetDefinition[] }> = [
+    { key: "NFL", label: "NFL", items: categories.NFL },
+    { key: "MLB", label: "MLB", items: categories.MLB },
+    { key: "NBA", label: "NBA", items: categories.NBA },
+    { key: "Utilities", label: "Misc", items: categories.Utilities },
   ];
 
   return (
@@ -49,8 +49,8 @@ export default function WidgetLibrary({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {sections.map((section) => (
-            <div key={section.title} className="space-y-2">
-              <p className="text-sm font-medium">{section.title}</p>
+            <div key={section.key} className="space-y-2">
+              <p className="text-sm font-medium">{section.label}</p>
               {section.items.length === 0 ? <p className="text-xs text-neutral-500">No widgets.</p> : null}
               {section.items.map((widget) => (
                 <div key={widget.key} className="rounded border border-neutral-700 bg-neutral-950 p-2 text-xs">
