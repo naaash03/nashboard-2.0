@@ -1,0 +1,70 @@
+{
+  "events": [
+    {
+      "id": "401900101",
+      "competitions": [
+        {
+          "status": {
+            "type": {
+              "state": "in",
+              "detail": "Q3 08:21",
+              "shortDetail": "Q3 08:21"
+            },
+            "displayClock": "08:21",
+            "period": 3
+          },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "score": "89",
+              "team": {
+                "abbreviation": "LAL",
+                "displayName": "Los Angeles Lakers"
+              }
+            },
+            {
+              "homeAway": "home",
+              "score": "92",
+              "team": {
+                "abbreviation": "BOS",
+                "displayName": "Boston Celtics"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401900102",
+      "competitions": [
+        {
+          "status": {
+            "type": {
+              "state": "post",
+              "detail": "Final",
+              "shortDetail": "Final"
+            }
+          },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "score": "110",
+              "team": {
+                "abbreviation": "PHX",
+                "displayName": "Phoenix Suns"
+              }
+            },
+            {
+              "homeAway": "home",
+              "score": "118",
+              "team": {
+                "abbreviation": "DEN",
+                "displayName": "Denver Nuggets"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

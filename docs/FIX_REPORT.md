@@ -25,6 +25,18 @@
   - Added fixture payloads under `tests/fixtures/espn/players/` for NFL/MLB/NBA search + profile.
   - `Player Card` now supports sport tabs and persists `config.sportKey` + selected player per sport.
   - `Watchlist` now supports `Teams` and `Players` modes; players mode includes sport tabs and persists `config.playerWatchlist` (`nfl`/`mlb`/`nba`, limit 10 per sport).
+- Misc widgets hardening (layout + watchlist status):
+  - Added shared `TabsRow` and standardized tab spacing in `Player Card` and `Watchlist` to prevent cramped/jumbled rows in small widget widths.
+  - `Watchlist` Teams mode now has league tabs (`NFL/MLB/NBA`) and per-sport persistence via:
+    - `config.teamWatchlist = { nfl: string[], mlb: string[], nba: string[] }`
+    - Backward-compatible migration: legacy `config.watchlist.teams` is treated as NFL and copied into `teamWatchlist.nfl` on load.
+  - Added ESPN team status provider + routes:
+    - `GET /api/teams/status?sport=nfl|mlb|nba&teamKey=...&dataMode=live|fixture`
+    - `GET /api/teams/status/batch?sport=nfl|mlb|nba&teamKeys=NYM,LAD,...&dataMode=live|fixture`
+  - Teams mode now uses the batch endpoint for one-call status hydration and shows `LIVE`, `Today`, `Final`, or `No game today` per team row.
+  - Added scoreboard fixtures for deterministic status responses in fixture mode:
+    - `tests/fixtures/espn/scoreboard/mlb_scoreboard_sample.json`
+    - `tests/fixtures/espn/scoreboard/nba_scoreboard_sample.json`
 
 ## What Changed
 - Guest watchlist correctness:
