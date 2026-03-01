@@ -15,6 +15,16 @@
 - Fixture mode usage:
   - Set `NASHBOARD_DATA_MODE=fixture` to force fixture responses.
   - Run all tests with `npm test`.
+- Player directory + sport switcher (NFL/MLB/NBA):
+  - Added unified ESPN player provider and APIs:
+    - `GET /api/players/search?sport=nfl|mlb|nba&q=...&dataMode=live|fixture`
+    - `GET /api/players/profile?sport=nfl|mlb|nba&playerId=...&dataMode=live|fixture`
+  - Both routes now return standardized envelopes:
+    - success: `{ data, meta, error?: undefined }`
+    - error: `{ data: null, meta, error: { message, code } }`
+  - Added fixture payloads under `tests/fixtures/espn/players/` for NFL/MLB/NBA search + profile.
+  - `Player Card` now supports sport tabs and persists `config.sportKey` + selected player per sport.
+  - `Watchlist` now supports `Teams` and `Players` modes; players mode includes sport tabs and persists `config.playerWatchlist` (`nfl`/`mlb`/`nba`, limit 10 per sport).
 
 ## What Changed
 - Guest watchlist correctness:

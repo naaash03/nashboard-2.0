@@ -1,0 +1,14 @@
+﻿{
+  "athlete": {
+    "id": "3917792",
+    "fullName": "Daniel Jones",
+    "displayName": "Daniel Jones",
+    "team": { "displayName": "Indianapolis Colts" },
+    "position": { "abbreviation": "QB" },
+    "headshot": { "href": "https://a.espncdn.com/i/headshots/nfl/players/full/3917792.png" },
+    "jersey": "17",
+    "age": 27,
+    "displayHeight": "6' 5\"",
+    "displayWeight": "230 lbs"
+  }
+}
