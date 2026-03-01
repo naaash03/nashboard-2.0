@@ -1,16 +1,11 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import SportTabs from "@/components/widgets/shared/SportTabs";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
-import {
-  addGuestWatchlistTeam,
-  getGuestWatchlist,
-  guestWatchlistLimit,
-  removeGuestWatchlistTeam,
-  type GuestWatchlistItem,
-} from "@/lib/guest/watchlist";
+import { getGuestWatchlist, type GuestWatchlistItem } from "@/lib/guest/watchlist";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
+import type { TeamStatus, TeamStatusBatch } from "@/lib/types/teamStatus";
 
 type WatchItem = GuestWatchlistItem;
 
@@ -24,16 +19,47 @@ type PlayerSearchResultMin = {
   fullName: string;
   teamName?: string;
   position?: string;
+  headshot?: string;
 };
 
 type PlayerWatchlistBySport = Record<SportKey, PlayerSearchResultMin[]>;
 
+type TeamWatchlistBySport = Record<SportKey, string[]>;
+
+type TeamWatchlistNamesBySport = Record<SportKey, Record<string, string>>;
+
 type ViewMode = "teams" | "players";
+
+const TEAM_LIMIT = 10;
+const PLAYER_LIMIT = 10;
+
+const MODE_TABS = [
+  { key: "teams", label: "Teams" },
+  { key: "players", label: "Players" },
+] as const;
+
+const SPORT_TABS = [
+  { key: "nfl", label: "NFL" },
+  { key: "mlb", label: "MLB" },
+  { key: "nba", label: "NBA" },
+] as const;
 
 const EMPTY_PLAYER_WATCHLIST: PlayerWatchlistBySport = {
   nfl: [],
   mlb: [],
   nba: [],
+};
+
+const EMPTY_TEAM_WATCHLIST: TeamWatchlistBySport = {
+  nfl: [],
+  mlb: [],
+  nba: [],
+};
+
+const EMPTY_TEAM_NAMES: TeamWatchlistNamesBySport = {
+  nfl: {},
+  mlb: {},
+  nba: {},
 };
 
 export function shouldUseServerWatchlist(props: Pick<WidgetCommonProps, "viewerMode" | "authConfigured" | "dbConfigured">): boolean {
@@ -49,6 +75,49 @@ function normalizeSportKey(input: unknown): SportKey {
 
 function normalizeViewMode(input: unknown): ViewMode {
   return input === "players" ? "players" : "teams";
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim().toUpperCase() : ""))
+    .filter(Boolean);
+}
+
+function normalizeTeamWatchlist(input: unknown): TeamWatchlistBySport {
+  const source = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    nfl: normalizeStringArray(source.nfl),
+    mlb: normalizeStringArray(source.mlb),
+    nba: normalizeStringArray(source.nba),
+  };
+}
+
+function normalizeTeamWatchlistNames(input: unknown): TeamWatchlistNamesBySport {
+  const source = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const out: TeamWatchlistNamesBySport = {
+    nfl: {},
+    mlb: {},
+    nba: {},
+  };
+
+  for (const sport of ["nfl", "mlb", "nba"] as const) {
+    const item = source[sport];
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+      if (typeof value === "string" && key.trim()) {
+        out[sport][key.trim().toUpperCase()] = value.trim();
+      }
+    }
+  }
+
+  return out;
 }
 
 function normalizePlayerWatchlist(input: unknown): PlayerWatchlistBySport {
@@ -89,6 +158,9 @@ function normalizePlayerWatchlist(input: unknown): PlayerWatchlistBySport {
       if (typeof typed.position === "string") {
         parsed.position = typed.position;
       }
+      if (typeof typed.headshot === "string") {
+        parsed.headshot = typed.headshot;
+      }
       parsedRows.push(parsed);
     }
 
@@ -96,6 +168,15 @@ function normalizePlayerWatchlist(input: unknown): PlayerWatchlistBySport {
   }
 
   return next;
+}
+
+function legacyTeamsFromConfig(config: Record<string, unknown>): string[] {
+  const watchlist = config.watchlist;
+  if (!watchlist || typeof watchlist !== "object") {
+    return [];
+  }
+  const teams = (watchlist as Record<string, unknown>).teams;
+  return normalizeStringArray(teams);
 }
 
 function to12h(value: string): string {
@@ -112,37 +193,72 @@ function uniqueByPlayerId(items: PlayerSearchResultMin[]): PlayerSearchResultMin
   return items.filter((item, index, all) => all.findIndex((row) => row.playerId === item.playerId) === index);
 }
 
+function compact(parts: Array<string | undefined>): string {
+  const values = parts.filter(Boolean) as string[];
+  return values.length > 0 ? values.join(" · ") : "—";
+}
+
+function teamStatusLabel(status: TeamStatus | undefined): string {
+  if (!status || !status.hasGameToday) {
+    return "No game today";
+  }
+
+  const opponent = status.opponent
+    ? status.homeAway === "home"
+      ? `vs ${status.opponent}`
+      : `at ${status.opponent}`
+    : "vs TBD";
+  const score = status.score ? `${status.score.team}-${status.score.opp}` : undefined;
+
+  if (status.state === "in") {
+    return compact([`LIVE ${opponent}`, score, status.displayClock]);
+  }
+  if (status.state === "pre") {
+    return compact([`Today ${opponent}`, status.displayClock]);
+  }
+  return compact([`Final ${opponent}`, score]);
+}
+
 export default function WatchlistWidget(props: WidgetCommonProps) {
-  const [items, setItems] = useState<WatchItem[]>([]);
-  const [teamKey, setTeamKey] = useState("");
-  const [teamName, setTeamName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState(new Date().toISOString());
+  const [legacyItems, setLegacyItems] = useState<WatchItem[]>([]);
+  const [legacyError, setLegacyError] = useState<string | null>(null);
+  const [legacyLoaded, setLegacyLoaded] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>(normalizeViewMode(props.config.watchlistMode));
-  const [playerSportKey, setPlayerSportKey] = useState<SportKey>(normalizeSportKey(props.config.watchlistSportKey));
+  const [sportKey, setSportKey] = useState<SportKey>(normalizeSportKey(props.config.watchlistSportKey));
+
   const [playerWatchlist, setPlayerWatchlist] = useState<PlayerWatchlistBySport>(normalizePlayerWatchlist(props.config.playerWatchlist));
+  const [teamWatchlist, setTeamWatchlist] = useState<TeamWatchlistBySport>(normalizeTeamWatchlist(props.config.teamWatchlist));
+  const [teamWatchlistNames, setTeamWatchlistNames] = useState<TeamWatchlistNamesBySport>(normalizeTeamWatchlistNames(props.config.teamWatchlistNames));
+
+  const [teamKeyInput, setTeamKeyInput] = useState("");
+  const [teamNameInput, setTeamNameInput] = useState("");
+  const [teamError, setTeamError] = useState<string | null>(null);
+
   const [playerQuery, setPlayerQuery] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerSearchResultMin[]>([]);
   const [playerError, setPlayerError] = useState<string | null>(null);
+
   const [lastProfile, setLastProfile] = useState<PlayerProfile | null>(null);
-  const [lastProfileMeta, setLastProfileMeta] = useState<WidgetMeta | null>(null);
-  const [playersEndpoint, setPlayersEndpoint] = useState("");
+  const [lastCallMeta, setLastCallMeta] = useState<WidgetMeta | null>(null);
+  const [teamStatusMeta, setTeamStatusMeta] = useState<WidgetMeta | null>(null);
+  const [statusByTeam, setStatusByTeam] = useState<Record<string, TeamStatus>>({});
+  const [lastEndpoint, setLastEndpoint] = useState("");
 
   const useServer = shouldUseServerWatchlist(props);
-  const sourceLabel = useServer ? "ESPN" : "Guest";
+  const migratedRef = useRef(false);
 
   useEffect(() => {
     setViewMode(normalizeViewMode(props.config.watchlistMode));
-    setPlayerSportKey(normalizeSportKey(props.config.watchlistSportKey));
+    setSportKey(normalizeSportKey(props.config.watchlistSportKey));
     setPlayerWatchlist(normalizePlayerWatchlist(props.config.playerWatchlist));
+    setTeamWatchlist(normalizeTeamWatchlist(props.config.teamWatchlist));
+    setTeamWatchlistNames(normalizeTeamWatchlistNames(props.config.teamWatchlistNames));
   }, [props.config]);
 
-  const load = useCallback(async (): Promise<WatchItem[]> => {
+  const loadLegacy = useCallback(async (): Promise<WatchItem[]> => {
     if (!useServer) {
-      const local = getGuestWatchlist();
-      setUpdatedAt(local.updatedAt);
-      return local.items;
+      return getGuestWatchlist().items;
     }
 
     const res = await fetch("/api/watchlist", { cache: "no-store" });
@@ -150,8 +266,6 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     if (!res.ok) {
       throw new Error(json.error ?? "Failed to load watchlist");
     }
-
-    setUpdatedAt(new Date().toISOString());
     return json.items ?? [];
   }, [useServer]);
 
@@ -160,13 +274,16 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
     void (async () => {
       try {
-        const nextItems = await load();
+        const items = await loadLegacy();
         if (!cancelled) {
-          setItems(nextItems);
+          setLegacyItems(items);
+          setLegacyError(null);
+          setLegacyLoaded(true);
         }
-      } catch (err) {
+      } catch (error) {
         if (!cancelled) {
-          setError(String(err));
+          setLegacyError(String(error));
+          setLegacyLoaded(true);
         }
       }
     })();
@@ -174,89 +291,135 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     return () => {
       cancelled = true;
     };
-  }, [load, props.refreshTick]);
+  }, [loadLegacy, props.refreshTick]);
 
-  const persistPlayerConfig = useCallback(async (
-    next: {
-      viewMode?: ViewMode;
-      sportKey?: SportKey;
-      watchlist?: PlayerWatchlistBySport;
-    },
-  ) => {
-    const normalizedWatchlist = next.watchlist ?? playerWatchlist;
+  useEffect(() => {
+    if (migratedRef.current) {
+      return;
+    }
+    if (!legacyLoaded) {
+      return;
+    }
+
+    const hasNewShape = Array.isArray((props.config.teamWatchlist as Record<string, unknown> | undefined)?.nfl)
+      || Array.isArray((props.config.teamWatchlist as Record<string, unknown> | undefined)?.mlb)
+      || Array.isArray((props.config.teamWatchlist as Record<string, unknown> | undefined)?.nba);
+
+    if (hasNewShape) {
+      migratedRef.current = true;
+      return;
+    }
+
+    const legacyConfig = legacyTeamsFromConfig(props.config);
+    const legacyServer = legacyItems.map((item) => item.teamKey.trim().toUpperCase());
+    const nflKeys = Array.from(new Set([...legacyConfig, ...legacyServer])).filter(Boolean);
+
+    const nflNames: Record<string, string> = {};
+    for (const item of legacyItems) {
+      nflNames[item.teamKey.trim().toUpperCase()] = item.teamName;
+    }
+
+    const nextTeams: TeamWatchlistBySport = {
+      nfl: nflKeys,
+      mlb: [],
+      nba: [],
+    };
+    const nextNames: TeamWatchlistNamesBySport = {
+      nfl: nflNames,
+      mlb: {},
+      nba: {},
+    };
+
+    setTeamWatchlist(nextTeams);
+    setTeamWatchlistNames(nextNames);
+    migratedRef.current = true;
+
+    void props.onPersist({
+      config: {
+        ...props.config,
+        watchlistSportKey: "nfl",
+        teamWatchlist: nextTeams,
+        teamWatchlistNames: nextNames,
+      },
+    });
+  }, [legacyItems, legacyLoaded, props]);
+
+  const persistConfig = useCallback(async (next: {
+    viewMode?: ViewMode;
+    sportKey?: SportKey;
+    playerWatchlist?: PlayerWatchlistBySport;
+    teamWatchlist?: TeamWatchlistBySport;
+    teamWatchlistNames?: TeamWatchlistNamesBySport;
+  }) => {
     const nextConfig = {
       ...props.config,
       watchlistMode: next.viewMode ?? viewMode,
-      watchlistSportKey: next.sportKey ?? playerSportKey,
-      playerWatchlist: normalizedWatchlist,
+      watchlistSportKey: next.sportKey ?? sportKey,
+      playerWatchlist: next.playerWatchlist ?? playerWatchlist,
+      teamWatchlist: next.teamWatchlist ?? teamWatchlist,
+      teamWatchlistNames: next.teamWatchlistNames ?? teamWatchlistNames,
     };
 
     await props.onPersist({ config: nextConfig });
-  }, [playerSportKey, playerWatchlist, props, viewMode]);
+  }, [playerWatchlist, props, sportKey, teamWatchlist, teamWatchlistNames, viewMode]);
 
-  async function addTeam(event: React.FormEvent) {
-    event.preventDefault();
-    setError(null);
-    const normalizedKey = teamKey.trim().toUpperCase();
-    const normalizedName = teamName.trim();
+  const teamsForSport = useMemo(() => teamWatchlist[sportKey] ?? [], [sportKey, teamWatchlist]);
+  const playersForSport = useMemo(() => playerWatchlist[sportKey] ?? [], [playerWatchlist, sportKey]);
 
-    if (!normalizedKey || !normalizedName) {
-      setError("teamKey and teamName are required");
+  useEffect(() => {
+    if (viewMode !== "teams") {
       return;
     }
 
-    if (useServer) {
-      const res = await fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamKey: normalizedKey, teamName: normalizedName, sport: "NFL" }),
-      });
-      const json = (await res.json()) as WatchlistResponse;
-      if (!res.ok) {
-        setError(json.error ?? "Failed to add team");
-        return;
-      }
-      const nextItems = await load();
-      setItems(nextItems);
-    } else {
-      const result = addGuestWatchlistTeam(normalizedKey, normalizedName);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setItems(result.state.items);
-      setUpdatedAt(result.state.updatedAt);
-    }
-
-    setTeamKey("");
-    setTeamName("");
-  }
-
-  async function remove(id: string) {
-    if (useServer) {
-      const res = await fetch(`/api/watchlist/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({ error: "Failed to remove team" }))) as { error?: string };
-        setError(json.error ?? "Failed to remove team");
-        return;
-      }
-      const nextItems = await load();
-      setItems(nextItems);
+    if (teamsForSport.length === 0) {
+      setStatusByTeam({});
+      setTeamStatusMeta(null);
       return;
     }
 
-    const nextState = removeGuestWatchlistTeam(id);
-    setItems(nextState.items);
-    setUpdatedAt(nextState.updatedAt);
-  }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const endpoint = `/api/teams/status/batch?sport=${sportKey}&teamKeys=${encodeURIComponent(teamsForSport.join(","))}&dataMode=${props.dataMode}`;
+        setLastEndpoint(endpoint);
+
+        const res = await fetch(endpoint, { cache: "no-store" });
+        const json = (await res.json()) as Envelope<TeamStatusBatch>;
+        if (!res.ok || json.error || !json.data) {
+          throw new Error(json.error?.message ?? "Failed to load team statuses");
+        }
+
+        if (cancelled) return;
+
+        const map = json.data.statuses.reduce<Record<string, TeamStatus>>((acc, status) => {
+          acc[status.teamKey.toUpperCase()] = status;
+          return acc;
+        }, {});
+
+        setStatusByTeam(map);
+        setTeamStatusMeta(json.meta);
+        setLastCallMeta(json.meta);
+        setTeamError(json.meta.warning ?? null);
+      } catch (error) {
+        if (!cancelled) {
+          setTeamError(String(error));
+          setStatusByTeam({});
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.dataMode, props.refreshTick, sportKey, teamsForSport, viewMode]);
 
   const runPlayerSearch = useCallback(async (value: string): Promise<PlayerSearchResultMin[]> => {
     if (value.trim().length < 3) {
       return [];
     }
 
-    const endpointUrl = `/api/players/search?sport=${playerSportKey}&q=${encodeURIComponent(value.trim())}&dataMode=${props.dataMode}`;
-    setPlayersEndpoint(endpointUrl);
+    const endpointUrl = `/api/players/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&dataMode=${props.dataMode}`;
+    setLastEndpoint(endpointUrl);
 
     const response = await fetch(endpointUrl, { cache: "no-store" });
     const json = (await response.json()) as Envelope<PlayerSearchResult[]>;
@@ -266,14 +429,17 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       return [];
     }
 
+    setLastCallMeta(json.meta);
     setPlayerError(json.meta.warning ?? null);
+
     return (json.data ?? []).map((row) => ({
       playerId: row.playerId,
       fullName: row.fullName,
       teamName: row.teamName,
       position: row.position,
+      headshot: row.headshot,
     }));
-  }, [playerSportKey, props.dataMode]);
+  }, [props.dataMode, sportKey]);
 
   useEffect(() => {
     if (viewMode !== "players") {
@@ -288,9 +454,9 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
           if (!cancelled) {
             setPlayerResults(results);
           }
-        } catch (searchError) {
+        } catch (error) {
           if (!cancelled) {
-            setPlayerError(String(searchError));
+            setPlayerError(String(error));
             setPlayerResults([]);
           }
         }
@@ -303,48 +469,108 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     };
   }, [playerQuery, runPlayerSearch, viewMode]);
 
-  const playersForSport = useMemo(() => playerWatchlist[playerSportKey] ?? [], [playerSportKey, playerWatchlist]);
+  const addTeam = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setTeamError(null);
+
+    const key = teamKeyInput.trim().toUpperCase();
+    const name = teamNameInput.trim();
+
+    if (!key) {
+      setTeamError("teamKey is required");
+      return;
+    }
+
+    if (teamsForSport.includes(key)) {
+      setTeamError("Team is already in this sport watchlist.");
+      return;
+    }
+
+    if (teamsForSport.length >= TEAM_LIMIT) {
+      setTeamError(`Limit reached: ${TEAM_LIMIT} teams per sport.`);
+      return;
+    }
+
+    const nextTeams: TeamWatchlistBySport = {
+      ...teamWatchlist,
+      [sportKey]: [...teamsForSport, key],
+    };
+    const nextNames: TeamWatchlistNamesBySport = {
+      ...teamWatchlistNames,
+      [sportKey]: {
+        ...teamWatchlistNames[sportKey],
+        [key]: name || teamWatchlistNames[sportKey][key] || key,
+      },
+    };
+
+    setTeamWatchlist(nextTeams);
+    setTeamWatchlistNames(nextNames);
+    setTeamKeyInput("");
+    setTeamNameInput("");
+
+    await persistConfig({ teamWatchlist: nextTeams, teamWatchlistNames: nextNames });
+  };
+
+  const removeTeam = async (teamKey: string) => {
+    const key = teamKey.trim().toUpperCase();
+
+    const nextTeams: TeamWatchlistBySport = {
+      ...teamWatchlist,
+      [sportKey]: teamsForSport.filter((item) => item !== key),
+    };
+    const nextNames: TeamWatchlistNamesBySport = {
+      ...teamWatchlistNames,
+      [sportKey]: { ...teamWatchlistNames[sportKey] },
+    };
+    delete nextNames[sportKey][key];
+
+    setTeamWatchlist(nextTeams);
+    setTeamWatchlistNames(nextNames);
+    await persistConfig({ teamWatchlist: nextTeams, teamWatchlistNames: nextNames });
+  };
 
   const addPlayer = async (player: PlayerSearchResultMin) => {
     setPlayerError(null);
+
     if (playersForSport.some((existing) => existing.playerId === player.playerId)) {
       setPlayerError("Player is already in this sport watchlist.");
       return;
     }
 
-    if (playersForSport.length >= 10) {
-      setPlayerError("Limit reached: 10 players per sport.");
+    if (playersForSport.length >= PLAYER_LIMIT) {
+      setPlayerError(`Limit reached: ${PLAYER_LIMIT} players per sport.`);
       return;
     }
 
     const nextWatchlist: PlayerWatchlistBySport = {
       ...playerWatchlist,
-      [playerSportKey]: uniqueByPlayerId([...playersForSport, player]),
+      [sportKey]: uniqueByPlayerId([...playersForSport, player]),
     };
 
     setPlayerWatchlist(nextWatchlist);
     setPlayerResults([]);
     setPlayerQuery("");
-    await persistPlayerConfig({ watchlist: nextWatchlist });
+
+    await persistConfig({ playerWatchlist: nextWatchlist });
   };
 
   const removePlayer = async (playerId: string) => {
     const nextWatchlist: PlayerWatchlistBySport = {
       ...playerWatchlist,
-      [playerSportKey]: playersForSport.filter((row) => row.playerId !== playerId),
+      [sportKey]: playersForSport.filter((row) => row.playerId !== playerId),
     };
 
     setPlayerWatchlist(nextWatchlist);
     if (lastProfile?.playerId === playerId) {
       setLastProfile(null);
-      setLastProfileMeta(null);
     }
-    await persistPlayerConfig({ watchlist: nextWatchlist });
+
+    await persistConfig({ playerWatchlist: nextWatchlist });
   };
 
   const loadPlayerProfile = async (playerId: string) => {
-    const endpointUrl = `/api/players/profile?sport=${playerSportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
-    setPlayersEndpoint(endpointUrl);
+    const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
+    setLastEndpoint(endpointUrl);
 
     const response = await fetch(endpointUrl, { cache: "no-store" });
     const json = (await response.json()) as Envelope<PlayerProfile>;
@@ -353,34 +579,32 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       return;
     }
 
+    setLastCallMeta(json.meta);
     setPlayerError(json.meta.warning ?? null);
     setLastProfile(json.data ?? null);
-    setLastProfileMeta(json.meta ?? null);
   };
 
   const onViewModeChange = async (next: ViewMode) => {
     setViewMode(next);
+    setTeamError(null);
     setPlayerError(null);
-    await persistPlayerConfig({ viewMode: next });
+    await persistConfig({ viewMode: next });
   };
 
-  const onPlayerSportChange = async (nextSportKey: SportKey) => {
-    setPlayerSportKey(nextSportKey);
+  const onSportChange = async (nextSportKey: SportKey) => {
+    setSportKey(nextSportKey);
     setPlayerResults([]);
     setPlayerQuery("");
+    setTeamError(null);
     setPlayerError(null);
-    await persistPlayerConfig({ sportKey: nextSportKey });
+    await persistConfig({ sportKey: nextSportKey });
   };
 
-  const teamsMeta: WidgetMeta = {
-    sourceUsed: sourceLabel.toLowerCase(),
-    updatedAt,
-    requestId: useServer ? "watchlist-server" : "watchlist-guest",
-  };
+  const headerMeta = viewMode === "teams" ? teamStatusMeta : lastCallMeta;
 
   return (
     <div className="space-y-2 text-xs">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-2">
         <span className="font-medium">Watchlist</span>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
@@ -393,54 +617,72 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
-      <div className="inline-flex rounded border border-neutral-700 bg-neutral-950 p-0.5">
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-[11px] ${viewMode === "teams" ? "bg-neutral-700 text-white" : "text-neutral-300"}`}
-          onClick={() => void onViewModeChange("teams")}
+      <div className="space-y-2">
+        <TabsRow
+          items={MODE_TABS.map((item) => ({ key: item.key, label: item.label }))}
+          value={viewMode}
+          onChange={(key) => void onViewModeChange(key as ViewMode)}
           disabled={props.locked}
-        >
-          Teams
-        </button>
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-[11px] ${viewMode === "players" ? "bg-neutral-700 text-white" : "text-neutral-300"}`}
-          onClick={() => void onViewModeChange("players")}
+          size="sm"
+        />
+
+        <TabsRow
+          items={SPORT_TABS.map((item) => ({ key: item.key, label: item.label }))}
+          value={sportKey}
+          onChange={(key) => void onSportChange(key as SportKey)}
           disabled={props.locked}
-        >
-          Players
-        </button>
+          size="sm"
+        />
       </div>
 
       {viewMode === "teams" ? (
         <>
-          <form className="grid grid-cols-2 gap-2" onSubmit={(event) => void addTeam(event)}>
-            <input className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1" placeholder="Team key" value={teamKey} onChange={(e) => setTeamKey(e.target.value)} />
-            <input className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1" placeholder="Team name" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
-            <button className="col-span-2 rounded border border-neutral-700 px-2 py-1" type="submit">Add team</button>
+          <form className="space-y-2" onSubmit={(event) => void addTeam(event)}>
+            <input
+              className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+              placeholder="Team key (e.g. NYM)"
+              value={teamKeyInput}
+              onChange={(event) => setTeamKeyInput(event.target.value)}
+              disabled={props.locked}
+            />
+            <input
+              className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+              placeholder="Team name"
+              value={teamNameInput}
+              onChange={(event) => setTeamNameInput(event.target.value)}
+              disabled={props.locked}
+            />
+            <button className="w-full rounded border border-neutral-700 px-2 py-1" type="submit" disabled={props.locked}>Add team</button>
           </form>
-          <p className="text-neutral-400">Why it matters: your top {guestWatchlistLimit()} teams stay visible across widgets.</p>
-          {error ? <p className="text-amber-300">{error}</p> : null}
 
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between rounded border border-neutral-700 bg-neutral-950 p-2">
-              <span>{item.teamName} ({item.teamKey})</span>
-              <button type="button" onClick={() => void remove(item.id)} disabled={props.locked}>Remove</button>
-            </div>
-          ))}
-          {items.length === 0 ? <p className="text-neutral-500">No teams added yet.</p> : null}
+          <p className="text-neutral-400">{teamsForSport.length}/{TEAM_LIMIT} teams in {sportLabel(sportKey)} watchlist.</p>
 
-          <div className="text-[10px] text-neutral-500">Updated {to12h(teamsMeta.updatedAt)} · Source {sourceLabel}</div>
+          {teamsForSport.map((key) => {
+            const normalizedKey = key.toUpperCase();
+            const label = teamWatchlistNames[sportKey][normalizedKey] ?? normalizedKey;
+            const status = statusByTeam[normalizedKey];
+            return (
+              <div key={`${sportKey}-team-${normalizedKey}`} className="flex items-start justify-between rounded border border-neutral-700 bg-neutral-950 p-2">
+                <div>
+                  <p className="font-medium">{label} ({normalizedKey})</p>
+                  <p className="text-neutral-400">{teamStatusLabel(status)}</p>
+                </div>
+                <button type="button" onClick={() => void removeTeam(normalizedKey)} disabled={props.locked}>Remove</button>
+              </div>
+            );
+          })}
+
+          {teamsForSport.length === 0 ? <p className="text-neutral-500">No teams added for this sport yet.</p> : null}
+          {teamError ? <p className="text-amber-300">{teamError}</p> : null}
+          {legacyError ? <p className="text-amber-300">{legacyError}</p> : null}
         </>
       ) : (
         <>
-          <SportTabs value={playerSportKey} onChange={(next) => void onPlayerSportChange(next)} disabled={props.locked} />
-
           <input
             className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
             value={playerQuery}
             onChange={(event) => setPlayerQuery(event.target.value)}
-            placeholder={`Search ${sportLabel(playerSportKey)} players (3+ chars)`}
+            placeholder={`Search ${sportLabel(sportKey)} players (3+ chars)`}
             disabled={props.locked}
           />
 
@@ -449,22 +691,34 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
           {playerResults.length > 0 ? (
             <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
               {playerResults.map((result) => (
-                <div key={`${playerSportKey}-${result.playerId}`} className="flex items-center justify-between rounded px-1 py-1 hover:bg-neutral-800">
-                  <span>{result.fullName} · {result.teamName ?? "-"} · {result.position ?? "-"}</span>
+                <div key={`${sportKey}-search-${result.playerId}`} className="flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-neutral-800">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <img src={result.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{result.fullName}</p>
+                      <p className="truncate text-neutral-400">{compact([result.position, result.teamName, sportLabel(sportKey)])}</p>
+                    </div>
+                  </div>
                   <button type="button" className="rounded border border-neutral-700 px-2 py-0.5" onClick={() => void addPlayer(result)} disabled={props.locked}>Add</button>
                 </div>
               ))}
             </div>
           ) : null}
 
-          <p className="text-neutral-400">{playersForSport.length}/10 players in {sportLabel(playerSportKey)} watchlist.</p>
+          <p className="text-neutral-400">{playersForSport.length}/{PLAYER_LIMIT} players in {sportLabel(sportKey)} watchlist.</p>
 
           {playersForSport.length > 0 ? (
             <div className="space-y-1 rounded border border-neutral-700 bg-neutral-950 p-2">
               {playersForSport.map((player) => (
-                <div key={`${playerSportKey}-watch-${player.playerId}`} className="flex items-center justify-between border-b border-neutral-800 py-1 last:border-b-0">
-                  <button type="button" className="text-left text-neutral-100" onClick={() => void loadPlayerProfile(player.playerId)}>
-                    {player.fullName} · {player.teamName ?? "-"}
+                <div key={`${sportKey}-watch-${player.playerId}`} className="flex items-center justify-between gap-2 border-b border-neutral-800 py-1 last:border-b-0">
+                  <button type="button" className="min-w-0 text-left" onClick={() => void loadPlayerProfile(player.playerId)}>
+                    <div className="flex items-center gap-2">
+                      <img src={player.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{player.fullName}</p>
+                        <p className="truncate text-neutral-400">{compact([player.position, player.teamName, sportLabel(sportKey)])}</p>
+                      </div>
+                    </div>
                   </button>
                   <button type="button" onClick={() => void removePlayer(player.playerId)} disabled={props.locked}>Remove</button>
                 </div>
@@ -477,18 +731,36 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
           {lastProfile ? (
             <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
               <p className="font-medium">{lastProfile.fullName}</p>
-              <p>{lastProfile.teamName ?? "-"} · {lastProfile.position ?? "-"} #{lastProfile.jersey ?? "-"}</p>
-              <p>{lastProfile.height ?? "-"} · {lastProfile.weight ?? "-"} · Age {typeof lastProfile.age === "number" ? lastProfile.age : "-"}</p>
+              <p>{compact([lastProfile.teamName, lastProfile.position, lastProfile.jersey ? `#${lastProfile.jersey}` : undefined])}</p>
+              <p>{compact([lastProfile.height, lastProfile.weight, typeof lastProfile.age === "number" ? `Age ${lastProfile.age}` : undefined])}</p>
+              <p className="text-[10px] text-neutral-500">
+                Updated {lastCallMeta ? to12h(lastCallMeta.updatedAt) : "-"} · Source {lastCallMeta ? lastCallMeta.sourceUsed.toUpperCase() : "-"}
+              </p>
             </div>
           ) : null}
-
-          <div className="text-[10px] text-neutral-500">
-            Updated {lastProfileMeta ? to12h(lastProfileMeta.updatedAt) : "-"} · Source {lastProfileMeta ? lastProfileMeta.sourceUsed.toUpperCase() : "-"}
-          </div>
 
           {playerError ? <p className="text-amber-300">{playerError}</p> : null}
         </>
       )}
+
+      <div className="text-[10px] text-neutral-500">
+        Updated {headerMeta ? to12h(headerMeta.updatedAt) : "-"} · Source {headerMeta ? headerMeta.sourceUsed.toUpperCase() : "-"}
+      </div>
+
+      <details className="rounded border border-neutral-700 bg-black/20 p-2">
+        <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
+        <p>View mode: {viewMode}</p>
+        <p>Sport: {sportKey.toUpperCase()}</p>
+        <p>Endpoint: {lastEndpoint || "-"}</p>
+        <p>Request ID: {headerMeta?.requestId ?? "-"}</p>
+        <pre className="overflow-auto text-[10px]">{JSON.stringify({
+          teamWatchlist,
+          teamWatchlistNames,
+          playerWatchlist,
+          lastProfile,
+          headerMeta,
+        }, null, 2)}</pre>
+      </details>
 
       <button
         type="button"
@@ -496,18 +768,14 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         onClick={() => props.onReportBug({
           widgetId: props.widgetId,
           mode: viewMode,
-          sportKey: playerSportKey,
-          error,
+          sportKey,
+          legacyError,
+          teamError,
           playerError,
-          itemCount: items.length,
-          playerCounts: {
-            nfl: playerWatchlist.nfl.length,
-            mlb: playerWatchlist.mlb.length,
-            nba: playerWatchlist.nba.length,
-          },
-          playersEndpoint,
-          teamsMeta,
-          lastProfileMeta,
+          lastEndpoint,
+          headerMeta,
+          teamWatchlist,
+          playerWatchlist,
         })}
       >
         Report a bug
