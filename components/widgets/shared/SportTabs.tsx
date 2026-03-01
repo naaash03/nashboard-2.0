@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { SportKey } from "@/lib/types/players";
 
 const TABS: Array<{ key: SportKey; label: string }> = [
@@ -18,18 +19,12 @@ export default function SportTabs({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex rounded border border-neutral-700 bg-neutral-950 p-0.5">
-      {TABS.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          onClick={() => onChange(tab.key)}
-          disabled={disabled}
-          className={`rounded px-2 py-1 text-[11px] ${value === tab.key ? "bg-neutral-700 text-white" : "text-neutral-300"}`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
+    <TabsRow
+      items={TABS}
+      value={value}
+      onChange={(next) => onChange(next as SportKey)}
+      disabled={disabled}
+      size="sm"
+    />
   );
 }
