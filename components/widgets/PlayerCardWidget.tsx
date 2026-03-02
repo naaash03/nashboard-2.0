@@ -5,12 +5,14 @@ import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
 import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
+import type { PlayerInsights } from "@/lib/types/playerInsights";
 import { stableKey } from "@/lib/utils/stableKey";
 
 type PlayerBySportConfig = Partial<Record<SportKey, { playerId: string; playerName?: string }>>;
 
 type SearchResponse = Envelope<PlayerSearchResult[]>;
 type PlayerProfileResponse = Envelope<PlayerProfile>;
+type PlayerInsightsResponse = Envelope<PlayerInsights>;
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -152,6 +154,27 @@ function sportExtraRows(profile: PlayerProfile, sport: SportKey): Array<{ label:
   ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
+function formatLiveLine(insights: PlayerInsights | null): string {
+  if (!insights?.live || !insights.live.hasGameToday) {
+    return "No game today";
+  }
+
+  const opponent = insights.live.opponent
+    ? insights.live.homeAway === "home"
+      ? `vs ${insights.live.opponent}`
+      : `at ${insights.live.opponent}`
+    : "vs TBD";
+  const score = insights.live.score ? `${insights.live.score.team}-${insights.live.score.opp}` : undefined;
+
+  if (insights.live.state === "in") {
+    return ["LIVE", opponent, score, insights.live.displayClock].filter(Boolean).join(" · ");
+  }
+  if (insights.live.state === "post") {
+    return ["Final", opponent, score].filter(Boolean).join(" · ");
+  }
+  return ["Today", opponent, insights.live.displayClock].filter(Boolean).join(" · ");
+}
+
 export default function PlayerCardWidget(props: WidgetCommonProps) {
   const initialSport = normalizeSportKey(props.config.sportKey);
 
@@ -168,9 +191,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const [showRawSearch, setShowRawSearch] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [insights, setInsights] = useState<PlayerInsights | null>(null);
+  const [insightsMeta, setInsightsMeta] = useState<WidgetMeta | null>(null);
+  const [isInsightsLoading, setIsInsightsLoading] = useState(false);
 
   const lastExecutedSearchKeyRef = useRef("");
   const lastFetchedProfileKeyRef = useRef("");
+  const lastFetchedInsightsKeyRef = useRef("");
 
   const configSportKey = normalizeSportKey(props.config.sportKey);
   const configPlayerId = selectedPlayerIdFromConfig(props.config, configSportKey);
@@ -286,6 +313,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     [props.dataMode, selectedPlayerId, sportKey],
   );
 
+  const insightsRequestKey = useMemo(
+    () => props.mode === "ADVANCED" && selectedPlayerId
+      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode, mode: "advanced" })
+      : "",
+    [props.dataMode, props.mode, selectedPlayerId, sportKey],
+  );
+
   useEffect(() => {
     if (!selectedPlayerId) {
       setData(null);
@@ -333,12 +367,67 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     };
   }, [loadPlayer, profileRequestKey, selectedPlayerId]);
 
+  useEffect(() => {
+    if (props.mode !== "ADVANCED" || !selectedPlayerId) {
+      setInsights(null);
+      setInsightsMeta(null);
+      setIsInsightsLoading(false);
+      lastFetchedInsightsKeyRef.current = "";
+      return;
+    }
+
+    if (insightsRequestKey === lastFetchedInsightsKeyRef.current) {
+      return;
+    }
+    lastFetchedInsightsKeyRef.current = insightsRequestKey;
+
+    const controller = new AbortController();
+    setIsInsightsLoading(true);
+
+    void (async () => {
+      try {
+        const endpointUrl = `/api/players/insights?sport=${sportKey}&playerId=${encodeURIComponent(selectedPlayerId)}&mode=advanced&dataMode=${props.dataMode}`;
+        setEndpoint(endpointUrl);
+        const response = await fetch(endpointUrl, { cache: "no-store", signal: controller.signal });
+        const json = (await response.json()) as PlayerInsightsResponse;
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (!response.ok || json.error) {
+          throw new Error(json.error?.message ?? "Failed to load player insights");
+        }
+
+        setInsights(json.data ?? null);
+        setInsightsMeta(json.meta ?? null);
+        if (json.meta?.warning) {
+          setWarning(json.meta.warning);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setWarning(String(error));
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsInsightsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [insightsRequestKey, props.dataMode, props.mode, selectedPlayerId, sportKey]);
+
   const onSelect = async (player: PlayerSearchResult) => {
     setSelectedPlayerId(player.playerId);
     setQuery(player.fullName);
     setResults([]);
     setLastSearchRaw(null);
     setWarning(null);
+    setInsights(null);
+    setInsightsMeta(null);
+    lastFetchedInsightsKeyRef.current = "";
 
     const playerBySport = normalizePlayerBySport(props.config.playerBySport);
     playerBySport[sportKey] = {
@@ -382,6 +471,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     setResults([]);
     setLastSearchRaw(null);
     setWarning(null);
+    setInsights(null);
+    setInsightsMeta(null);
+    lastFetchedInsightsKeyRef.current = "";
     if (!nextSelectedPlayerId) {
       setData(null);
       setMeta(null);
@@ -411,6 +503,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
   const extraRows = data ? sportExtraRows(data, sportKey) : [];
   const physicalLine = data ? profilePhysicalLine(data) : null;
+  const activeMeta = props.mode === "ADVANCED" ? (insightsMeta ?? meta) : meta;
 
   return (
     <div className="space-y-2 text-xs">
@@ -507,10 +600,82 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         <p className="text-neutral-400">No player selected.</p>
       )}
 
+      {props.mode === "ADVANCED" && selectedPlayerId ? (
+        <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
+          {isInsightsLoading ? <p className="text-neutral-400">Loading advanced insights...</p> : null}
+
+          <details className="rounded border border-neutral-800 bg-black/20 p-2">
+            <summary className="cursor-pointer font-medium">Live Context</summary>
+            <p className="mt-1 text-neutral-300">{formatLiveLine(insights)}</p>
+          </details>
+
+          <details className="rounded border border-neutral-800 bg-black/20 p-2">
+            <summary className="cursor-pointer font-medium">Season Highlights</summary>
+            {insights?.season ? (
+              <div className="mt-2 space-y-2">
+                <p className="text-neutral-300">{insights.season.headline}</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {insights.season.metrics.slice(0, 6).map((metric) => (
+                    <div key={metric.key} className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-1">
+                      <p className="text-[10px] uppercase tracking-wide text-neutral-400">{metric.label}</p>
+                      <p className="text-sm font-semibold text-neutral-100">{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-1 text-neutral-400">Not available.</p>
+            )}
+          </details>
+
+          <details className="rounded border border-neutral-800 bg-black/20 p-2">
+            <summary className="cursor-pointer font-medium">Recent Games</summary>
+            {insights?.recent?.games && insights.recent.games.length > 0 ? (
+              <div className="mt-2 max-h-52 space-y-1 overflow-auto">
+                <p className="text-neutral-300">{insights.recent.headline}</p>
+                {insights.recent.games.map((game, index) => (
+                  <div key={`${game.date ?? "na"}-${index}`} className="rounded border border-neutral-700 bg-neutral-900/70 px-2 py-1">
+                    <p className="text-[11px] text-neutral-200">
+                      {(game.date ?? "-")} · {(game.opponent ?? "TBD")} · {(game.result ?? "-")}
+                    </p>
+                    <p className="text-neutral-400">{game.line}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-neutral-400">Not available.</p>
+            )}
+          </details>
+
+          <details className="rounded border border-neutral-800 bg-black/20 p-2">
+            <summary className="cursor-pointer font-medium">Status / Injury</summary>
+            {insights?.injury ? (
+              <div className="mt-1">
+                <p className="text-neutral-300">{insights.injury.status ?? "Status unavailable"}</p>
+                {insights.injury.detail ? <p className="text-neutral-400">{insights.injury.detail}</p> : null}
+              </div>
+            ) : (
+              <p className="mt-1 text-neutral-400">Not available.</p>
+            )}
+          </details>
+
+          {insights?.metaNotes && insights.metaNotes.length > 0 ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Notes</summary>
+              <ul className="mt-1 space-y-1 text-neutral-400">
+                {insights.metaNotes.map((note, index) => (
+                  <li key={`${index}-${note}`}>- {note}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+
       {warning ? <p className="text-amber-300">{warning}</p> : null}
-      {meta && data ? (
+      {activeMeta && data ? (
         <div className="text-[10px] text-neutral-500">
-          Updated {to12h(meta.updatedAt)} · Source {meta.sourceUsed.toUpperCase()}
+          Updated {to12h(activeMeta.updatedAt)} · Source {activeMeta.sourceUsed.toUpperCase()}
         </div>
       ) : null}
 
@@ -518,8 +683,8 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
         <p>Local API URL: {endpoint}</p>
         <p>Sport: {sportKey.toUpperCase()}</p>
-        <p>Request ID: {meta?.requestId ?? "-"}</p>
-        <p>Final upstream URL: {meta?.endpointUrl ?? "-"}</p>
+        <p>Request ID: {activeMeta?.requestId ?? "-"}</p>
+        <p>Final upstream URL: {activeMeta?.endpointUrl ?? "-"}</p>
         <p>Last error: {lastError ?? "none"}</p>
         {isDev ? (
           <label className="mt-1 flex items-center gap-2 text-[11px]">
@@ -534,7 +699,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         {isDev && showRawSearch ? (
           <pre className="overflow-auto text-[10px]">{JSON.stringify(lastSearchRaw, null, 2)}</pre>
         ) : null}
-        <pre className="overflow-auto text-[10px]">{JSON.stringify({ meta }, null, 2)}</pre>
+        <pre className="overflow-auto text-[10px]">{JSON.stringify({ profileMeta: meta, insightsMeta, insights }, null, 2)}</pre>
       </details>
 
       <button
@@ -543,7 +708,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         onClick={() => props.onReportBug({
           widgetId: props.widgetId,
           sportKey,
-          meta,
+          meta: activeMeta,
           warning,
           playerId: selectedPlayerId,
           endpoint,

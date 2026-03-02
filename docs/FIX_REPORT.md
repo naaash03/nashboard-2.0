@@ -1,5 +1,37 @@
 ﻿# FIX REPORT
 
+## Changelog (2026-03-02)
+- Advanced mode for Misc widgets:
+  - Player Card Advanced now pulls /api/players/insights and renders mobile-friendly accordion sections for:
+    - Live context
+    - Season highlights
+    - Recent games (last 5)
+    - Injury/status
+  - Watchlist Teams Advanced now pulls /api/teams/advanced and adds per-team details for:
+    - Next game
+    - Record/streak/last 10 (when available)
+    - Standings rank (when available)
+    - Detailed live state
+  - Watchlist Players Advanced now pulls /api/players/insights/batch once per sport/list change and shows:
+    - Quick stat summary
+    - Last game line
+    - Team live game context
+- New advanced APIs (standard envelope: { data, meta, error? }):
+  - GET /api/players/insights?sport=nfl|mlb|nba&playerId=...&mode=beginner|advanced&dataMode=live|fixture
+  - GET /api/players/insights/batch?sport=nfl|mlb|nba&playerIds=...&mode=advanced&dataMode=live|fixture
+  - GET /api/teams/advanced?sport=nfl|mlb|nba&teamKeys=...&mode=beginner|advanced&dataMode=live|fixture
+- Safe-mode data strategy and derived stats:
+  - Uses reliable ESPN profile + scoreboard + standings + gamelog endpoints first.
+  - If season aggregates are missing, derives highlights from recent games:
+    - NBA: PPG/RPG/APG
+    - NFL: passing/rushing/receiving per-game summaries
+    - MLB pitcher: ERA/WHIP/K9
+    - MLB hitter: AVG/OPS/HR/RBI when sufficient fields exist
+  - If upstream data is partial, returns graceful null sections with meta.warning and metaNotes instead of failing the full payload.
+- Fixture mode notes:
+  - New gamelog fixtures added under tests/fixtures/espn/gamelog/.
+  - Advanced team status/standings in fixture mode use existing scoreboard + standings fixtures.
+
 ## Changelog (2026-03-01)
 - Widget category refactor:
   - `player_card` and `watchlist` moved to `UTILITIES` for metadata/category grouping.
@@ -205,5 +237,6 @@
 - [x] Data health endpoint
 - [x] Vitest fixture-mode tests for required offseason/stability cases
 - [x] MLB scaffolding widget slots + provider stub
+
 
 
