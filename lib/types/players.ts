@@ -4,8 +4,12 @@ export type PlayerSearchResult = {
   playerId: string;
   fullName: string;
   teamName?: string;
+  teamAbbr?: string;
   position?: string;
+  jersey?: string;
   headshot?: string;
+  headshotUrl?: string;
+  teamLogoUrl?: string;
 };
 
 export type PlayerProfile = {

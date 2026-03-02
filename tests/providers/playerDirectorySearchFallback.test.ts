@@ -6,7 +6,7 @@ beforeEach(() => {
 });
 
 describe("player directory fallback search behavior", () => {
-  it("short-circuits MLB search to ESPN common search endpoint", async () => {
+  it("uses ESPN common search endpoint for MLB", async () => {
     const mod = await import("@/lib/providers/espn/playerDirectory");
     const result = await mod.searchPlayers("mlb", "juan soto", "fixture", 8);
 
@@ -14,13 +14,12 @@ describe("player directory fallback search behavior", () => {
     expect(result.meta.sourceUsed).toBe("fixture");
     expect(result.meta.endpointUrl).toContain("site.web.api.espn.com/apis/common/v3/search");
     expect(result.meta.endpointUrl).not.toContain("/sports/baseball/mlb/athletes");
-    expect(result.meta.warning).toContain("League athlete search endpoint unavailable; used common search.");
     expect(Array.isArray(result.data)).toBe(true);
     expect(result.data?.length ?? 0).toBeGreaterThan(0);
     expect(result.data?.length ?? 0).toBeLessThanOrEqual(8);
   });
 
-  it("short-circuits NBA search to ESPN common search endpoint", async () => {
+  it("uses ESPN common search endpoint for NBA", async () => {
     const mod = await import("@/lib/providers/espn/playerDirectory");
     const result = await mod.searchPlayers("nba", "lebron james", "fixture", 8);
 

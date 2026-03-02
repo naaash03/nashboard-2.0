@@ -6,7 +6,7 @@ beforeEach(() => {
 });
 
 describe("players insights api route", () => {
-  it("returns fixture envelope with live/season/recent data", async () => {
+  it("returns fixture envelope with NBA live/season/recent data including TS% when inputs exist", async () => {
     const mod = await import("@/app/api/players/insights/route");
     const res = await mod.GET(new Request("http://localhost/api/players/insights?sport=nba&playerId=1966&mode=advanced&dataMode=fixture"));
     const body = await res.json();
@@ -23,9 +23,23 @@ describe("players insights api route", () => {
     }));
     expect(Array.isArray(body.data.recent?.games)).toBe(true);
     expect(body.data.recent.games.length).toBeLessThanOrEqual(5);
-    if (body.data.season) {
-      expect(["upstream", "derived"]).toContain(body.data.season.source);
-    }
+    expect(body.data.season).toBeTruthy();
+    expect(["upstream", "derived"]).toContain(body.data.season.source);
+    const labels = (body.data.season.metrics ?? []).map((metric: { label: string }) => metric.label);
+    expect(labels).toEqual(expect.arrayContaining(["PPG", "RPG", "APG", "TS%"]));
+  });
+
+  it("derives MLB pitcher highlights (ERA/WHIP/K9) from fixture game log", async () => {
+    const mod = await import("@/app/api/players/insights/route");
+    const res = await mod.GET(new Request("http://localhost/api/players/insights?sport=mlb&playerId=32827&mode=advanced&dataMode=fixture"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta.sourceUsed).toBe("fixture");
+    expect(body.data.season).toBeTruthy();
+    const labels = (body.data.season.metrics ?? []).map((metric: { label: string }) => metric.label);
+    expect(labels).toEqual(expect.arrayContaining(["ERA", "WHIP", "K/9"]));
+    expect(body.data.recent.games.length).toBeLessThanOrEqual(5);
   });
 
   it("returns 400 envelope when playerId is missing", async () => {

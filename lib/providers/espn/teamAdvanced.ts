@@ -7,6 +7,7 @@ import type { SportKey, TeamAdvanced } from "@/lib/types/playerInsights";
 
 type ModeArg = "live" | "fixture";
 type ViewMode = "beginner" | "advanced";
+type CacheBustArg = string | number | null | undefined;
 
 type ScoreboardPayload = {
   events?: Array<{
@@ -268,6 +269,7 @@ export async function getTeamsAdvanced(
   teamKeys: string[],
   mode: ViewMode,
   dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
 ): Promise<Envelope<{ sport: SportKey; teams: TeamAdvanced[] }>> {
   const resolvedMode = getDataMode(dataMode);
   const normalizedKeys = Array.from(new Set(teamKeys.map((key) => key.trim().toUpperCase()).filter(Boolean)));
@@ -290,7 +292,7 @@ export async function getTeamsAdvanced(
   }
 
   const notes: string[] = [];
-  const statusEnvelope = await getTeamStatusBatch(sport, normalizedKeys, resolvedMode);
+  const statusEnvelope = await getTeamStatusBatch(sport, normalizedKeys, resolvedMode, cacheBust);
   if (statusEnvelope.error || !statusEnvelope.data) {
     return {
       data: null,
@@ -312,6 +314,7 @@ export async function getTeamsAdvanced(
       fixtureSubdir: fixture.subdir,
       ttlSeconds: 60,
       dataMode: resolvedMode,
+      cacheBust,
     });
     scoreboardMeta = scoreboard.meta;
     scoreboardPayload = scoreboard.data;
@@ -329,6 +332,7 @@ export async function getTeamsAdvanced(
       fixtureSubdir: standingsFixture?.subdir,
       ttlSeconds: 180,
       dataMode: resolvedMode,
+      cacheBust,
     });
     standingsMeta = standingsResponse.meta;
     standingsByTeam = parseStandings(standingsResponse.data);

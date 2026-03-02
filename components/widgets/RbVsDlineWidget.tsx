@@ -74,10 +74,28 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
   const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
-    setInputTeamKey(configTeamKey);
-    setAppliedTeamKey(configTeamKey);
-    setValidationError(null);
+    const timeoutId = window.setTimeout(() => {
+      setInputTeamKey(configTeamKey);
+      setAppliedTeamKey(configTeamKey);
+      setValidationError(null);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [configTeamKey]);
+
+  useEffect(() => {
+    if (appliedTeamKey) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setData(null);
+      setMeta(null);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [appliedTeamKey]);
 
   const load = useCallback(async (
     key: string,
@@ -101,8 +119,6 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
 
   useEffect(() => {
     if (!appliedTeamKey) {
-      setData(null);
-      setMeta(null);
       return;
     }
 

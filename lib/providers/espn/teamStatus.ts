@@ -1,10 +1,11 @@
 ﻿import { randomUUID } from "node:crypto";
-import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
-import type { Meta } from "@/lib/providers/types";
+import { getDataMode } from "@/lib/providers/espn/client";
+import { getScoreboard } from "@/lib/providers/espn/playerDirectory";
 import type { Envelope, SportKey } from "@/lib/types/players";
 import type { TeamStatus, TeamStatusBatch } from "@/lib/types/teamStatus";
 
 type ModeArg = "live" | "fixture";
+type CacheBustArg = string | number | null | undefined;
 
 type ScoreboardPayload = {
   events?: Array<{
@@ -30,18 +31,6 @@ type ScoreboardPayload = {
       }>;
     }>;
   }>;
-};
-
-const SPORT_ENDPOINTS: Record<SportKey, string> = {
-  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-  mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-};
-
-const SPORT_FIXTURES: Record<SportKey, { file: string; subdir: string }> = {
-  nfl: { file: "scoreboard_with_games.json", subdir: "nfl" },
-  mlb: { file: "mlb_scoreboard_sample.json", subdir: "scoreboard" },
-  nba: { file: "nba_scoreboard_sample.json", subdir: "scoreboard" },
 };
 
 function normalizeSportKey(input: string | null | undefined): SportKey {
@@ -135,26 +124,11 @@ function findStatusForTeam(sport: SportKey, teamKey: string, payload: Scoreboard
   return fallback;
 }
 
-async function fetchScoreboard(sport: SportKey, dataMode: ModeArg): Promise<{ payload: ScoreboardPayload; meta: Meta }> {
-  const fixture = SPORT_FIXTURES[sport];
-  const response = await fetchEspnJson<ScoreboardPayload>({
-    endpoint: SPORT_ENDPOINTS[sport],
-    fixtureFile: fixture.file,
-    fixtureSubdir: fixture.subdir,
-    ttlSeconds: 45,
-    dataMode,
-  });
-
-  return {
-    payload: response.data,
-    meta: response.meta,
-  };
-}
-
 export async function getTeamStatus(
   sportInput: SportKey,
   teamAbbrevOrKey: string,
   dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
 ): Promise<Envelope<TeamStatus>> {
   const sport = normalizeSportKey(sportInput);
   const teamKey = teamAbbrevOrKey.trim().toUpperCase();
@@ -178,9 +152,20 @@ export async function getTeamStatus(
   }
 
   try {
-    const fetched = await fetchScoreboard(sport, mode);
+    const fetched = await getScoreboard({ sport, dataMode: mode, cacheBust });
+    if (fetched.error || !fetched.data) {
+      return {
+        data: null,
+        meta: fetched.meta,
+        error: {
+          message: fetched.error?.message ?? "Failed to fetch scoreboard data",
+          code: fetched.error?.code ?? "UPSTREAM_ERROR",
+        },
+      };
+    }
+
     return {
-      data: findStatusForTeam(sport, teamKey, fetched.payload),
+      data: findStatusForTeam(sport, teamKey, fetched.data as ScoreboardPayload),
       meta: fetched.meta,
     };
   } catch (error) {
@@ -205,6 +190,7 @@ export async function getTeamStatusBatch(
   sportInput: SportKey,
   teamKeys: string[],
   dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
 ): Promise<Envelope<TeamStatusBatch>> {
   const sport = normalizeSportKey(sportInput);
   const normalizedKeys = teamKeys.map((key) => key.trim().toUpperCase()).filter(Boolean);
@@ -228,8 +214,19 @@ export async function getTeamStatusBatch(
   }
 
   try {
-    const fetched = await fetchScoreboard(sport, mode);
-    const statuses = normalizedKeys.map((key) => findStatusForTeam(sport, key, fetched.payload));
+    const fetched = await getScoreboard({ sport, dataMode: mode, cacheBust });
+    if (fetched.error || !fetched.data) {
+      return {
+        data: null,
+        meta: fetched.meta,
+        error: {
+          message: fetched.error?.message ?? "Failed to fetch scoreboard data",
+          code: fetched.error?.code ?? "UPSTREAM_ERROR",
+        },
+      };
+    }
+
+    const statuses = normalizedKeys.map((key) => findStatusForTeam(sport, key, fetched.data as ScoreboardPayload));
     return {
       data: {
         sport,

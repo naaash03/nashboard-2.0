@@ -27,6 +27,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const sport = normalizeTeamStatusSport(searchParams.get("sport"));
   const teamKey = (searchParams.get("teamKey") ?? "").trim();
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!teamKey) {
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getTeamStatus(sport, teamKey, resolvedDataMode);
+    const envelope = await getTeamStatus(sport, teamKey, resolvedDataMode, cacheBust);
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

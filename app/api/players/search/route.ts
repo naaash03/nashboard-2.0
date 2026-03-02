@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const query = (searchParams.get("q") ?? "").trim();
   const parsedLimit = Number.parseInt(searchParams.get("limit") ?? "8", 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(8, parsedLimit)) : 8;
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!query) {
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await searchPlayers(sport, query, resolvedDataMode, limit);
+    const envelope = await searchPlayers(sport, query, resolvedDataMode, limit, cacheBust);
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

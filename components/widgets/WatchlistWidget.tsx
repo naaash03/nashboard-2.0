@@ -50,23 +50,24 @@ const SPORT_TABS = [
   { key: "nba", label: "NBA" },
 ] as const;
 
-const EMPTY_PLAYER_WATCHLIST: PlayerWatchlistBySport = {
-  nfl: [],
-  mlb: [],
-  nba: [],
-};
-
-const EMPTY_TEAM_WATCHLIST: TeamWatchlistBySport = {
-  nfl: [],
-  mlb: [],
-  nba: [],
-};
-
-const EMPTY_TEAM_NAMES: TeamWatchlistNamesBySport = {
-  nfl: {},
-  mlb: {},
-  nba: {},
-};
+export function addTeamToSportWatchlist(
+  current: Record<SportKey, string[]>,
+  sport: SportKey,
+  teamKey: string,
+): Record<SportKey, string[]> {
+  const normalized = teamKey.trim().toUpperCase();
+  if (!normalized) {
+    return current;
+  }
+  const sportTeams = current[sport] ?? [];
+  if (sportTeams.includes(normalized)) {
+    return current;
+  }
+  return {
+    ...current,
+    [sport]: [...sportTeams, normalized],
+  };
+}
 
 export function shouldUseServerWatchlist(props: Pick<WidgetCommonProps, "viewerMode" | "authConfigured" | "dbConfigured">): boolean {
   return props.viewerMode === "signed_in" && props.authConfigured && props.dbConfigured;
@@ -438,14 +439,26 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     [teamsForSport],
   );
   const statusReqKey = useMemo(
-    () => stableKey({ sportKey, teamKeys: currentTeamKeys, mode: props.mode, dataMode: props.dataMode }),
-    [currentTeamKeys, props.dataMode, props.mode, sportKey],
+    () => stableKey({
+      sportKey,
+      teamKeys: currentTeamKeys,
+      mode: props.mode,
+      dataMode: props.dataMode,
+      refreshTick: props.refreshTick,
+    }),
+    [currentTeamKeys, props.dataMode, props.mode, props.refreshTick, sportKey],
   );
   const teamsModeActive = viewMode === "teams";
   const playersModeActive = viewMode === "players";
   const playerInsightsReqKey = useMemo(
-    () => stableKey({ sportKey, playerIds: currentPlayerIds, mode: props.mode, dataMode: props.dataMode }),
-    [currentPlayerIds, props.dataMode, props.mode, sportKey],
+    () => stableKey({
+      sportKey,
+      playerIds: currentPlayerIds,
+      mode: props.mode,
+      dataMode: props.dataMode,
+      refreshTick: props.refreshTick,
+    }),
+    [currentPlayerIds, props.dataMode, props.mode, props.refreshTick, sportKey],
   );
 
   const refreshTeamStatuses = useCallback(async (): Promise<void> => {
@@ -475,7 +488,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
     try {
       const modeParam = props.mode.toLowerCase();
-      const endpoint = `/api/teams/advanced?sport=${sportKey}&teamKeys=${encodeURIComponent(currentTeamKeys.join(","))}&mode=${modeParam}&dataMode=${props.dataMode}`;
+      const endpoint = `/api/teams/advanced?sport=${sportKey}&teamKeys=${encodeURIComponent(currentTeamKeys.join(","))}&mode=${modeParam}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
       setLastEndpoint(endpoint);
 
       const res = await fetch(endpoint, { cache: "no-store", signal: controller.signal });
@@ -510,7 +523,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         setTeamAdvancedByKey({});
       }
     }
-  }, [currentTeamKeys, props.dataMode, props.mode, sportKey, statusReqKey, teamsModeActive]);
+  }, [currentTeamKeys, props.dataMode, props.mode, props.refreshTick, sportKey, statusReqKey, teamsModeActive]);
 
   useEffect(() => {
     if (!teamsModeActive) {
@@ -566,7 +579,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     playerInsightsAbortRef.current = controller;
 
     try {
-      const endpoint = `/api/players/insights/batch?sport=${sportKey}&playerIds=${encodeURIComponent(currentPlayerIds.join(","))}&mode=advanced&dataMode=${props.dataMode}`;
+      const endpoint = `/api/players/insights/batch?sport=${sportKey}&playerIds=${encodeURIComponent(currentPlayerIds.join(","))}&mode=advanced&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
       setLastEndpoint(endpoint);
       const response = await fetch(endpoint, { cache: "no-store", signal: controller.signal });
       const json = (await response.json()) as PlayerInsightsBatchEnvelope;
@@ -592,7 +605,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         setPlayerError(String(error));
       }
     }
-  }, [currentPlayerIds, playerInsightsReqKey, playersModeActive, props.dataMode, props.mode, sportKey]);
+  }, [currentPlayerIds, playerInsightsReqKey, playersModeActive, props.dataMode, props.mode, props.refreshTick, sportKey]);
 
   useEffect(() => {
     if (!playersModeActive || props.mode !== "ADVANCED") {
@@ -629,7 +642,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       return [];
     }
 
-    const endpointUrl = `/api/players/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&dataMode=${props.dataMode}`;
+    const endpointUrl = `/api/players/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setLastEndpoint(endpointUrl);
 
     const response = await fetch(endpointUrl, { cache: "no-store" });
@@ -650,7 +663,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       position: row.position,
       headshot: row.headshot,
     }));
-  }, [props.dataMode, sportKey]);
+  }, [props.dataMode, props.refreshTick, sportKey]);
 
   useEffect(() => {
     if (viewMode !== "players") {
@@ -702,10 +715,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       return;
     }
 
-    const nextTeams: TeamWatchlistBySport = {
-      ...teamWatchlist,
-      [sportKey]: [...teamsForSport, key],
-    };
+    const nextTeams = addTeamToSportWatchlist(teamWatchlist, sportKey, key);
     const nextNames: TeamWatchlistNamesBySport = {
       ...teamWatchlistNames,
       [sportKey]: {
@@ -787,7 +797,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     }
     lastQuickProfileKeyRef.current = profileKey;
 
-    const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
+    const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setLastEndpoint(endpointUrl);
 
     const response = await fetch(endpointUrl, { cache: "no-store" });
@@ -897,7 +907,9 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             return (
               <div key={`${sportKey}-team-${normalizedKey}`} className="flex items-start justify-between rounded border border-neutral-700 bg-neutral-950 p-2">
                 <div className="min-w-0 flex-1 pr-2">
-                  <p className="font-medium">{label} ({normalizedKey})</p>
+                  <p className="font-medium">
+                    {label} ({normalizedKey}) <span className="rounded bg-neutral-800 px-1 py-0.5 text-[10px] text-neutral-300">{sportLabel(sportKey)}</span>
+                  </p>
                   <p className="text-neutral-400">{teamStatusLabel(status)}</p>
                   {props.mode === "BEGINNER" ? (
                     <p className="text-neutral-500">Last: {lastGameLabel(advanced)}</p>

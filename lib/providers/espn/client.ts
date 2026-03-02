@@ -10,6 +10,7 @@ type FetchOptions = {
   fixtureSubdir?: string;
   ttlSeconds?: number;
   dataMode?: "live" | "fixture";
+  cacheBust?: string | number | null;
 };
 
 type FetchResult<T> = {
@@ -60,6 +61,17 @@ function resolvedDataMode(override?: "live" | "fixture"): "live" | "fixture" {
     return override;
   }
   return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
+}
+
+function resolveCacheBustToken(value: FetchOptions["cacheBust"]): string | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function trackSuccess(endpoint: string, sourceUsed: DataSource, url?: string, status?: number, cacheHit?: boolean, cacheAgeSeconds?: number): void {
@@ -163,6 +175,8 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
   const ttlSeconds = options.ttlSeconds ?? 60;
   const cacheKey = keyFor(options.endpoint, options.params);
   const dataMode = resolvedDataMode(options.dataMode);
+  const cacheBustToken = resolveCacheBustToken(options.cacheBust);
+  const bypassCache = typeof cacheBustToken === "string";
 
   const search = new URLSearchParams();
   for (const [k, v] of Object.entries(options.params ?? {})) {
@@ -187,6 +201,7 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
         sourceUsed: "fixture",
         updatedAt: new Date().toISOString(),
         requestId,
+        cacheHit: false,
         endpointUrl: url,
         upstreamStatus: 200,
         dataMode,
@@ -194,23 +209,25 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
     };
   }
 
-  const mem = inMemory.get(cacheKey);
-  if (mem && mem.expiresAtMs > Date.now()) {
-    const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
-    trackSuccess(options.endpoint, "cache", url, 200, true, ageSeconds);
-    return {
-      data: mem.payload as T,
-      meta: {
-        sourceUsed: "cache",
-        updatedAt: mem.updatedAt,
-        requestId,
-        cacheHit: true,
-        cacheAgeSeconds: ageSeconds,
-        endpointUrl: url,
-        upstreamStatus: 200,
-        dataMode,
-      },
-    };
+  if (!bypassCache) {
+    const mem = inMemory.get(cacheKey);
+    if (mem && mem.expiresAtMs > Date.now()) {
+      const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
+      trackSuccess(options.endpoint, "cache", url, 200, true, ageSeconds);
+      return {
+        data: mem.payload as T,
+        meta: {
+          sourceUsed: "cache",
+          updatedAt: mem.updatedAt,
+          requestId,
+          cacheHit: true,
+          cacheAgeSeconds: ageSeconds,
+          endpointUrl: url,
+          upstreamStatus: 200,
+          dataMode,
+        },
+      };
+    }
   }
 
   let lastError: unknown;
@@ -247,8 +264,10 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
           sourceUsed: "espn",
           updatedAt: new Date().toISOString(),
           requestId,
+          cacheHit: false,
           endpointUrl: url,
           upstreamStatus: response.status,
+          warning: bypassCache ? "Cache bypass requested via cacheBust." : undefined,
           dataMode,
         },
       };
@@ -261,24 +280,26 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
     }
   }
 
-  const cached = await readPersistentCache<T>("espn", options.endpoint, options.params);
-  if (cached) {
-    trackSuccess(options.endpoint, "cache", url, lastStatus ?? 200, true, cached.ageSeconds);
-    return {
-      data: cached.payload,
-      meta: {
-        sourceUsed: "cache",
-        updatedAt: new Date(Date.now() - cached.ageSeconds * 1000).toISOString(),
-        warning: "Using last cached response because ESPN is currently unavailable.",
-        requestId,
-        cacheHit: true,
-        cacheAgeSeconds: Math.max(0, cached.ageSeconds),
-        endpointUrl: url,
-        upstreamStatus: lastStatus,
-        upstreamMessage: String(lastError),
-        dataMode,
-      },
-    };
+  if (!bypassCache) {
+    const cached = await readPersistentCache<T>("espn", options.endpoint, options.params);
+    if (cached) {
+      trackSuccess(options.endpoint, "cache", url, lastStatus ?? 200, true, cached.ageSeconds);
+      return {
+        data: cached.payload,
+        meta: {
+          sourceUsed: "cache",
+          updatedAt: new Date(Date.now() - cached.ageSeconds * 1000).toISOString(),
+          warning: "Using last cached response because ESPN is currently unavailable.",
+          requestId,
+          cacheHit: true,
+          cacheAgeSeconds: Math.max(0, cached.ageSeconds),
+          endpointUrl: url,
+          upstreamStatus: lastStatus,
+          upstreamMessage: String(lastError),
+          dataMode,
+        },
+      };
+    }
   }
 
   trackError(options.endpoint, String(lastError), lastStatus, url);

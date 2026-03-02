@@ -1,6 +1,9 @@
-import { randomUUID } from "node:crypto";
-import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
-import { getPlayerProfile } from "@/lib/providers/espn/playerDirectory";
+﻿import { randomUUID } from "node:crypto";
+import { getDataMode } from "@/lib/providers/espn/client";
+import {
+  getGameLog,
+  getPlayerProfile,
+} from "@/lib/providers/espn/playerDirectory";
 import { getTeamStatus } from "@/lib/providers/espn/teamStatus";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
@@ -8,33 +11,24 @@ import type { PlayerInsights, SportKey } from "@/lib/types/playerInsights";
 
 type ModeArg = "live" | "fixture";
 type InsightsMode = "beginner" | "advanced";
-
-type GamelogConfig = {
-  endpoint: string;
-  fixtureFile: string;
-};
+type CacheBustArg = string | number | null | undefined;
 
 type ParsedGame = {
   date?: string;
   opponent?: string;
   result?: string;
-  line: string;
   stats: Record<string, number>;
 };
 
-const GAMELOG_CONFIG: Record<SportKey, GamelogConfig> = {
-  nfl: {
-    endpoint: "https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/{playerId}/gamelog",
-    fixtureFile: "nfl_athlete_gamelog_sample.json",
-  },
-  mlb: {
-    endpoint: "https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{playerId}/gamelog",
-    fixtureFile: "mlb_athlete_gamelog_32827.json",
-  },
-  nba: {
-    endpoint: "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/{playerId}/gamelog",
-    fixtureFile: "nba_athlete_gamelog_1966.json",
-  },
+type ParsedGamesResult = {
+  games: ParsedGame[];
+  notes: string[];
+};
+
+type StatMetric = {
+  key: string;
+  label: string;
+  value: string;
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -62,32 +56,15 @@ function readNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function findObjectValue(source: Record<string, unknown>, candidates: string[]): number | undefined {
-  for (const candidate of candidates) {
-    if (candidate in source) {
-      const value = readNumber(source[candidate]);
-      if (typeof value === "number") {
-        return value;
-      }
-    }
-  }
-
-  const lowerMap = new Map(Object.entries(source).map(([key, value]) => [key.toLowerCase(), value]));
-  for (const candidate of candidates) {
-    const value = readNumber(lowerMap.get(candidate.toLowerCase()));
-    if (typeof value === "number") {
-      return value;
-    }
-  }
-
-  return undefined;
+function normalizeKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9/]/g, "");
 }
 
-function toFixed(value: number, decimals = 1): string {
-  return value.toFixed(decimals);
+function formatFixed(value: number, digits: number): string {
+  return Number.isFinite(value) ? value.toFixed(digits) : "0";
 }
 
-function toAvgStyle(value: number): string {
+function formatAvg(value: number): string {
   const fixed = value.toFixed(3);
   return fixed.startsWith("0") ? fixed.slice(1) : fixed;
 }
@@ -105,116 +82,203 @@ function ipToOuts(ip: number): number {
 }
 
 function outsToIp(outs: number): string {
-  const whole = Math.floor(outs / 3);
-  const remainder = outs % 3;
+  const whole = Math.floor(Math.max(0, outs) / 3);
+  const remainder = Math.max(0, outs) % 3;
   return `${whole}.${remainder}`;
 }
 
-function parseStatsFromRow(row: Record<string, unknown>, sport: SportKey): Record<string, number> {
-  const statsObj = asObject(row.stats) ?? asObject(row.statistics) ?? asObject(row.statLine) ?? {};
-
-  const find = (candidates: string[]): number | undefined =>
-    findObjectValue(row, candidates) ?? findObjectValue(statsObj, candidates);
-
-  if (sport === "nba") {
-    return {
-      points: find(["pts", "points"]),
-      rebounds: find(["reb", "rebounds"]),
-      assists: find(["ast", "assists"]),
-    } as Record<string, number>;
+function assignStat(stats: Record<string, number>, key: string, value: number): void {
+  if (!Number.isFinite(value)) {
+    return;
   }
-
-  if (sport === "nfl") {
-    return {
-      passComp: find(["passComp", "cmp", "completions"]),
-      passAtt: find(["passAtt", "att", "attempts"]),
-      passYds: find(["passYds", "passYards", "passingYards"]),
-      passTd: find(["passTd", "passingTouchdowns", "passTD"]),
-      int: find(["int", "ints", "interceptions"]),
-      rushAtt: find(["rushAtt", "rushAttempts"]),
-      rushYds: find(["rushYds", "rushYards", "rushingYards"]),
-      rushTd: find(["rushTd", "rushTD", "rushingTouchdowns"]),
-      rec: find(["rec", "receptions"]),
-      recYds: find(["recYds", "recYards", "receivingYards"]),
-      recTd: find(["recTd", "receivingTouchdowns"]),
-    } as Record<string, number>;
-  }
-
-  return {
-    ip: find(["ip", "inningsPitched"]),
-    er: find(["er", "earnedRuns"]),
-    h: find(["h", "hits"]),
-    bb: find(["bb", "walks", "baseOnBalls"]),
-    k: find(["k", "strikeouts"]),
-    ab: find(["ab", "atBats"]),
-    hits: find(["hits", "h"]),
-    hr: find(["hr", "homeRuns"]),
-    rbi: find(["rbi", "runsBattedIn"]),
-    doubles: find(["doubles", "2b"]),
-    triples: find(["triples", "3b"]),
-  } as Record<string, number>;
+  stats[key] = value;
 }
 
-function compactStatLine(sport: SportKey, stats: Record<string, number>): string {
-  if (sport === "nba") {
-    const pts = typeof stats.points === "number" ? Math.round(stats.points) : undefined;
-    const reb = typeof stats.rebounds === "number" ? Math.round(stats.rebounds) : undefined;
-    const ast = typeof stats.assists === "number" ? Math.round(stats.assists) : undefined;
-    const parts = [
-      typeof pts === "number" ? `${pts} PTS` : undefined,
-      typeof reb === "number" ? `${reb} REB` : undefined,
-      typeof ast === "number" ? `${ast} AST` : undefined,
-    ].filter(Boolean) as string[];
-    return parts.length > 0 ? parts.join(" · ") : "Stat line unavailable";
+function mapLabelToStats(
+  stats: Record<string, number>,
+  labelRaw: string,
+  valueRaw: unknown,
+  categoryRaw?: string,
+): void {
+  const label = normalizeKey(labelRaw);
+  const category = normalizeKey(categoryRaw ?? "");
+
+  const read = () => readNumber(valueRaw);
+  const parseCompAtt = () => {
+    if (typeof valueRaw !== "string") return;
+    const match = valueRaw.match(/(\d+)\s*\/\s*(\d+)/);
+    if (!match) return;
+    assignStat(stats, "passComp", Number(match[1]));
+    assignStat(stats, "passAtt", Number(match[2]));
+  };
+
+  if (label === "c/att" || label === "cmp/att" || label === "comp/att") {
+    parseCompAtt();
+    return;
   }
 
-  if (sport === "nfl") {
-    if (typeof stats.passAtt === "number" || typeof stats.passYds === "number") {
-      const compAtt = typeof stats.passComp === "number" && typeof stats.passAtt === "number"
-        ? `${Math.round(stats.passComp)}/${Math.round(stats.passAtt)}`
-        : undefined;
-      const yards = typeof stats.passYds === "number" ? `${Math.round(stats.passYds)}y` : undefined;
-      const td = typeof stats.passTd === "number" ? `${Math.round(stats.passTd)}TD` : undefined;
-      const int = typeof stats.int === "number" ? `${Math.round(stats.int)}INT` : undefined;
-      return ["Pass", compAtt, yards, td, int].filter(Boolean).join(" ");
-    }
-
-    if (typeof stats.rushAtt === "number" || typeof stats.rushYds === "number") {
-      const attempts = typeof stats.rushAtt === "number" ? Math.round(stats.rushAtt) : undefined;
-      const yards = typeof stats.rushYds === "number" ? Math.round(stats.rushYds) : undefined;
-      const td = typeof stats.rushTd === "number" ? `${Math.round(stats.rushTd)}TD` : undefined;
-      return ["Rush", typeof attempts === "number" && typeof yards === "number" ? `${attempts}-${yards}` : undefined, td]
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    if (typeof stats.rec === "number" || typeof stats.recYds === "number") {
-      const rec = typeof stats.rec === "number" ? Math.round(stats.rec) : undefined;
-      const yards = typeof stats.recYds === "number" ? Math.round(stats.recYds) : undefined;
-      const td = typeof stats.recTd === "number" ? `${Math.round(stats.recTd)}TD` : undefined;
-      return ["Rec", typeof rec === "number" && typeof yards === "number" ? `${rec}-${yards}` : undefined, td]
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    return "Stat line unavailable";
+  const numeric = read();
+  if (typeof numeric !== "number") {
+    return;
   }
 
-  const hasPitcher = typeof stats.ip === "number" || typeof stats.er === "number" || typeof stats.k === "number";
-  if (hasPitcher) {
-    const ip = typeof stats.ip === "number" ? `${outsToIp(ipToOuts(stats.ip))} IP` : undefined;
-    const er = typeof stats.er === "number" ? `${Math.round(stats.er)} ER` : undefined;
-    const k = typeof stats.k === "number" ? `${Math.round(stats.k)} K` : undefined;
-    return [ip, er, k].filter(Boolean).join(" · ") || "Stat line unavailable";
+  if (label === "pts" || label === "points") assignStat(stats, "points", numeric);
+  if (label === "reb" || label === "rebounds") assignStat(stats, "rebounds", numeric);
+  if (label === "ast" || label === "assists") assignStat(stats, "assists", numeric);
+  if (label === "fga") assignStat(stats, "fga", numeric);
+  if (label === "fta") assignStat(stats, "fta", numeric);
+
+  if (label === "ip" || label === "inningspitched") assignStat(stats, "ip", numeric);
+  if (label === "er" || label === "earnedruns") assignStat(stats, "er", numeric);
+  if (label === "h" || label === "hits") assignStat(stats, "hits", numeric);
+  if (label === "bb" || label === "walks" || label === "baseonballs") assignStat(stats, "bb", numeric);
+  if (label === "k" || label === "so" || label === "strikeouts") assignStat(stats, "k", numeric);
+  if (label === "ab" || label === "atbats") assignStat(stats, "ab", numeric);
+  if (label === "hr" || label === "homeruns") assignStat(stats, "hr", numeric);
+  if (label === "rbi" || label === "runsbattedin") assignStat(stats, "rbi", numeric);
+  if (label === "2b" || label === "doubles") assignStat(stats, "doubles", numeric);
+  if (label === "3b" || label === "triples") assignStat(stats, "triples", numeric);
+  if (label === "hbp") assignStat(stats, "hbp", numeric);
+  if (label === "sf") assignStat(stats, "sf", numeric);
+  if (label === "tb" || label === "totalbases") assignStat(stats, "tb", numeric);
+
+  if (label === "yds" || label === "yards") {
+    if (category.includes("pass")) assignStat(stats, "passYds", numeric);
+    if (category.includes("rush")) assignStat(stats, "rushYds", numeric);
+    if (category.includes("receiv")) assignStat(stats, "recYds", numeric);
+  }
+  if (label === "td" || label === "touchdowns") {
+    if (category.includes("pass")) assignStat(stats, "passTd", numeric);
+    if (category.includes("rush")) assignStat(stats, "rushTd", numeric);
+    if (category.includes("receiv")) assignStat(stats, "recTd", numeric);
+  }
+  if (label === "int" || label === "ints" || label === "interceptions") {
+    if (category.includes("pass")) assignStat(stats, "int", numeric);
+  }
+  if (label === "att" || label === "attempts") {
+    if (category.includes("pass")) assignStat(stats, "passAtt", numeric);
+    if (category.includes("rush")) assignStat(stats, "rushAtt", numeric);
+  }
+  if (label === "rec" || label === "receptions") {
+    assignStat(stats, "rec", numeric);
+  }
+}
+
+function mergeObjectStats(target: Record<string, number>, source: Record<string, unknown>, category?: string): void {
+  for (const [key, value] of Object.entries(source)) {
+    mapLabelToStats(target, key, value, category);
+  }
+}
+
+function mergeStatsFromBlock(target: Record<string, number>, blockInput: unknown, categoryHint?: string): void {
+  const block = asObject(blockInput);
+  if (!block) {
+    return;
   }
 
-  const hits = typeof stats.hits === "number" ? Math.round(stats.hits) : undefined;
-  const ab = typeof stats.ab === "number" ? Math.round(stats.ab) : undefined;
-  const hr = typeof stats.hr === "number" ? `HR ${Math.round(stats.hr)}` : undefined;
-  const rbi = typeof stats.rbi === "number" ? `RBI ${Math.round(stats.rbi)}` : undefined;
-  return [typeof hits === "number" && typeof ab === "number" ? `${hits}-${ab}` : undefined, hr, rbi]
-    .filter(Boolean)
-    .join(" · ") || "Stat line unavailable";
+  const category = readString(block.name) ?? readString(block.displayName) ?? categoryHint;
+  const labels = Array.isArray(block.labels) ? block.labels : [];
+  const stats = Array.isArray(block.stats) ? block.stats : [];
+
+  if (labels.length > 0 && stats.length > 0) {
+    const count = Math.min(labels.length, stats.length);
+    for (let index = 0; index < count; index += 1) {
+      const label = readString(labels[index]);
+      if (!label) continue;
+      mapLabelToStats(target, label, stats[index], category);
+    }
+  }
+
+  for (const [key, value] of Object.entries(block)) {
+    if (key === "labels" || key === "stats") {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const nested of value) {
+        const nestedObj = asObject(nested);
+        if (nestedObj) {
+          const nestedLabel =
+            readString(nestedObj.label)
+            ?? readString(nestedObj.name)
+            ?? readString(nestedObj.abbreviation)
+            ?? readString(nestedObj.displayName);
+          if (nestedLabel) {
+            mapLabelToStats(target, nestedLabel, nestedObj.value ?? nestedObj.displayValue ?? nestedObj.stat, category);
+            continue;
+          }
+          mergeStatsFromBlock(target, nestedObj, category);
+        }
+      }
+      continue;
+    }
+
+    const nestedObject = asObject(value);
+    if (nestedObject) {
+      mergeObjectStats(target, nestedObject, category);
+      continue;
+    }
+
+    mapLabelToStats(target, key, value, category);
+  }
+}
+
+function extractStatsFromRow(row: Record<string, unknown>): Record<string, number> {
+  const stats: Record<string, number> = {};
+
+  mergeObjectStats(stats, row);
+
+  const directObjects = [
+    asObject(row.stats),
+    asObject(row.statistics),
+    asObject(row.statLine),
+    asObject(row.linescore),
+  ].filter((entry): entry is Record<string, unknown> => Boolean(entry));
+
+  for (const objectStats of directObjects) {
+    mergeObjectStats(stats, objectStats);
+  }
+
+  const statArrays = [
+    Array.isArray(row.stats) ? row.stats : [],
+    Array.isArray(row.statistics) ? row.statistics : [],
+    Array.isArray(row.categories) ? row.categories : [],
+    Array.isArray(row.splits) ? row.splits : [],
+  ];
+
+  for (const blockList of statArrays) {
+    for (const block of blockList) {
+      mergeStatsFromBlock(stats, block);
+    }
+  }
+
+  return stats;
+}
+
+function extractRowDate(row: Record<string, unknown>): string | undefined {
+  return readString(row.date)
+    ?? readString(row.gameDate)
+    ?? readString(asObject(row.event)?.date)
+    ?? readString(asObject(asObject(row.game)?.event)?.date);
+}
+
+function extractRowOpponent(row: Record<string, unknown>): string | undefined {
+  const opponentObj = asObject(row.opponent)
+    ?? asObject(asObject(row.event)?.opponent)
+    ?? asObject(asObject(asObject(row.game)?.event)?.opponent);
+
+  return readString(row.vs)
+    ?? readString(row.opponent)
+    ?? readString(opponentObj?.abbreviation)
+    ?? readString(opponentObj?.displayName)
+    ?? readString(opponentObj?.name);
+}
+
+function extractRowResult(row: Record<string, unknown>): string | undefined {
+  return readString(row.result)
+    ?? readString(row.outcome)
+    ?? readString(asObject(row.event)?.result)
+    ?? readString(asObject(asObject(row.game)?.event)?.result);
 }
 
 function extractGameRows(payload: unknown): Record<string, unknown>[] {
@@ -223,10 +287,12 @@ function extractGameRows(payload: unknown): Record<string, unknown>[] {
     return [];
   }
 
-  const directCandidates = [data.events, data.games, data.entries];
+  const directCandidates = [data.events, data.games, data.entries, data.items, data.rows];
   for (const candidate of directCandidates) {
     if (Array.isArray(candidate)) {
-      return candidate.filter((row): row is Record<string, unknown> => Boolean(asObject(row)));
+      return candidate
+        .map((entry) => asObject(entry))
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry));
     }
   }
 
@@ -234,7 +300,9 @@ function extractGameRows(payload: unknown): Record<string, unknown>[] {
   if (gamelog) {
     for (const candidate of [gamelog.events, gamelog.games, gamelog.entries]) {
       if (Array.isArray(candidate)) {
-        return candidate.filter((row): row is Record<string, unknown> => Boolean(asObject(row)));
+        return candidate
+          .map((entry) => asObject(entry))
+          .filter((entry): entry is Record<string, unknown> => Boolean(entry));
       }
     }
   }
@@ -242,76 +310,272 @@ function extractGameRows(payload: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function parseGames(payload: unknown, sport: SportKey): ParsedGame[] {
+function parseGames(payload: unknown): ParsedGamesResult {
   const rows = extractGameRows(payload);
-  const parsed = rows.map((row) => {
-    const stats = parseStatsFromRow(row, sport);
-    const opponentObj = asObject(row.opponent);
-    const opponent = readString(row.opponent)
-      ?? readString(row.vs)
-      ?? readString(opponentObj?.abbreviation)
-      ?? readString(opponentObj?.displayName)
-      ?? readString(opponentObj?.name);
+  const games = rows.map((row) => ({
+    date: extractRowDate(row),
+    opponent: extractRowOpponent(row),
+    result: extractRowResult(row),
+    stats: extractStatsFromRow(row),
+  }));
 
-    return {
-      date: readString(row.date) ?? readString(row.gameDate),
-      opponent,
-      result: readString(row.result) ?? readString(row.outcome),
-      line: readString(row.line) ?? compactStatLine(sport, stats),
-      stats,
-    };
-  });
-
-  return parsed
+  const sorted = games
     .sort((a, b) => {
       const aTime = a.date ? new Date(a.date).getTime() : 0;
       const bTime = b.date ? new Date(b.date).getTime() : 0;
       return bTime - aTime;
     })
-    .filter((row) => row.line.length > 0);
-}
+    .filter((game) => Object.keys(game.stats).length > 0 || game.opponent || game.date);
 
-function deriveNbaSeason(games: ParsedGame[], sampleSize: number): PlayerInsights["season"] {
-  if (games.length === 0) {
-    return null;
+  const notes: string[] = [];
+  if (sorted.length === 0) {
+    notes.push("Recent game log is not available from current upstream payload.");
   }
-  const slice = games.slice(0, sampleSize);
-  const totals = slice.reduce((acc, game) => {
-    acc.points += game.stats.points ?? 0;
-    acc.rebounds += game.stats.rebounds ?? 0;
-    acc.assists += game.stats.assists ?? 0;
-    return acc;
-  }, { points: 0, rebounds: 0, assists: 0 });
-
-  const hasData = totals.points > 0 || totals.rebounds > 0 || totals.assists > 0;
-  if (!hasData) {
-    return null;
-  }
-
-  const n = slice.length;
-  const ppg = totals.points / n;
-  const rpg = totals.rebounds / n;
-  const apg = totals.assists / n;
 
   return {
-    headline: `PPG ${toFixed(ppg, 1)} · RPG ${toFixed(rpg, 1)} · APG ${toFixed(apg, 1)}`,
-    metrics: [
-      { key: "ppg", label: "PPG", value: toFixed(ppg, 1) },
-      { key: "rpg", label: "RPG", value: toFixed(rpg, 1) },
-      { key: "apg", label: "APG", value: toFixed(apg, 1) },
-    ],
-    source: "derived",
-    sampleSize: n,
+    games: sorted,
+    notes,
   };
 }
 
-function deriveNflSeason(games: ParsedGame[], sampleSize: number): PlayerInsights["season"] {
+function buildNbaSeasonAndRecent(games: ParsedGame[], notes: string[]): {
+  season: PlayerInsights["season"];
+  recent: PlayerInsights["recent"];
+} {
   if (games.length === 0) {
-    return null;
+    return { season: null, recent: null };
   }
 
-  const slice = games.slice(0, sampleSize);
-  const totals = slice.reduce((acc, game) => {
+  const seasonSlice = games.slice(0, Math.min(10, games.length));
+  const totals = seasonSlice.reduce((acc, game) => {
+    acc.points += game.stats.points ?? 0;
+    acc.rebounds += game.stats.rebounds ?? 0;
+    acc.assists += game.stats.assists ?? 0;
+    acc.fga += game.stats.fga ?? 0;
+    acc.fta += game.stats.fta ?? 0;
+    return acc;
+  }, { points: 0, rebounds: 0, assists: 0, fga: 0, fta: 0 });
+
+  const gp = seasonSlice.length;
+  if (gp === 0 || (totals.points === 0 && totals.rebounds === 0 && totals.assists === 0)) {
+    notes.push("Season stat summary is not available from current upstream payload.");
+    return { season: null, recent: null };
+  }
+
+  const ppg = totals.points / gp;
+  const rpg = totals.rebounds / gp;
+  const apg = totals.assists / gp;
+
+  const metrics: StatMetric[] = [
+    { key: "ppg", label: "PPG", value: formatFixed(ppg, 1) },
+    { key: "rpg", label: "RPG", value: formatFixed(rpg, 1) },
+    { key: "apg", label: "APG", value: formatFixed(apg, 1) },
+  ];
+
+  let tsValue: string | null = null;
+  const tsDenominator = 2 * (totals.fga + 0.44 * totals.fta);
+  if (tsDenominator > 0) {
+    tsValue = formatFixed(totals.points / tsDenominator, 3);
+    metrics.push({ key: "ts", label: "TS%", value: tsValue });
+  } else {
+    notes.push("TS% omitted because FGA/FTA inputs were not available.");
+  }
+
+  const season: PlayerInsights["season"] = {
+    headline: [`PPG ${formatFixed(ppg, 1)}`, `RPG ${formatFixed(rpg, 1)}`, `APG ${formatFixed(apg, 1)}`, tsValue ? `TS% ${tsValue}` : undefined]
+      .filter(Boolean)
+      .join(" · "),
+    metrics,
+    source: "derived",
+    sampleSize: gp,
+  };
+
+  const recentGames = games.slice(0, 5);
+  const recent: PlayerInsights["recent"] = {
+    headline: `Last ${recentGames.length}: ${season.headline}`,
+    source: "derived",
+    games: recentGames.map((game) => ({
+      date: game.date,
+      opponent: game.opponent,
+      result: game.result,
+      line: `${Math.round(game.stats.points ?? 0)} PTS · ${Math.round(game.stats.rebounds ?? 0)} REB · ${Math.round(game.stats.assists ?? 0)} AST`,
+    })),
+  };
+
+  return { season, recent };
+}
+
+function isPitcher(position?: string, games: ParsedGame[] = []): boolean {
+  const positionKey = (position ?? "").trim().toUpperCase();
+  if (positionKey === "P" || positionKey === "SP" || positionKey === "RP" || positionKey === "CP") {
+    return true;
+  }
+  return games.some((game) =>
+    typeof game.stats.ip === "number"
+    || typeof game.stats.er === "number"
+    || typeof game.stats.k === "number",
+  );
+}
+
+function buildMlbSeasonAndRecent(
+  games: ParsedGame[],
+  position: string | undefined,
+  notes: string[],
+): {
+  season: PlayerInsights["season"];
+  recent: PlayerInsights["recent"];
+} {
+  if (games.length === 0) {
+    return { season: null, recent: null };
+  }
+
+  const seasonSlice = games.slice(0, Math.min(10, games.length));
+  const recentSlice = games.slice(0, 5);
+
+  if (isPitcher(position, seasonSlice)) {
+    const totals = seasonSlice.reduce((acc, game) => {
+      acc.outs += typeof game.stats.ip === "number" ? ipToOuts(game.stats.ip) : 0;
+      acc.er += game.stats.er ?? 0;
+      acc.hits += game.stats.hits ?? 0;
+      acc.bb += game.stats.bb ?? 0;
+      acc.k += game.stats.k ?? 0;
+      return acc;
+    }, { outs: 0, er: 0, hits: 0, bb: 0, k: 0 });
+
+    const innings = totals.outs / 3;
+    if (innings <= 0) {
+      notes.push("Season stat summary is not available from current upstream payload.");
+      return { season: null, recent: null };
+    }
+
+    const era = (totals.er * 9) / innings;
+    const whip = (totals.bb + totals.hits) / innings;
+    const k9 = (totals.k * 9) / innings;
+
+    const season: PlayerInsights["season"] = {
+      headline: `ERA ${formatFixed(era, 2)} · WHIP ${formatFixed(whip, 2)} · K/9 ${formatFixed(k9, 1)}`,
+      metrics: [
+        { key: "era", label: "ERA", value: formatFixed(era, 2) },
+        { key: "whip", label: "WHIP", value: formatFixed(whip, 2) },
+        { key: "k9", label: "K/9", value: formatFixed(k9, 1) },
+      ],
+      source: "derived",
+      sampleSize: seasonSlice.length,
+    };
+
+    const recent: PlayerInsights["recent"] = {
+      headline: `Last ${recentSlice.length}: ERA ${formatFixed(era, 2)} · WHIP ${formatFixed(whip, 2)}`,
+      source: "derived",
+      games: recentSlice.map((game) => ({
+        date: game.date,
+        opponent: game.opponent,
+        result: game.result,
+        line: `${outsToIp(ipToOuts(game.stats.ip ?? 0))} IP · ${Math.round(game.stats.er ?? 0)} ER · ${Math.round(game.stats.k ?? 0)} K`,
+      })),
+    };
+
+    return { season, recent };
+  }
+
+  const totals = seasonSlice.reduce((acc, game) => {
+    acc.ab += game.stats.ab ?? 0;
+    acc.hits += game.stats.hits ?? 0;
+    acc.bb += game.stats.bb ?? 0;
+    acc.hbp += game.stats.hbp ?? 0;
+    acc.sf += game.stats.sf ?? 0;
+    acc.hr += game.stats.hr ?? 0;
+    acc.rbi += game.stats.rbi ?? 0;
+    acc.doubles += game.stats.doubles ?? 0;
+    acc.triples += game.stats.triples ?? 0;
+    acc.tb += game.stats.tb ?? 0;
+    return acc;
+  }, {
+    ab: 0,
+    hits: 0,
+    bb: 0,
+    hbp: 0,
+    sf: 0,
+    hr: 0,
+    rbi: 0,
+    doubles: 0,
+    triples: 0,
+    tb: 0,
+  });
+
+  if (totals.ab <= 0) {
+    notes.push("Season stat summary is not available from current upstream payload.");
+    return { season: null, recent: null };
+  }
+
+  const singles = Math.max(0, totals.hits - totals.doubles - totals.triples - totals.hr);
+  const totalBases = totals.tb > 0 ? totals.tb : singles + totals.doubles * 2 + totals.triples * 3 + totals.hr * 4;
+  const avg = totals.hits / totals.ab;
+
+  const obpDenominator = totals.ab + totals.bb + totals.hbp + totals.sf;
+  const obp = obpDenominator > 0 ? (totals.hits + totals.bb + totals.hbp) / obpDenominator : null;
+  if (totals.hbp === 0 || totals.sf === 0) {
+    notes.push("MLB OBP used available fields; HBP/SF were missing in part of the game log.");
+  }
+
+  const slg = totalBases / totals.ab;
+  const ops = obp !== null ? obp + slg : null;
+
+  const seasonMetrics: StatMetric[] = [
+    { key: "avg", label: "AVG", value: formatAvg(avg) },
+    ...(obp !== null ? [{ key: "obp", label: "OBP", value: formatAvg(obp) }] : []),
+    { key: "slg", label: "SLG", value: formatAvg(slg) },
+    ...(ops !== null ? [{ key: "ops", label: "OPS", value: formatAvg(ops) }] : []),
+    { key: "hr", label: "HR", value: String(Math.round(totals.hr)) },
+    { key: "rbi", label: "RBI", value: String(Math.round(totals.rbi)) },
+  ];
+
+  const seasonHeadlineParts = [
+    `AVG ${formatAvg(avg)}`,
+    obp !== null ? `OBP ${formatAvg(obp)}` : undefined,
+    `SLG ${formatAvg(slg)}`,
+    ops !== null ? `OPS ${formatAvg(ops)}` : undefined,
+    `HR ${Math.round(totals.hr)}`,
+    `RBI ${Math.round(totals.rbi)}`,
+  ].filter(Boolean) as string[];
+
+  const season: PlayerInsights["season"] = {
+    headline: seasonHeadlineParts.join(" · "),
+    metrics: seasonMetrics,
+    source: "derived",
+    sampleSize: seasonSlice.length,
+  };
+
+  const recent: PlayerInsights["recent"] = {
+    headline: `Last ${recentSlice.length}: ${season.headline}`,
+    source: "derived",
+    games: recentSlice.map((game) => ({
+      date: game.date,
+      opponent: game.opponent,
+      result: game.result,
+      line: `${Math.round(game.stats.hits ?? 0)}-${Math.round(game.stats.ab ?? 0)} · HR ${Math.round(game.stats.hr ?? 0)} · RBI ${Math.round(game.stats.rbi ?? 0)}`,
+    })),
+  };
+
+  return { season, recent };
+}
+
+function buildNflSeasonAndRecent(
+  games: ParsedGame[],
+  position: string | undefined,
+  notes: string[],
+): {
+  season: PlayerInsights["season"];
+  recent: PlayerInsights["recent"];
+} {
+  if (games.length === 0) {
+    return { season: null, recent: null };
+  }
+
+  const seasonSlice = games.slice(0, Math.min(10, games.length));
+  const recentSlice = games.slice(0, 5);
+  const pos = (position ?? "").trim().toUpperCase();
+
+  const totals = seasonSlice.reduce((acc, game) => {
     acc.passYds += game.stats.passYds ?? 0;
     acc.passTd += game.stats.passTd ?? 0;
     acc.int += game.stats.int ?? 0;
@@ -321,266 +585,90 @@ function deriveNflSeason(games: ParsedGame[], sampleSize: number): PlayerInsight
     acc.recTd += game.stats.recTd ?? 0;
     return acc;
   }, {
-    passYds: 0, passTd: 0, int: 0, rushYds: 0, rushTd: 0, recYds: 0, recTd: 0,
+    passYds: 0,
+    passTd: 0,
+    int: 0,
+    rushYds: 0,
+    rushTd: 0,
+    recYds: 0,
+    recTd: 0,
   });
 
-  const n = slice.length;
-  const metrics: { key: string; label: string; value: string }[] = [];
-
-  if (totals.passYds > 0 || totals.passTd > 0 || totals.int > 0) {
-    metrics.push(
-      { key: "pass_ypg", label: "Pass YPG", value: toFixed(totals.passYds / n, 1) },
-      { key: "pass_td_pg", label: "Pass TD/G", value: toFixed(totals.passTd / n, 2) },
-      { key: "int_pg", label: "INT/G", value: toFixed(totals.int / n, 2) },
-    );
-  }
-  if (totals.rushYds > 0 || totals.rushTd > 0) {
-    metrics.push(
-      { key: "rush_ypg", label: "Rush YPG", value: toFixed(totals.rushYds / n, 1) },
-      { key: "rush_td_pg", label: "Rush TD/G", value: toFixed(totals.rushTd / n, 2) },
-    );
-  }
-  if (totals.recYds > 0 || totals.recTd > 0) {
-    metrics.push(
-      { key: "rec_ypg", label: "Rec YPG", value: toFixed(totals.recYds / n, 1) },
-      { key: "rec_td_pg", label: "Rec TD/G", value: toFixed(totals.recTd / n, 2) },
-    );
+  const gamesCount = seasonSlice.length;
+  if (gamesCount === 0) {
+    notes.push("Season stat summary is not available from current upstream payload.");
+    return { season: null, recent: null };
   }
 
-  if (metrics.length === 0) {
-    return null;
+  let seasonMetrics: StatMetric[] = [];
+  if (pos === "QB" || totals.passYds > 0) {
+    seasonMetrics = [
+      { key: "pass_ypg", label: "Pass YPG", value: formatFixed(totals.passYds / gamesCount, 1) },
+      { key: "pass_tdpg", label: "Pass TD/G", value: formatFixed(totals.passTd / gamesCount, 2) },
+      { key: "intpg", label: "INT/G", value: formatFixed(totals.int / gamesCount, 2) },
+    ];
+  } else if (pos === "RB" || totals.rushYds > 0) {
+    seasonMetrics = [
+      { key: "rush_ypg", label: "Rush YPG", value: formatFixed(totals.rushYds / gamesCount, 1) },
+      { key: "rush_tdpg", label: "Rush TD/G", value: formatFixed(totals.rushTd / gamesCount, 2) },
+    ];
+  } else {
+    seasonMetrics = [
+      { key: "rec_ypg", label: "Rec YPG", value: formatFixed(totals.recYds / gamesCount, 1) },
+      { key: "rec_tdpg", label: "Rec TD/G", value: formatFixed(totals.recTd / gamesCount, 2) },
+    ];
   }
 
-  return {
-    headline: metrics.slice(0, 3).map((metric) => `${metric.label} ${metric.value}`).join(" · "),
-    metrics,
+  const meaningfulMetrics = seasonMetrics.filter((metric) => Number(metric.value) > 0);
+  if (meaningfulMetrics.length === 0) {
+    notes.push("Season stat summary is not available from current upstream payload.");
+    return { season: null, recent: null };
+  }
+
+  const season: PlayerInsights["season"] = {
+    headline: meaningfulMetrics.map((metric) => `${metric.label} ${metric.value}`).join(" · "),
+    metrics: meaningfulMetrics,
     source: "derived",
-    sampleSize: n,
+    sampleSize: gamesCount,
   };
-}
 
-function deriveMlbSeason(games: ParsedGame[], sampleSize: number): PlayerInsights["season"] {
-  if (games.length === 0) {
-    return null;
-  }
-
-  const slice = games.slice(0, sampleSize);
-  const hasPitcherData = slice.some((game) =>
-    typeof game.stats.ip === "number" || typeof game.stats.er === "number" || typeof game.stats.k === "number");
-
-  if (hasPitcherData) {
-    const totals = slice.reduce((acc, game) => {
-      acc.outs += typeof game.stats.ip === "number" ? ipToOuts(game.stats.ip) : 0;
-      acc.er += game.stats.er ?? 0;
-      acc.h += game.stats.h ?? 0;
-      acc.bb += game.stats.bb ?? 0;
-      acc.k += game.stats.k ?? 0;
-      return acc;
-    }, { outs: 0, er: 0, h: 0, bb: 0, k: 0 });
-
-    const innings = totals.outs / 3;
-    if (innings <= 0) {
-      return null;
-    }
-
-    const era = (totals.er * 9) / innings;
-    const whip = (totals.bb + totals.h) / innings;
-    const k9 = (totals.k * 9) / innings;
-
-    return {
-      headline: `ERA ${toFixed(era, 2)} · WHIP ${toFixed(whip, 2)} · K/9 ${toFixed(k9, 1)}`,
-      metrics: [
-        { key: "era", label: "ERA", value: toFixed(era, 2) },
-        { key: "whip", label: "WHIP", value: toFixed(whip, 2) },
-        { key: "k9", label: "K/9", value: toFixed(k9, 1) },
-      ],
-      source: "derived",
-      sampleSize: slice.length,
-    };
-  }
-
-  const totals = slice.reduce((acc, game) => {
-    acc.ab += game.stats.ab ?? 0;
-    acc.hits += game.stats.hits ?? 0;
-    acc.bb += game.stats.bb ?? 0;
-    acc.hr += game.stats.hr ?? 0;
-    acc.rbi += game.stats.rbi ?? 0;
-    acc.doubles += game.stats.doubles ?? 0;
-    acc.triples += game.stats.triples ?? 0;
-    return acc;
-  }, { ab: 0, hits: 0, bb: 0, hr: 0, rbi: 0, doubles: 0, triples: 0 });
-
-  if (totals.ab <= 0 && totals.hr <= 0 && totals.rbi <= 0) {
-    return null;
-  }
-
-  const singles = Math.max(0, totals.hits - totals.doubles - totals.triples - totals.hr);
-  const totalBases = singles + totals.doubles * 2 + totals.triples * 3 + totals.hr * 4;
-  const avg = totals.ab > 0 ? totals.hits / totals.ab : 0;
-  const obpDenominator = totals.ab + totals.bb;
-  const obp = obpDenominator > 0 ? (totals.hits + totals.bb) / obpDenominator : null;
-  const slg = totals.ab > 0 ? totalBases / totals.ab : null;
-  const ops = obp !== null && slg !== null ? obp + slg : null;
-
-  const metrics = [
-    { key: "avg", label: "AVG", value: toAvgStyle(avg) },
-    ...(ops !== null ? [{ key: "ops", label: "OPS", value: toFixed(ops, 3) }] : []),
-    { key: "hr", label: "HR", value: String(Math.round(totals.hr)) },
-    { key: "rbi", label: "RBI", value: String(Math.round(totals.rbi)) },
-  ];
-
-  return {
-    headline: `AVG ${toAvgStyle(avg)} · HR ${Math.round(totals.hr)} · RBI ${Math.round(totals.rbi)}`,
-    metrics,
+  const recent: PlayerInsights["recent"] = {
+    headline: `Last ${recentSlice.length}: ${season.headline}`,
     source: "derived",
-    sampleSize: slice.length,
+    games: recentSlice.map((game) => {
+      const line = pos === "QB" || (game.stats.passYds ?? 0) > 0
+        ? `Pass ${Math.round(game.stats.passYds ?? 0)}y · ${Math.round(game.stats.passTd ?? 0)} TD · ${Math.round(game.stats.int ?? 0)} INT`
+        : pos === "RB" || (game.stats.rushYds ?? 0) > 0
+          ? `Rush ${Math.round(game.stats.rushYds ?? 0)}y · ${Math.round(game.stats.rushTd ?? 0)} TD`
+          : `Rec ${Math.round(game.stats.recYds ?? 0)}y · ${Math.round(game.stats.recTd ?? 0)} TD`;
+      return {
+        date: game.date,
+        opponent: game.opponent,
+        result: game.result,
+        line,
+      };
+    }),
   };
+
+  return { season, recent };
 }
 
-function deriveSeason(sport: SportKey, games: ParsedGame[]): PlayerInsights["season"] {
-  const sampleSize = Math.min(10, games.length);
-  if (sport === "nba") {
-    return deriveNbaSeason(games, sampleSize);
-  }
-  if (sport === "nfl") {
-    return deriveNflSeason(games, sampleSize);
-  }
-  return deriveMlbSeason(games, sampleSize);
-}
-
-function seasonFromPayload(payload: unknown, sport: SportKey): PlayerInsights["season"] {
-  const data = asObject(payload);
-  if (!data) {
-    return null;
-  }
-
-  const seasonTotals = asObject(data.seasonTotals) ?? asObject(asObject(data.season)?.totals);
-  if (!seasonTotals) {
-    return null;
-  }
-
-  const find = (keys: string[]) => findObjectValue(seasonTotals, keys);
-
-  if (sport === "nba") {
-    const ppg = find(["pts", "points", "ppg"]);
-    const rpg = find(["reb", "rebounds", "rpg"]);
-    const apg = find(["ast", "assists", "apg"]);
-    if (typeof ppg !== "number" && typeof rpg !== "number" && typeof apg !== "number") {
-      return null;
-    }
-
-    const metrics = [
-      typeof ppg === "number" ? { key: "ppg", label: "PPG", value: toFixed(ppg, 1) } : null,
-      typeof rpg === "number" ? { key: "rpg", label: "RPG", value: toFixed(rpg, 1) } : null,
-      typeof apg === "number" ? { key: "apg", label: "APG", value: toFixed(apg, 1) } : null,
-    ].filter((row): row is { key: string; label: string; value: string } => row !== null);
-
-    return {
-      headline: metrics.map((metric) => `${metric.label} ${metric.value}`).join(" · "),
-      metrics,
-      source: "upstream",
-    };
-  }
-
-  if (sport === "nfl") {
-    const passYpg = find(["passYpg", "passYardsPerGame"]);
-    const passTd = find(["passTd", "passingTouchdowns"]);
-    const int = find(["int", "interceptions"]);
-    const rushYpg = find(["rushYpg", "rushingYardsPerGame"]);
-    const recYpg = find(["recYpg", "receivingYardsPerGame"]);
-
-    const metrics = [
-      typeof passYpg === "number" ? { key: "pass_ypg", label: "Pass YPG", value: toFixed(passYpg, 1) } : null,
-      typeof passTd === "number" ? { key: "pass_td", label: "Pass TD", value: toFixed(passTd, 0) } : null,
-      typeof int === "number" ? { key: "int", label: "INT", value: toFixed(int, 0) } : null,
-      typeof rushYpg === "number" ? { key: "rush_ypg", label: "Rush YPG", value: toFixed(rushYpg, 1) } : null,
-      typeof recYpg === "number" ? { key: "rec_ypg", label: "Rec YPG", value: toFixed(recYpg, 1) } : null,
-    ].filter((row): row is { key: string; label: string; value: string } => row !== null);
-
-    if (metrics.length === 0) {
-      return null;
-    }
-
-    return {
-      headline: metrics.slice(0, 3).map((metric) => `${metric.label} ${metric.value}`).join(" · "),
-      metrics,
-      source: "upstream",
-    };
-  }
-
-  const era = find(["era"]);
-  const whip = find(["whip"]);
-  const avg = find(["avg", "battingAverage"]);
-  const ops = find(["ops"]);
-  const hr = find(["hr", "homeRuns"]);
-  const rbi = find(["rbi", "runsBattedIn"]);
-
-  const metrics = [
-    typeof era === "number" ? { key: "era", label: "ERA", value: toFixed(era, 2) } : null,
-    typeof whip === "number" ? { key: "whip", label: "WHIP", value: toFixed(whip, 2) } : null,
-    typeof avg === "number" ? { key: "avg", label: "AVG", value: toAvgStyle(avg) } : null,
-    typeof ops === "number" ? { key: "ops", label: "OPS", value: toFixed(ops, 3) } : null,
-    typeof hr === "number" ? { key: "hr", label: "HR", value: String(Math.round(hr)) } : null,
-    typeof rbi === "number" ? { key: "rbi", label: "RBI", value: String(Math.round(rbi)) } : null,
-  ].filter((row): row is { key: string; label: string; value: string } => row !== null);
-
-  if (metrics.length === 0) {
-    return null;
-  }
-
-  return {
-    headline: metrics.slice(0, 3).map((metric) => `${metric.label} ${metric.value}`).join(" · "),
-    metrics,
-    source: "upstream",
-  };
-}
-
-function recentFromGames(sport: SportKey, games: ParsedGame[]): PlayerInsights["recent"] {
-  if (games.length === 0) {
-    return null;
-  }
-
-  const recentGames = games.slice(0, 5);
-  const derivedSeason = deriveSeason(sport, recentGames);
-  const headline = derivedSeason
-    ? `Last ${recentGames.length}: ${derivedSeason.headline}`
-    : `Last ${recentGames.length}: Game log available`;
-
-  return {
-    headline,
-    games: recentGames.map((game) => ({
-      date: game.date,
-      opponent: game.opponent,
-      result: game.result,
-      line: game.line,
-    })),
-    source: "derived",
-  };
-}
-
-async function fetchGamelog(
+function buildSeasonAndRecent(
   sport: SportKey,
-  playerId: string,
-  dataMode: ModeArg,
-): Promise<{ payload: unknown; meta: Meta } | null> {
-  const config = GAMELOG_CONFIG[sport];
-  const endpoint = config.endpoint.replace("{playerId}", encodeURIComponent(playerId));
-
-  try {
-    const response = await fetchEspnJson<unknown>({
-      endpoint,
-      fixtureFile: config.fixtureFile,
-      fixtureSubdir: "gamelog",
-      ttlSeconds: 240,
-      dataMode,
-    });
-    return {
-      payload: response.data,
-      meta: response.meta,
-    };
-  } catch {
-    return null;
+  games: ParsedGame[],
+  position: string | undefined,
+  notes: string[],
+): {
+  season: PlayerInsights["season"];
+  recent: PlayerInsights["recent"];
+} {
+  if (sport === "nba") {
+    return buildNbaSeasonAndRecent(games, notes);
   }
+  if (sport === "mlb") {
+    return buildMlbSeasonAndRecent(games, position, notes);
+  }
+  return buildNflSeasonAndRecent(games, position, notes);
 }
 
 function combineMeta(
@@ -614,25 +702,28 @@ function teamAbbrevFromPayload(payload: unknown): string | undefined {
   if (!data) {
     return undefined;
   }
+
   const direct = readString(data.teamAbbrev);
   if (direct) {
     return direct.toUpperCase();
   }
-  const team = asObject(data.team);
-  const nested = readString(team?.abbreviation);
+
+  const teamObj = asObject(data.team);
+  const nested = readString(teamObj?.abbreviation);
   return nested ? nested.toUpperCase() : undefined;
 }
 
 export async function getPlayerInsights(
   sport: SportKey,
-  playerId: string,
+  playerIdInput: string,
   mode: InsightsMode,
   dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
 ): Promise<Envelope<PlayerInsights>> {
   const resolvedMode = getDataMode(dataMode);
-  const trimmedPlayerId = playerId.trim();
+  const playerId = playerIdInput.trim();
 
-  if (!trimmedPlayerId) {
+  if (!playerId) {
     return {
       data: null,
       meta: {
@@ -650,45 +741,37 @@ export async function getPlayerInsights(
   }
 
   const notes: string[] = [];
-  const profileEnvelope = await getPlayerProfile(sport, trimmedPlayerId, resolvedMode);
+
+  const profileEnvelope = await getPlayerProfile(sport, playerId, resolvedMode, cacheBust);
   if (profileEnvelope.error) {
     notes.push(profileEnvelope.error.message);
   }
-
   const profile = profileEnvelope.data;
+
   let gamelogMeta: Meta | null = null;
   let parsedGames: ParsedGame[] = [];
-  let season: PlayerInsights["season"] = null;
-  let recent: PlayerInsights["recent"] = null;
   let teamAbbrev = profile?.teamAbbrev;
-
   if (mode === "advanced") {
-    const gamelogEnvelope = await fetchGamelog(sport, trimmedPlayerId, resolvedMode);
-    if (!gamelogEnvelope) {
+    const gamelogEnvelope = await getGameLog({ sport, playerId, dataMode: resolvedMode, cacheBust });
+    gamelogMeta = gamelogEnvelope.meta;
+
+    if (gamelogEnvelope.error || !gamelogEnvelope.data) {
       notes.push("Game log endpoint unavailable for this player/league.");
     } else {
-      gamelogMeta = gamelogEnvelope.meta;
-      parsedGames = parseGames(gamelogEnvelope.payload, sport);
-      teamAbbrev = teamAbbrev ?? teamAbbrevFromPayload(gamelogEnvelope.payload);
-      season = seasonFromPayload(gamelogEnvelope.payload, sport) ?? deriveSeason(sport, parsedGames);
-      recent = recentFromGames(sport, parsedGames);
-
-      if (!season) {
-        notes.push("Season stat summary is not available from current upstream payload.");
-      }
-      if (!recent) {
-        notes.push("Recent game log is not available from current upstream payload.");
-      }
+      const parsed = parseGames(gamelogEnvelope.data);
+      parsedGames = parsed.games;
+      notes.push(...parsed.notes);
+      teamAbbrev = teamAbbrev ?? teamAbbrevFromPayload(gamelogEnvelope.data);
     }
   }
 
   let live: PlayerInsights["live"] = null;
   let liveMeta: Meta | null = null;
   if (teamAbbrev) {
-    const liveEnvelope = await getTeamStatus(sport, teamAbbrev, resolvedMode);
+    const liveEnvelope = await getTeamStatus(sport, teamAbbrev, resolvedMode, cacheBust);
     liveMeta = liveEnvelope.meta;
     if (liveEnvelope.error) {
-      notes.push(liveEnvelope.error.message);
+      notes.push("Team live context unavailable right now.");
     } else {
       live = liveEnvelope.data;
     }
@@ -696,9 +779,17 @@ export async function getPlayerInsights(
     notes.push("Team abbreviation unavailable; skipped live team context.");
   }
 
+  let season: PlayerInsights["season"] = null;
+  let recent: PlayerInsights["recent"] = null;
+  if (mode === "advanced") {
+    const derived = buildSeasonAndRecent(sport, parsedGames, profile?.position, notes);
+    season = derived.season;
+    recent = derived.recent;
+  }
+
   const data: PlayerInsights = {
     sport,
-    playerId: trimmedPlayerId,
+    playerId,
     fullName: profile?.fullName,
     teamAbbrev,
     teamName: profile?.teamName,

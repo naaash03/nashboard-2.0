@@ -50,6 +50,7 @@ export async function GET(req: Request) {
     .map((id) => id.trim())
     .filter(Boolean);
   const mode = (searchParams.get("mode") ?? "advanced").toLowerCase() === "beginner" ? "beginner" : "advanced";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (playerIds.length === 0) {
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
 
   try {
     const uniqueIds = Array.from(new Set(playerIds));
-    const tasks = uniqueIds.map((playerId) => async () => getPlayerInsights(sport, playerId, mode, resolvedDataMode));
+    const tasks = uniqueIds.map((playerId) => async () => getPlayerInsights(sport, playerId, mode, resolvedDataMode, cacheBust));
     const envelopes = await runWithConcurrency(tasks, 4);
 
     const players = envelopes

@@ -29,6 +29,7 @@ export async function GET(req: Request) {
   const sport = normalizeSportKey(searchParams.get("sport"));
   const playerId = (searchParams.get("playerId") ?? "").trim();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!playerId) {
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getPlayerInsights(sport, playerId, mode, resolvedDataMode);
+    const envelope = await getPlayerInsights(sport, playerId, mode, resolvedDataMode, cacheBust);
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

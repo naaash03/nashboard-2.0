@@ -1,6 +1,28 @@
 ﻿# FIX REPORT
 
 ## Changelog (2026-03-02)
+- Production reliability pass (LIVE mode + refresh discipline):
+  - Unified ESPN player data access now prioritizes stable endpoints:
+    - player search: `https://site.web.api.espn.com/apis/common/v3/search`
+    - core athlete profile: `https://sports.core.api.espn.com/v2/sports/<sport>/leagues/<league>/athletes/<id>`
+    - athlete gamelog: `https://site.web.api.espn.com/apis/common/v3/sports/<sport>/<league>/athletes/<id>/gamelog`
+    - scoreboard: `https://site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard`
+  - Deprecated league athlete search endpoints are no longer primary for MLB/NBA.
+  - Search fallback behavior is non-fatal: upstream search errors now return empty results with `meta.warning`, not route-level 500s.
+  - Player Insights derivation expanded:
+    - MLB pitchers: ERA / WHIP / K/9 derived from gamelog when needed.
+    - MLB hitters: AVG / OBP / SLG / OPS / HR / RBI derived from gamelog fields when available.
+    - NBA: PPG / RPG / APG + TS% when `PTS/FGA/FTA` inputs are available; otherwise TS% is omitted with a note.
+  - Refresh All now actively busts cache:
+    - widget requests append `cacheBust=<refreshTick>`
+    - provider fetch layer bypasses in-memory/persistent cache when `cacheBust` is present
+    - metadata reflects fresh fetch (`cacheHit=false`) on cache-busted requests.
+  - Player Card Enter-selection safety fix:
+    - suggestions remain visible while typing
+    - Enter selects only an exact normalized name match
+    - no top-result auto-select fallback
+    - inline hint shown when user must click a suggestion (`Select a player from the list.`).
+
 - Advanced mode for Misc widgets:
   - Player Card Advanced now pulls /api/players/insights and renders mobile-friendly accordion sections for:
     - Live context

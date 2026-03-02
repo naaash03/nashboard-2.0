@@ -37,6 +37,7 @@ export async function GET(req: Request) {
     .map((key) => key.trim())
     .filter(Boolean);
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (teamKeys.length === 0) {
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getTeamsAdvanced(sport, teamKeys, mode, resolvedDataMode);
+    const envelope = await getTeamsAdvanced(sport, teamKeys, mode, resolvedDataMode, cacheBust);
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

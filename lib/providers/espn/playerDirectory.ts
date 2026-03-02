@@ -1,51 +1,77 @@
 ﻿import { randomUUID } from "node:crypto";
-import { getDataMode, fetchEspnJson } from "@/lib/providers/espn/client";
+import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
 
 type ModeArg = "live" | "fixture";
+type CacheBustArg = string | number | null | undefined;
 
 type SportConfig = {
-  siteSport: string;
-  siteLeague: string;
+  sportPath: "football" | "baseball" | "basketball";
+  league: "nfl" | "mlb" | "nba";
   searchFixtureFile: string;
   profileFixtureFile: string;
-  sportFilter: string;
-  leagueFilter: string;
-  coreSport: string;
-  coreLeague: string;
+  gamelogFixtureFile: string;
+  scoreboardFixtureFile: string;
+  scoreboardFixtureSubdir: string;
+};
+
+type SearchArgs = {
+  sport: SportKey;
+  query: string;
+  limit?: number;
+  dataMode?: ModeArg;
+  cacheBust?: CacheBustArg;
+};
+
+type CoreAthleteArgs = {
+  sport: SportKey;
+  playerId: string;
+  dataMode?: ModeArg;
+  cacheBust?: CacheBustArg;
+};
+
+type GameLogArgs = {
+  sport: SportKey;
+  playerId: string;
+  dataMode?: ModeArg;
+  cacheBust?: CacheBustArg;
+};
+
+type ScoreboardArgs = {
+  sport: SportKey;
+  date?: string;
+  dataMode?: ModeArg;
+  cacheBust?: CacheBustArg;
 };
 
 const SPORT_CONFIG: Record<SportKey, SportConfig> = {
   nfl: {
-    siteSport: "football",
-    siteLeague: "nfl",
+    sportPath: "football",
+    league: "nfl",
     searchFixtureFile: "nfl_search_daniel_jones.json",
     profileFixtureFile: "nfl_profile_sample.json",
-    sportFilter: "football",
-    leagueFilter: "nfl",
-    coreSport: "football",
-    coreLeague: "nfl",
+    gamelogFixtureFile: "nfl_athlete_gamelog_sample.json",
+    scoreboardFixtureFile: "scoreboard_with_games.json",
+    scoreboardFixtureSubdir: "nfl",
   },
   mlb: {
-    siteSport: "baseball",
-    siteLeague: "mlb",
+    sportPath: "baseball",
+    league: "mlb",
     searchFixtureFile: "mlb_search_juan_soto.json",
     profileFixtureFile: "mlb_profile_sample.json",
-    sportFilter: "baseball",
-    leagueFilter: "mlb",
-    coreSport: "baseball",
-    coreLeague: "mlb",
+    gamelogFixtureFile: "mlb_athlete_gamelog_32827.json",
+    scoreboardFixtureFile: "mlb_scoreboard_sample.json",
+    scoreboardFixtureSubdir: "scoreboard",
   },
   nba: {
-    siteSport: "basketball",
-    siteLeague: "nba",
+    sportPath: "basketball",
+    league: "nba",
     searchFixtureFile: "nba_search_lebron_james.json",
     profileFixtureFile: "nba_profile_sample.json",
-    sportFilter: "basketball",
-    leagueFilter: "nba",
-    coreSport: "basketball",
-    coreLeague: "nba",
+    gamelogFixtureFile: "nba_athlete_gamelog_1966.json",
+    scoreboardFixtureFile: "nba_scoreboard_sample.json",
+    scoreboardFixtureSubdir: "scoreboard",
   },
 };
 
@@ -57,14 +83,13 @@ function resolveSportKey(input: string | null | undefined): SportKey {
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 function readString(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
-
   const next = value.trim();
   return next.length > 0 ? next : undefined;
 }
@@ -82,6 +107,17 @@ function readNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function normalizeCacheBust(value: CacheBustArg): string | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function extractIdFromRef(value: unknown): string | undefined {
   const ref = readString(value);
   if (!ref) return undefined;
@@ -89,8 +125,17 @@ function extractIdFromRef(value: unknown): string | undefined {
   return match?.[1];
 }
 
-function extractHeadshot(candidate: Record<string, unknown>): string | undefined {
-  const direct = readString(candidate.headshot) ?? readString(candidate.headshotUrl) ?? readString(candidate.image);
+function extractHeadshot(candidateInput: unknown): string | undefined {
+  const candidate = asObject(candidateInput);
+  if (!candidate) {
+    return undefined;
+  }
+
+  const direct = readString(candidate.headshot)
+    ?? readString(candidate.headshotUrl)
+    ?? readString(candidate.image)
+    ?? readString(candidate.href)
+    ?? readString(candidate.url);
   if (direct) {
     return direct;
   }
@@ -98,6 +143,46 @@ function extractHeadshot(candidate: Record<string, unknown>): string | undefined
   const headshotObj = asObject(candidate.headshot);
   if (headshotObj) {
     return readString(headshotObj.href) ?? readString(headshotObj.url);
+  }
+
+  const images = Array.isArray(candidate.images) ? candidate.images : [];
+  for (const image of images) {
+    const typed = asObject(image);
+    if (!typed) continue;
+    const type = readString(typed.type)?.toLowerCase();
+    if (!type || type.includes("athlete") || type.includes("headshot")) {
+      const found = readString(typed.url) ?? readString(typed.href);
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function extractTeamLogo(candidateInput: unknown): string | undefined {
+  const candidate = asObject(candidateInput);
+  if (!candidate) {
+    return undefined;
+  }
+
+  const direct = readString(candidate.teamLogoUrl) ?? readString(candidate.logo);
+  if (direct) {
+    return direct;
+  }
+
+  const images = Array.isArray(candidate.images) ? candidate.images : [];
+  for (const image of images) {
+    const typed = asObject(image);
+    if (!typed) continue;
+    const type = readString(typed.type)?.toLowerCase();
+    if (type && (type.includes("team") || type.includes("logo"))) {
+      const found = readString(typed.url) ?? readString(typed.href);
+      if (found) {
+        return found;
+      }
+    }
   }
 
   return undefined;
@@ -110,23 +195,24 @@ function toSearchResult(candidateInput: unknown): PlayerSearchResult | null {
   }
 
   const athlete = asObject(outer.athlete) ?? outer;
-  const team = asObject(athlete.team);
-  const position = asObject(athlete.position);
+  const team = asObject(athlete.team) ?? asObject(outer.team);
+  const position = asObject(athlete.position) ?? asObject(outer.position);
 
   const playerId =
-    readString(athlete.id) ??
-    readString(outer.id) ??
-    readString(athlete.playerId) ??
-    extractIdFromRef(athlete.$ref) ??
-    extractIdFromRef(outer.$ref);
+    readString(athlete.id)
+    ?? readString(outer.id)
+    ?? readString(athlete.playerId)
+    ?? extractIdFromRef(athlete.$ref)
+    ?? extractIdFromRef(outer.$ref);
 
   const fullName =
-    readString(athlete.fullName) ??
-    readString(athlete.displayName) ??
-    readString(outer.displayName) ??
-    readString(outer.fullName) ??
-    readString(athlete.shortName) ??
-    readString(outer.shortName);
+    readString(athlete.fullName)
+    ?? readString(athlete.displayName)
+    ?? readString(outer.displayName)
+    ?? readString(outer.fullName)
+    ?? readString(athlete.shortName)
+    ?? readString(outer.shortName)
+    ?? readString(outer.name);
 
   if (!playerId || !fullName) {
     return null;
@@ -137,28 +223,50 @@ function toSearchResult(candidateInput: unknown): PlayerSearchResult | null {
     fullName,
   };
 
-  const teamName = readString(team?.displayName) ?? readString(team?.name) ?? readString(outer.label);
+  const teamName =
+    readString(team?.displayName)
+    ?? readString(team?.name)
+    ?? readString(outer.teamName)
+    ?? readString(outer.description);
   if (teamName) {
     result.teamName = teamName;
   }
 
+  const teamAbbr = readString(team?.abbreviation) ?? readString(outer.teamAbbr) ?? readString(outer.teamKey);
+  if (teamAbbr) {
+    result.teamAbbr = teamAbbr.toUpperCase();
+  }
+
   const positionName =
-    readString(position?.abbreviation) ??
-    readString(position?.displayName) ??
-    readString(position?.name);
+    readString(position?.abbreviation)
+    ?? readString(position?.displayName)
+    ?? readString(position?.name)
+    ?? readString(outer.position)
+    ?? readString(outer.positionName);
   if (positionName) {
     result.position = positionName;
   }
 
-  const headshot = extractHeadshot(athlete) ?? extractHeadshot(outer);
-  if (headshot) {
-    result.headshot = headshot;
+  const jersey = readString(athlete.jersey) ?? readString(outer.jersey);
+  if (jersey) {
+    result.jersey = jersey;
+  }
+
+  const headshotUrl = extractHeadshot(athlete) ?? extractHeadshot(outer);
+  if (headshotUrl) {
+    result.headshot = headshotUrl;
+    result.headshotUrl = headshotUrl;
+  }
+
+  const teamLogoUrl = extractTeamLogo(athlete) ?? extractTeamLogo(outer);
+  if (teamLogoUrl) {
+    result.teamLogoUrl = teamLogoUrl;
   }
 
   return result;
 }
 
-function mapSearchPayload(payload: unknown, sport: SportKey): { results: PlayerSearchResult[]; warning?: string } {
+function mapSearchPayload(payload: unknown): { results: PlayerSearchResult[]; warning?: string } {
   const data = asObject(payload);
   if (!data) {
     return {
@@ -169,32 +277,9 @@ function mapSearchPayload(payload: unknown, sport: SportKey): { results: PlayerS
 
   const athletesArray = Array.isArray(data.athletes) ? data.athletes : [];
   const itemsArray = Array.isArray(data.items) ? data.items : [];
+  const resultsArray = Array.isArray(data.results) ? data.results : [];
+  const rows = athletesArray.length > 0 ? athletesArray : (itemsArray.length > 0 ? itemsArray : resultsArray);
 
-  const config = SPORT_CONFIG[sport];
-
-  const filteredItems = itemsArray.filter((row) => {
-    const item = asObject(row);
-    if (!item) return false;
-    const type = readString(item.type);
-    const sportKey = readString(item.sport)?.toLowerCase();
-    const leagueKey = readString(item.league)?.toLowerCase();
-
-    if (type && type.toLowerCase() !== "player") {
-      return false;
-    }
-
-    if (sportKey && sportKey !== config.sportFilter) {
-      return false;
-    }
-
-    if (leagueKey && leagueKey !== config.leagueFilter) {
-      return false;
-    }
-
-    return true;
-  });
-
-  const rows = athletesArray.length > 0 ? athletesArray : filteredItems;
   const mapped = rows
     .map((row) => toSearchResult(row))
     .filter((row): row is PlayerSearchResult => row !== null);
@@ -204,8 +289,30 @@ function mapSearchPayload(payload: unknown, sport: SportKey): { results: PlayerS
   return {
     results: deduped,
     warning: rows.length > 0 && deduped.length === 0
-      ? "Upstream search payload was missing expected athlete fields."
+      ? "Upstream search payload was missing expected player fields."
       : undefined,
+  };
+}
+
+function mergeWarning(meta: Meta, warning?: string): Meta {
+  if (!warning) {
+    return meta;
+  }
+
+  const combined = meta.warning ? `${meta.warning} ${warning}` : warning;
+  return {
+    ...meta,
+    warning: combined,
+  };
+}
+
+function fallbackMeta(dataMode: ModeArg, sourceUsed: Meta["sourceUsed"], warning?: string): Meta {
+  return {
+    sourceUsed,
+    updatedAt: new Date().toISOString(),
+    requestId: randomUUID(),
+    warning,
+    dataMode,
   };
 }
 
@@ -255,6 +362,7 @@ function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profil
   if (teamName) {
     profile.teamName = teamName;
   }
+
   const teamAbbrev = readString(team?.abbreviation) ?? readString(team?.shortDisplayName);
   if (teamAbbrev) {
     profile.teamAbbrev = teamAbbrev.toUpperCase();
@@ -263,12 +371,13 @@ function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profil
   const positionName =
     readString(position?.abbreviation)
     ?? readString(position?.displayName)
-    ?? readString(position?.name);
+    ?? readString(position?.name)
+    ?? readString(athlete.positionAbbreviation);
   if (positionName) {
     profile.position = positionName;
   }
 
-  const headshot = extractHeadshot(athlete);
+  const headshot = extractHeadshot(athlete) ?? extractHeadshot(data);
   if (headshot) {
     profile.headshot = headshot;
   }
@@ -326,145 +435,171 @@ function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profil
   return { profile, warning };
 }
 
-function fallbackMeta(dataMode: ModeArg, sourceUsed: Meta["sourceUsed"], warning?: string): Meta {
-  return {
-    sourceUsed,
-    updatedAt: new Date().toISOString(),
-    requestId: randomUUID(),
-    warning,
-    dataMode,
-  };
-}
-
-function mergeWarning(meta: Meta, warning?: string): Meta {
-  if (!warning) {
-    return meta;
+function mergeProfiles(primary: PlayerProfile | null, secondary: PlayerProfile | null): PlayerProfile | null {
+  if (!primary && !secondary) {
+    return null;
+  }
+  if (!primary) {
+    return secondary;
+  }
+  if (!secondary) {
+    return primary;
   }
 
-  const combined = meta.warning ? `${meta.warning} ${warning}` : warning;
   return {
-    ...meta,
-    warning: combined,
+    playerId: secondary.playerId || primary.playerId,
+    fullName: secondary.fullName || primary.fullName,
+    teamAbbrev: secondary.teamAbbrev ?? primary.teamAbbrev,
+    teamName: secondary.teamName ?? primary.teamName,
+    position: secondary.position ?? primary.position,
+    headshot: secondary.headshot ?? primary.headshot,
+    jersey: secondary.jersey ?? primary.jersey,
+    age: secondary.age ?? primary.age,
+    height: secondary.height ?? primary.height,
+    weight: secondary.weight ?? primary.weight,
+    bats: secondary.bats ?? primary.bats,
+    throws: secondary.throws ?? primary.throws,
+    injury: secondary.injury ?? primary.injury,
+    whyItMatters: secondary.whyItMatters ?? primary.whyItMatters,
+    tooltip: secondary.tooltip ?? primary.tooltip,
+    stats: secondary.stats ?? primary.stats,
+    learnMore: secondary.learnMore ?? primary.learnMore,
   };
 }
 
-async function fetchSearchPayload(sport: SportKey, query: string, dataMode: ModeArg): Promise<{ payload: unknown; meta: Meta }> {
-  const config = SPORT_CONFIG[sport];
-  const primaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${config.siteSport}/${config.siteLeague}/athletes?search=${encodeURIComponent(query)}`;
-  const commonSearchWarning = "League athlete search endpoint unavailable; used common search.";
+export function getSportEndpointConfig(sportInput: SportKey): SportConfig {
+  return SPORT_CONFIG[resolveSportKey(sportInput)];
+}
 
-  const fetchCommonSearch = async () => {
-    const fallback = await fetchEspnJson<unknown>({
-      endpoint: "https://site.web.api.espn.com/apis/common/v3/search",
-      params: {
-        query,
-        type: "player",
-        limit: 20,
+export async function getCoreAthlete(args: CoreAthleteArgs): Promise<Envelope<unknown>> {
+  const sport = resolveSportKey(args.sport);
+  const mode = getDataMode(args.dataMode);
+  const playerId = args.playerId.trim();
+
+  if (!playerId) {
+    return {
+      data: null,
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
+      error: {
+        message: "playerId is required",
+        code: "MISSING_PLAYER_ID",
       },
-      fixtureFile: config.searchFixtureFile,
-      fixtureSubdir: "players",
-      ttlSeconds: 300,
-      dataMode,
-    });
-
-    return {
-      payload: fallback.data,
-      meta: mergeWarning(fallback.meta, commonSearchWarning),
-    };
-  };
-
-  if (sport === "mlb" || sport === "nba") {
-    return fetchCommonSearch();
-  }
-
-  if (dataMode === "fixture") {
-    const fixture = await fetchEspnJson<unknown>({
-      endpoint: primaryUrl,
-      fixtureFile: config.searchFixtureFile,
-      fixtureSubdir: "players",
-      ttlSeconds: 300,
-      dataMode,
-    });
-
-    return {
-      payload: fixture.data,
-      meta: fixture.meta,
     };
   }
 
   try {
-    const primary = await fetchEspnJson<unknown>({
-      endpoint: primaryUrl,
-      ttlSeconds: 300,
-      dataMode,
-    });
-    return {
-      payload: primary.data,
-      meta: primary.meta,
-    };
-  } catch {
-    return fetchCommonSearch();
-  }
-}
-
-async function fetchProfilePayload(sport: SportKey, playerId: string, dataMode: ModeArg): Promise<{ payload: unknown; meta: Meta }> {
-  const config = SPORT_CONFIG[sport];
-  const primaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${config.siteSport}/${config.siteLeague}/athletes/${encodeURIComponent(playerId)}`;
-
-  if (dataMode === "fixture") {
-    const fixture = await fetchEspnJson<unknown>({
-      endpoint: primaryUrl,
-      fixtureFile: config.profileFixtureFile,
-      fixtureSubdir: "players",
-      ttlSeconds: 600,
-      dataMode,
-    });
-
-    return {
-      payload: fixture.data,
-      meta: fixture.meta,
-    };
-  }
-
-  try {
-    const primary = await fetchEspnJson<unknown>({
-      endpoint: primaryUrl,
-      ttlSeconds: 600,
-      dataMode,
-    });
-
-    return {
-      payload: primary.data,
-      meta: primary.meta,
-    };
-  } catch {
-    const fallback = await fetchEspnJson<unknown>({
-      endpoint: `https://sports.core.api.espn.com/v2/sports/${config.coreSport}/leagues/${config.coreLeague}/athletes/${encodeURIComponent(playerId)}`,
+    const config = SPORT_CONFIG[sport];
+    const response = await fetchEspnJson<unknown>({
+      endpoint: `https://sports.core.api.espn.com/v2/sports/${config.sportPath}/leagues/${config.league}/athletes/${encodeURIComponent(playerId)}`,
       params: {
         lang: "en",
         region: "us",
       },
+      fixtureFile: config.profileFixtureFile,
+      fixtureSubdir: "players",
       ttlSeconds: 600,
-      dataMode,
+      dataMode: mode,
+      cacheBust: normalizeCacheBust(args.cacheBust),
     });
 
     return {
-      payload: fallback.data,
-      meta: mergeWarning(fallback.meta, "Using ESPN core athlete profile (site athlete endpoint returned 404 for this league)."),
+      data: response.data,
+      meta: response.meta,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
+      error: {
+        message: `Failed to load core athlete profile: ${String(error)}`,
+        code: "UPSTREAM_ERROR",
+      },
     };
   }
 }
 
-export async function searchPlayers(
-  sportInput: SportKey,
-  query: string,
-  dataMode?: ModeArg,
-  limit = 8,
-): Promise<Envelope<PlayerSearchResult[]>> {
-  const sport = resolveSportKey(sportInput);
-  const mode = getDataMode(dataMode);
-  const trimmed = query.trim();
-  const resolvedLimit = Math.max(1, Math.min(8, Math.floor(limit)));
+export async function getGameLog(args: GameLogArgs): Promise<Envelope<unknown>> {
+  const sport = resolveSportKey(args.sport);
+  const mode = getDataMode(args.dataMode);
+  const playerId = args.playerId.trim();
+
+  if (!playerId) {
+    return {
+      data: null,
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
+      error: {
+        message: "playerId is required",
+        code: "MISSING_PLAYER_ID",
+      },
+    };
+  }
+
+  try {
+    const config = SPORT_CONFIG[sport];
+    const response = await fetchEspnJson<unknown>({
+      endpoint: `https://site.web.api.espn.com/apis/common/v3/sports/${config.sportPath}/${config.league}/athletes/${encodeURIComponent(playerId)}/gamelog`,
+      fixtureFile: config.gamelogFixtureFile,
+      fixtureSubdir: "gamelog",
+      ttlSeconds: 240,
+      dataMode: mode,
+      cacheBust: normalizeCacheBust(args.cacheBust),
+    });
+
+    return {
+      data: response.data,
+      meta: response.meta,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
+      error: {
+        message: `Failed to load player gamelog: ${String(error)}`,
+        code: "UPSTREAM_ERROR",
+      },
+    };
+  }
+}
+
+export async function getScoreboard(args: ScoreboardArgs): Promise<Envelope<unknown>> {
+  const sport = resolveSportKey(args.sport);
+  const mode = getDataMode(args.dataMode);
+
+  try {
+    const config = SPORT_CONFIG[sport];
+    const response = await fetchEspnJson<unknown>({
+      endpoint: `https://site.api.espn.com/apis/site/v2/sports/${config.sportPath}/${config.league}/scoreboard`,
+      params: {
+        dates: args.date,
+      },
+      fixtureFile: config.scoreboardFixtureFile,
+      fixtureSubdir: config.scoreboardFixtureSubdir,
+      ttlSeconds: 60,
+      dataMode: mode,
+      cacheBust: normalizeCacheBust(args.cacheBust),
+    });
+
+    return {
+      data: response.data,
+      meta: response.meta,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
+      error: {
+        message: `Failed to load scoreboard: ${String(error)}`,
+        code: "UPSTREAM_ERROR",
+      },
+    };
+  }
+}
+
+async function searchPlayersByOptions(args: SearchArgs): Promise<Envelope<PlayerSearchResult[]>> {
+  const sport = resolveSportKey(args.sport);
+  const mode = getDataMode(args.dataMode);
+  const trimmed = args.query.trim();
+  const limit = Math.max(1, Math.min(8, Math.floor(args.limit ?? 8)));
 
   if (!trimmed) {
     return {
@@ -477,35 +612,67 @@ export async function searchPlayers(
     };
   }
 
+  const config = SPORT_CONFIG[sport];
   try {
-    const fetched = await fetchSearchPayload(sport, trimmed, mode);
-    const mapped = mapSearchPayload(fetched.payload, sport);
+    const searchResponse = await fetchEspnJson<unknown>({
+      endpoint: "https://site.web.api.espn.com/apis/common/v3/search",
+      params: {
+        query: trimmed,
+        type: "player",
+        limit,
+      },
+      fixtureFile: config.searchFixtureFile,
+      fixtureSubdir: "players",
+      ttlSeconds: 300,
+      dataMode: mode,
+      cacheBust: normalizeCacheBust(args.cacheBust),
+    });
+
+    const mapped = mapSearchPayload(searchResponse.data);
     return {
-      data: mapped.results.slice(0, resolvedLimit),
-      meta: mergeWarning(fetched.meta, mapped.warning),
+      data: mapped.results.slice(0, limit),
+      meta: mergeWarning(searchResponse.meta, mapped.warning),
     };
   } catch (error) {
+    const warning = `Common player search unavailable, returning empty results: ${String(error)}`;
     return {
-      data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
-      error: {
-        message: `Failed to search players: ${String(error)}`,
-        code: "UPSTREAM_ERROR",
-      },
+      data: [],
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", warning),
     };
   }
 }
 
+export async function searchPlayers(
+  sportOrArgs: SportKey | SearchArgs,
+  query?: string,
+  dataMode?: ModeArg,
+  limit = 8,
+  cacheBust?: CacheBustArg,
+): Promise<Envelope<PlayerSearchResult[]>> {
+  if (typeof sportOrArgs === "object") {
+    return searchPlayersByOptions(sportOrArgs);
+  }
+
+  return searchPlayersByOptions({
+    sport: sportOrArgs,
+    query: query ?? "",
+    dataMode,
+    limit,
+    cacheBust,
+  });
+}
+
 export async function getPlayerProfile(
   sportInput: SportKey,
-  playerId: string,
+  playerIdInput: string,
   dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
 ): Promise<Envelope<PlayerProfile>> {
   const sport = resolveSportKey(sportInput);
   const mode = getDataMode(dataMode);
-  const trimmedPlayerId = playerId.trim();
+  const playerId = playerIdInput.trim();
 
-  if (!trimmedPlayerId) {
+  if (!playerId) {
     return {
       data: null,
       meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
@@ -516,31 +683,48 @@ export async function getPlayerProfile(
     };
   }
 
-  try {
-    const fetched = await fetchProfilePayload(sport, trimmedPlayerId, mode);
-    const mapped = mapProfilePayload(fetched.payload, trimmedPlayerId);
-
-    if (!mapped.profile) {
-      return {
-        data: null,
-        meta: mergeWarning(fetched.meta, mapped.warning ?? "No player profile data returned from upstream."),
-      };
-    }
-
-    return {
-      data: mapped.profile,
-      meta: mergeWarning(fetched.meta, mapped.warning),
-    };
-  } catch (error) {
+  const notes: string[] = [];
+  const coreEnvelope = await getCoreAthlete({ sport, playerId, dataMode: mode, cacheBust });
+  if (coreEnvelope.error || !coreEnvelope.data) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
-      error: {
-        message: `Failed to load player profile: ${String(error)}`,
-        code: "UPSTREAM_ERROR",
-      },
+      meta: mergeWarning(coreEnvelope.meta, "Unable to load player profile from ESPN core athlete endpoint."),
+      error: coreEnvelope.error,
     };
   }
+
+  const coreMapped = mapProfilePayload(coreEnvelope.data, playerId);
+  let mergedProfile = coreMapped.profile;
+  let mergedMeta = mergeWarning(coreEnvelope.meta, coreMapped.warning);
+
+  if (mode === "live") {
+    const config = SPORT_CONFIG[sport];
+    try {
+      const siteResponse = await fetchEspnJson<unknown>({
+        endpoint: `https://site.api.espn.com/apis/site/v2/sports/${config.sportPath}/${config.league}/athletes/${encodeURIComponent(playerId)}`,
+        ttlSeconds: 600,
+        dataMode: mode,
+        cacheBust: normalizeCacheBust(cacheBust),
+      });
+      const siteMapped = mapProfilePayload(siteResponse.data, playerId);
+      mergedProfile = mergeProfiles(mergedProfile, siteMapped.profile);
+      mergedMeta = mergeWarning(siteResponse.meta, siteMapped.warning);
+    } catch {
+      notes.push("Using ESPN core athlete profile (league site athlete endpoint unavailable).");
+    }
+  }
+
+  if (!mergedProfile) {
+    return {
+      data: null,
+      meta: mergeWarning(mergedMeta, notes.length > 0 ? notes.join(" ") : "No player profile data returned from upstream."),
+    };
+  }
+
+  return {
+    data: mergedProfile,
+    meta: mergeWarning(mergedMeta, notes.length > 0 ? notes.join(" ") : undefined),
+  };
 }
 
 export function normalizeSportKey(input: string | null | undefined): SportKey {

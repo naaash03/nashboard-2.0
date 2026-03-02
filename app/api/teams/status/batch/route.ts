@@ -30,6 +30,7 @@ export async function GET(req: Request) {
     .split(",")
     .map((key) => key.trim())
     .filter(Boolean);
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (teamKeys.length === 0) {
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getTeamStatusBatch(sport, teamKeys, resolvedDataMode);
+    const envelope = await getTeamStatusBatch(sport, teamKeys, resolvedDataMode, cacheBust);
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

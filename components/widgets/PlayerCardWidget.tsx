@@ -59,30 +59,36 @@ function normalizePlayerBySport(raw: unknown): PlayerBySportConfig {
 }
 
 function selectedPlayerIdFromConfig(config: Record<string, unknown>, sportKey: SportKey): string {
+  const configSport = normalizeSportKey(config.sportKey);
+  if (configSport === sportKey) {
+    if (typeof config.playerId === "string") {
+      return config.playerId;
+    }
+    return "";
+  }
+
   const playerBySport = normalizePlayerBySport(config.playerBySport);
   const fromSport = playerBySport[sportKey]?.playerId;
   if (fromSport) {
     return fromSport;
   }
 
-  const configSport = normalizeSportKey(config.sportKey);
-  if (configSport === sportKey && typeof config.playerId === "string") {
-    return config.playerId;
-  }
-
   return "";
 }
 
 function selectedPlayerNameFromConfig(config: Record<string, unknown>, sportKey: SportKey): string {
+  const configSport = normalizeSportKey(config.sportKey);
+  if (configSport === sportKey) {
+    if (typeof config.playerName === "string") {
+      return config.playerName;
+    }
+    return "";
+  }
+
   const playerBySport = normalizePlayerBySport(config.playerBySport);
   const fromSport = playerBySport[sportKey]?.playerName;
   if (fromSport) {
     return fromSport;
-  }
-
-  const configSport = normalizeSportKey(config.sportKey);
-  if (configSport === sportKey && typeof config.playerName === "string") {
-    return config.playerName;
   }
 
   return "";
@@ -93,17 +99,37 @@ export function buildPlayerSearchUrl(
   dataMode: "live" | "fixture",
   limit = 8,
   sport: SportKey = "nfl",
+  cacheBust?: string | number,
 ): string {
   const params = new URLSearchParams();
   params.set("sport", sport);
   params.set("q", query);
   params.set("limit", String(limit));
   params.set("dataMode", dataMode);
+  if (cacheBust !== undefined) {
+    params.set("cacheBust", String(cacheBust));
+  }
   return `/api/players/search?${params.toString()}`;
+}
+
+export function normalizePlayerName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s]|_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function selectTopPlayerResult(results: PlayerSearchResult[]): PlayerSearchResult | null {
   return results[0] ?? null;
+}
+
+export function selectExactPlayerResult(query: string, results: PlayerSearchResult[]): PlayerSearchResult | null {
+  const normalizedQuery = normalizePlayerName(query);
+  if (!normalizedQuery) {
+    return null;
+  }
+  return results.find((result) => normalizePlayerName(result.fullName) === normalizedQuery) ?? null;
 }
 
 function to12h(value: string): string {
@@ -194,6 +220,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const [insights, setInsights] = useState<PlayerInsights | null>(null);
   const [insightsMeta, setInsightsMeta] = useState<WidgetMeta | null>(null);
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
+  const [enterHint, setEnterHint] = useState<string | null>(null);
 
   const lastExecutedSearchKeyRef = useRef("");
   const lastFetchedProfileKeyRef = useRef("");
@@ -227,8 +254,8 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   }, [configPlayerId, configPlayerName, query]);
 
   const searchRequestKey = useMemo(
-    () => stableKey({ sportKey, query: debouncedQuery.toLowerCase(), dataMode: props.dataMode }),
-    [debouncedQuery, props.dataMode, sportKey],
+    () => stableKey({ sportKey, query: debouncedQuery.toLowerCase(), dataMode: props.dataMode, refreshTick: props.refreshTick }),
+    [debouncedQuery, props.dataMode, props.refreshTick, sportKey],
   );
 
   useEffect(() => {
@@ -249,10 +276,10 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
     void (async () => {
       try {
-        const endpointUrl = buildPlayerSearchUrl(debouncedQuery, props.dataMode, 8, sportKey);
-        setEndpoint(endpointUrl);
+        const cacheBustUrl = buildPlayerSearchUrl(debouncedQuery, props.dataMode, 8, sportKey, props.refreshTick);
+        setEndpoint(cacheBustUrl);
 
-        const response = await fetch(endpointUrl, { cache: "no-store", signal: controller.signal });
+        const response = await fetch(cacheBustUrl, { cache: "no-store", signal: controller.signal });
         const json = (await response.json()) as SearchResponse;
         if (controller.signal.aborted) {
           return;
@@ -266,6 +293,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         }
 
         setWarning(json.meta.warning ?? null);
+        setEnterHint(null);
         setResults(json.data ?? []);
         setLastError(null);
       } catch (error) {
@@ -285,13 +313,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     return () => {
       controller.abort();
     };
-  }, [debouncedQuery, props.dataMode, searchRequestKey, sportKey]);
+  }, [debouncedQuery, props.dataMode, props.refreshTick, searchRequestKey, sportKey]);
 
   const loadPlayer = useCallback(async (
     playerId: string,
     signal: AbortSignal,
   ): Promise<{ data: PlayerProfile | null; meta: WidgetMeta | null }> => {
-    const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
+    const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(endpointUrl);
     const response = await fetch(endpointUrl, { cache: "no-store", signal });
     const json = (await response.json()) as PlayerProfileResponse;
@@ -304,20 +332,20 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       data: json.data ?? null,
       meta: json.meta ?? null,
     };
-  }, [props.dataMode, sportKey]);
+  }, [props.dataMode, props.refreshTick, sportKey]);
 
   const profileRequestKey = useMemo(
     () => selectedPlayerId
-      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode })
+      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode, refreshTick: props.refreshTick })
       : "",
-    [props.dataMode, selectedPlayerId, sportKey],
+    [props.dataMode, props.refreshTick, selectedPlayerId, sportKey],
   );
 
   const insightsRequestKey = useMemo(
     () => props.mode === "ADVANCED" && selectedPlayerId
-      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode, mode: "advanced" })
+      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode, mode: "advanced", refreshTick: props.refreshTick })
       : "",
-    [props.dataMode, props.mode, selectedPlayerId, sportKey],
+    [props.dataMode, props.mode, props.refreshTick, selectedPlayerId, sportKey],
   );
 
   useEffect(() => {
@@ -386,7 +414,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
     void (async () => {
       try {
-        const endpointUrl = `/api/players/insights?sport=${sportKey}&playerId=${encodeURIComponent(selectedPlayerId)}&mode=advanced&dataMode=${props.dataMode}`;
+        const endpointUrl = `/api/players/insights?sport=${sportKey}&playerId=${encodeURIComponent(selectedPlayerId)}&mode=advanced&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
         setEndpoint(endpointUrl);
         const response = await fetch(endpointUrl, { cache: "no-store", signal: controller.signal });
         const json = (await response.json()) as PlayerInsightsResponse;
@@ -417,7 +445,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     return () => {
       controller.abort();
     };
-  }, [insightsRequestKey, props.dataMode, props.mode, selectedPlayerId, sportKey]);
+  }, [insightsRequestKey, props.dataMode, props.mode, props.refreshTick, selectedPlayerId, sportKey]);
 
   const onSelect = async (player: PlayerSearchResult) => {
     setSelectedPlayerId(player.playerId);
@@ -425,6 +453,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     setResults([]);
     setLastSearchRaw(null);
     setWarning(null);
+    setEnterHint(null);
     setInsights(null);
     setInsightsMeta(null);
     lastFetchedInsightsKeyRef.current = "";
@@ -450,9 +479,14 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const onEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    const selected = selectTopPlayerResult(results);
+    const selected = selectExactPlayerResult(query, results);
     if (selected) {
+      setEnterHint(null);
       void onSelect(selected);
+      return;
+    }
+    if (query.trim().length >= 3 && results.length > 0) {
+      setEnterHint("Select a player from the list.");
     }
   };
 
@@ -461,34 +495,28 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       return;
     }
 
-    const playerBySport = normalizePlayerBySport(props.config.playerBySport);
-    const nextSelectedPlayerId = playerBySport[nextSportKey]?.playerId ?? "";
-    const nextSelectedName = playerBySport[nextSportKey]?.playerName ?? "";
-
     setSportKey(nextSportKey);
-    setSelectedPlayerId(nextSelectedPlayerId);
-    setQuery(nextSelectedName);
+    setSelectedPlayerId("");
+    setQuery("");
     setResults([]);
     setLastSearchRaw(null);
     setWarning(null);
+    setEnterHint(null);
     setInsights(null);
     setInsightsMeta(null);
     lastFetchedInsightsKeyRef.current = "";
-    if (!nextSelectedPlayerId) {
-      setData(null);
-      setMeta(null);
-      lastFetchedProfileKeyRef.current = "";
-    }
+    setData(null);
+    setMeta(null);
+    lastFetchedProfileKeyRef.current = "";
 
     await props.onPersist({
       config: {
         ...props.config,
         sportKey: nextSportKey,
-        playerId: nextSelectedPlayerId,
-        playerName: nextSelectedName,
-        playerBySport,
+        playerId: "",
+        playerName: "",
       },
-      playerId: nextSelectedPlayerId || undefined,
+      playerId: undefined,
     });
   };
 
@@ -531,7 +559,10 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
         <input
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setEnterHint(null);
+          }}
           onKeyDown={onEnter}
           placeholder={`Search ${sportLabel(sportKey)} player (3+ chars)`}
           className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
@@ -539,6 +570,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       </div>
 
       {trimmed.length < 3 ? <p className="text-neutral-400">Type 3+ chars to search.</p> : null}
+      {enterHint ? <p className="text-amber-300">{enterHint}</p> : null}
       {isSearching ? <p className="text-neutral-400">Searching...</p> : null}
 
       {results.length > 0 ? (
