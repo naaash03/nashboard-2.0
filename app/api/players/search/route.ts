@@ -26,6 +26,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const sport = normalizeSportKey(searchParams.get("sport"));
   const query = (searchParams.get("q") ?? "").trim();
+  const parsedLimit = Number.parseInt(searchParams.get("limit") ?? "8", 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(8, parsedLimit)) : 8;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!query) {
@@ -42,7 +44,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await searchPlayers(sport, query, resolvedDataMode);
+    const envelope = await searchPlayers(sport, query, resolvedDataMode, limit);
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

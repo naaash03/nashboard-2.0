@@ -338,6 +338,31 @@ function mergeWarning(meta: Meta, warning?: string): Meta {
 async function fetchSearchPayload(sport: SportKey, query: string, dataMode: ModeArg): Promise<{ payload: unknown; meta: Meta }> {
   const config = SPORT_CONFIG[sport];
   const primaryUrl = `https://site.api.espn.com/apis/site/v2/sports/${config.siteSport}/${config.siteLeague}/athletes?search=${encodeURIComponent(query)}`;
+  const commonSearchWarning = "League athlete search endpoint unavailable; used common search.";
+
+  const fetchCommonSearch = async () => {
+    const fallback = await fetchEspnJson<unknown>({
+      endpoint: "https://site.web.api.espn.com/apis/common/v3/search",
+      params: {
+        query,
+        type: "player",
+        limit: 20,
+      },
+      fixtureFile: config.searchFixtureFile,
+      fixtureSubdir: "players",
+      ttlSeconds: 300,
+      dataMode,
+    });
+
+    return {
+      payload: fallback.data,
+      meta: mergeWarning(fallback.meta, commonSearchWarning),
+    };
+  };
+
+  if (sport === "mlb" || sport === "nba") {
+    return fetchCommonSearch();
+  }
 
   if (dataMode === "fixture") {
     const fixture = await fetchEspnJson<unknown>({
@@ -365,21 +390,7 @@ async function fetchSearchPayload(sport: SportKey, query: string, dataMode: Mode
       meta: primary.meta,
     };
   } catch {
-    const fallback = await fetchEspnJson<unknown>({
-      endpoint: "https://site.web.api.espn.com/apis/common/v3/search",
-      params: {
-        query,
-        type: "player",
-        limit: 20,
-      },
-      ttlSeconds: 300,
-      dataMode,
-    });
-
-    return {
-      payload: fallback.data,
-      meta: mergeWarning(fallback.meta, `Primary sport-specific athletes endpoint is unavailable for ${sport.toUpperCase()}; used ESPN common search fallback.`),
-    };
+    return fetchCommonSearch();
   }
 }
 
@@ -435,10 +446,12 @@ export async function searchPlayers(
   sportInput: SportKey,
   query: string,
   dataMode?: ModeArg,
+  limit = 8,
 ): Promise<Envelope<PlayerSearchResult[]>> {
   const sport = resolveSportKey(sportInput);
   const mode = getDataMode(dataMode);
   const trimmed = query.trim();
+  const resolvedLimit = Math.max(1, Math.min(8, Math.floor(limit)));
 
   if (!trimmed) {
     return {
@@ -455,7 +468,7 @@ export async function searchPlayers(
     const fetched = await fetchSearchPayload(sport, trimmed, mode);
     const mapped = mapSearchPayload(fetched.payload, sport);
     return {
-      data: mapped.results,
+      data: mapped.results.slice(0, resolvedLimit),
       meta: mergeWarning(fetched.meta, mapped.warning),
     };
   } catch (error) {

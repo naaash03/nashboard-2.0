@@ -37,6 +37,24 @@
   - Added scoreboard fixtures for deterministic status responses in fixture mode:
     - `tests/fixtures/espn/scoreboard/mlb_scoreboard_sample.json`
     - `tests/fixtures/espn/scoreboard/nba_scoreboard_sample.json`
+- Polish pass (fetch discipline + loop prevention):
+  - Player Card:
+    - Added `useDebouncedValue` (300ms) and query-key guards so search runs only after debounce and only for new `{sport, query, dataMode}` combinations.
+    - Added abortable search/profile fetches to prevent stale state updates when input changes quickly.
+    - Added profile fetch tuple guard (`sport + playerId + dataMode`) to prevent duplicate profile requests during config persistence updates.
+    - Profile metadata (`Updated / Source`) now renders only after a successful profile fetch.
+  - Watchlist:
+    - Team status batch calls now use a stable request key (`sport + sorted team keys + dataMode`) and a 30s TTL policy.
+    - Polling runs every 30s only while Teams mode is active and the active sport has at least one watched team.
+    - Team status fetches no longer run on unrelated widget config patches.
+    - Quick player profile panel now skips redundant refetch for the same `{sport, playerId, dataMode}` selection.
+  - RB vs D-Line:
+    - Split input state from applied state: typing no longer triggers API calls.
+    - Fetch now runs only when user clicks `Set` or presses Enter with a valid key.
+    - Validation enforces `2-4` uppercase letters (`^[A-Z]{2,4}$`) with inline feedback.
+  - ESPN unified player provider:
+    - MLB/NBA search now short-circuits directly to ESPN common search (`/apis/common/v3/search`) to avoid known 404-prone league athlete search endpoints.
+    - Search results are explicitly capped to route/provider limit (`max 8`).
 
 ## What Changed
 - Guest watchlist correctness:
