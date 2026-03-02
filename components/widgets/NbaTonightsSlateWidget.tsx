@@ -40,7 +40,7 @@ export default function NbaTonightsSlateWidget(props: WidgetCommonProps) {
 
   const load = useCallback(async () => {
     const mode = props.mode.toLowerCase();
-    const url = `/api/widgets/nba-tonights-slate?mode=${mode}&dataMode=${props.dataMode}`;
+    const url = `/api/widgets/nba-tonights-slate?mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(url);
     setLoading(true);
 
@@ -59,7 +59,7 @@ export default function NbaTonightsSlateWidget(props: WidgetCommonProps) {
     } finally {
       setLoading(false);
     }
-  }, [props.mode, props.dataMode]);
+  }, [props.dataMode, props.mode, props.refreshTick]);
 
   useEffect(() => {
     void load();

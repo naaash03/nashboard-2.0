@@ -23,7 +23,8 @@ import {
   updateLayout,
   type GuestWidgetInstance,
 } from "@/lib/guest/guestDashboard";
-import { getGuestDataMode, setGuestDataMode } from "@/lib/guest/devDataMode";
+import { getDevDataModeOverride, setDevDataModeOverride } from "@/lib/guest/devDataMode";
+import { isDevDataModeOverrideEnabled, resolveDataMode, type DataMode } from "@/lib/dataMode";
 
 type Sport = "NFL" | "NBA" | "MLB";
 
@@ -93,18 +94,34 @@ export default function DashboardPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [dataMode, setDataMode] = useState<"live" | "fixture">("live");
+  const [preferenceDataMode, setPreferenceDataMode] = useState<DataMode>("live");
+  const [devOverrideDataMode, setDevOverrideDataModeState] = useState<DataMode | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [bugBundle, setBugBundle] = useState<Record<string, unknown> | null>(null);
   const [refreshAt, setRefreshAt] = useState(0);
   const loadRequestRef = useRef(0);
 
   const isGuestMode = mode !== "signed_in";
+  const showDevFixtureToggle = isDevDataModeOverrideEnabled();
+  const modeResolution = useMemo(
+    () => resolveDataMode({
+      preferenceDataMode,
+      devOverrideDataMode,
+      fallbackDataMode: "live",
+      isDevEnvironment: showDevFixtureToggle,
+    }),
+    [devOverrideDataMode, preferenceDataMode, showDevFixtureToggle],
+  );
+  const dataMode = modeResolution.resolvedDataMode;
 
   const sortedWidgets = useMemo(
     () => [...widgets].sort((a, b) => a.y - b.y || a.x - b.x),
     [widgets],
   );
+
+  useEffect(() => {
+    setDevOverrideDataModeState(getDevDataModeOverride());
+  }, []);
 
   const loadGuest = useCallback(() => {
     const guest = getGuestDashboard();
@@ -116,7 +133,7 @@ export default function DashboardPage({
       shareToken: null,
     });
     setWidgets(guest.widgets);
-    setDataMode(getGuestDataMode());
+    setPreferenceDataMode("live");
     setLoading(false);
   }, []);
 
@@ -141,7 +158,7 @@ export default function DashboardPage({
       const pref = await fetch("/api/preferences/data-mode", { cache: "no-store" })
         .then((res) => res.json())
         .catch(() => ({ mode: "live" }));
-      setDataMode(pref.mode === "fixture" ? "fixture" : "live");
+      setPreferenceDataMode(pref.mode === "fixture" ? "fixture" : "live");
     } catch (loadError) {
       setError(String(loadError));
     } finally {
@@ -377,22 +394,15 @@ export default function DashboardPage({
     setRefreshTick((current) => current + 1);
   }, [refreshAt]);
 
-  const onDataModeChange = useCallback(async (next: "live" | "fixture") => {
-    setDataMode(next);
-    document.cookie = `nashboard_dataMode=${next}; Path=/; SameSite=Lax`;
-    if (isGuestMode || !dbConfigured) {
-      setGuestDataMode(next);
-      setRefreshTick((current) => current + 1);
+  const onDataModeChange = useCallback(async (next: DataMode) => {
+    if (!showDevFixtureToggle) {
       return;
     }
-
-    await fetch("/api/preferences/data-mode", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: next }),
-    }).catch(() => undefined);
+    const nextOverride = next === "fixture" ? "fixture" : null;
+    setDevOverrideDataModeState(nextOverride);
+    setDevDataModeOverride(nextOverride);
     setRefreshTick((current) => current + 1);
-  }, [dbConfigured, isGuestMode]);
+  }, [showDevFixtureToggle]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -413,19 +423,21 @@ export default function DashboardPage({
     };
   }, [refreshAll]);
 
-  useEffect(() => {
-    document.cookie = `nashboard_dataMode=${dataMode}; Path=/; SameSite=Lax`;
-  }, [dataMode]);
-
   const copyBugBundle = async () => {
     if (!bugBundle) return;
-    const health = await fetch("/api/health/data", { cache: "no-store" })
+    const health = await fetch(
+      `/api/health/data?dataMode=${dataMode}&preferenceMode=${preferenceDataMode}${devOverrideDataMode ? `&devOverrideMode=${devOverrideDataMode}` : ""}`,
+      { cache: "no-store" },
+    )
       .then((res) => res.json())
       .catch(() => null);
     const bundle = {
       ...bugBundle,
       appInfo: {
-        mode: health?.resolvedDataMode ?? health?.providerMode ?? "unknown",
+        preferenceMode: preferenceDataMode,
+        devOverrideMode: devOverrideDataMode ?? "none",
+        mode: health?.resolvedDataMode ?? dataMode,
+        modeSource: health?.resolutionSource ?? modeResolution.source,
         user: isGuestMode ? "guest" : dashboard?.id,
       },
     };
@@ -558,6 +570,10 @@ export default function DashboardPage({
                     dbConfigured={dbConfigured}
                     refreshTick={refreshTick}
                     dataMode={dataMode}
+                    preferenceDataMode={preferenceDataMode}
+                    devOverrideDataMode={devOverrideDataMode}
+                    dataModeSource={modeResolution.source}
+                    showDevFixtureToggle={showDevFixtureToggle}
                     onDataModeChange={onDataModeChange}
                     onPersist={(next) => persistWidget(widget.id, next)}
                     onReportBug={(bundle) => {

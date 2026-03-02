@@ -47,6 +47,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get("sport") ?? "NFL").toUpperCase();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
   const date = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
 
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const todaySlate = await getScoreboard(date, resolvedDataMode);
+    const todaySlate = await getScoreboard(date, resolvedDataMode, cacheBust);
     if (todaySlate.games.length > 0) {
       return NextResponse.json(responsePayload({
         state: "today",
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
       }));
     }
 
-    const nextSlate = await getNextLeagueSlateAfter(date, resolvedDataMode, 21);
+    const nextSlate = await getNextLeagueSlateAfter(date, resolvedDataMode, 21, cacheBust);
     if (nextSlate.games.length > 0 && nextSlate.nextDateISO) {
       return NextResponse.json(responsePayload({
         state: "next_slate",
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
       }));
     }
 
-    const historical = await getMostRecentSlateBefore(date, resolvedDataMode, 60);
+    const historical = await getMostRecentSlateBefore(date, resolvedDataMode, 60, cacheBust);
     const scheduleMessage = "Next season schedule has not been posted by the league yet.";
     return NextResponse.json(responsePayload({
       state: "schedule_not_posted",

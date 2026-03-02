@@ -338,7 +338,42 @@ function parseGames(payload: unknown): ParsedGamesResult {
   };
 }
 
-function buildNbaSeasonAndRecent(games: ParsedGame[], notes: string[]): {
+function extractSeasonStats(payload: unknown): Record<string, number> {
+  const totals: Record<string, number> = {};
+  const data = asObject(payload);
+  if (!data) {
+    return totals;
+  }
+
+  const directCandidates = [
+    asObject(data.seasonTotals),
+    asObject(data.seasonTotal),
+    asObject(data.totals),
+    asObject(asObject(data.statistics)?.season),
+  ].filter((entry): entry is Record<string, unknown> => Boolean(entry));
+
+  for (const candidate of directCandidates) {
+    mergeObjectStats(totals, candidate);
+  }
+
+  const seasonTypes = Array.isArray(data.seasonTypes) ? data.seasonTypes : [];
+  for (const seasonType of seasonTypes) {
+    const typed = asObject(seasonType);
+    if (!typed) {
+      continue;
+    }
+    mergeStatsFromBlock(totals, typed);
+    if (Array.isArray(typed.categories)) {
+      for (const category of typed.categories) {
+        mergeStatsFromBlock(totals, category);
+      }
+    }
+  }
+
+  return totals;
+}
+
+function buildNbaSeasonAndRecent(games: ParsedGame[], seasonStats: Record<string, number>, notes: string[]): {
   season: PlayerInsights["season"];
   recent: PlayerInsights["recent"];
 } {
@@ -356,15 +391,22 @@ function buildNbaSeasonAndRecent(games: ParsedGame[], notes: string[]): {
     return acc;
   }, { points: 0, rebounds: 0, assists: 0, fga: 0, fta: 0 });
 
-  const gp = seasonSlice.length;
-  if (gp === 0 || (totals.points === 0 && totals.rebounds === 0 && totals.assists === 0)) {
+  const seasonPoints = seasonStats.points ?? totals.points;
+  const seasonRebounds = seasonStats.rebounds ?? totals.rebounds;
+  const seasonAssists = seasonStats.assists ?? totals.assists;
+  const seasonFga = seasonStats.fga ?? totals.fga;
+  const seasonFta = seasonStats.fta ?? totals.fta;
+  const gp = Math.max(1, Math.round(seasonStats.gamesplayed ?? seasonStats.games ?? seasonSlice.length));
+
+  const sampleSize = seasonSlice.length;
+  if (gp <= 0 || (seasonPoints === 0 && seasonRebounds === 0 && seasonAssists === 0)) {
     notes.push("Season stat summary is not available from current upstream payload.");
     return { season: null, recent: null };
   }
 
-  const ppg = totals.points / gp;
-  const rpg = totals.rebounds / gp;
-  const apg = totals.assists / gp;
+  const ppg = seasonPoints / gp;
+  const rpg = seasonRebounds / gp;
+  const apg = seasonAssists / gp;
 
   const metrics: StatMetric[] = [
     { key: "ppg", label: "PPG", value: formatFixed(ppg, 1) },
@@ -373,9 +415,9 @@ function buildNbaSeasonAndRecent(games: ParsedGame[], notes: string[]): {
   ];
 
   let tsValue: string | null = null;
-  const tsDenominator = 2 * (totals.fga + 0.44 * totals.fta);
+  const tsDenominator = 2 * (seasonFga + 0.44 * seasonFta);
   if (tsDenominator > 0) {
-    tsValue = formatFixed(totals.points / tsDenominator, 3);
+    tsValue = formatFixed(seasonPoints / tsDenominator, 3);
     metrics.push({ key: "ts", label: "TS%", value: tsValue });
   } else {
     notes.push("TS% omitted because FGA/FTA inputs were not available.");
@@ -387,7 +429,7 @@ function buildNbaSeasonAndRecent(games: ParsedGame[], notes: string[]): {
       .join(" · "),
     metrics,
     source: "derived",
-    sampleSize: gp,
+    sampleSize,
   };
 
   const recentGames = games.slice(0, 5);
@@ -419,6 +461,7 @@ function isPitcher(position?: string, games: ParsedGame[] = []): boolean {
 
 function buildMlbSeasonAndRecent(
   games: ParsedGame[],
+  seasonStats: Record<string, number>,
   position: string | undefined,
   notes: string[],
 ): {
@@ -442,15 +485,23 @@ function buildMlbSeasonAndRecent(
       return acc;
     }, { outs: 0, er: 0, hits: 0, bb: 0, k: 0 });
 
-    const innings = totals.outs / 3;
+    const seasonOuts = Math.max(
+      totals.outs,
+      typeof seasonStats.ip === "number" ? ipToOuts(seasonStats.ip) : 0,
+    );
+    const seasonEr = seasonStats.er ?? totals.er;
+    const seasonHits = seasonStats.hits ?? totals.hits;
+    const seasonBb = seasonStats.bb ?? totals.bb;
+    const seasonK = seasonStats.k ?? totals.k;
+    const innings = seasonOuts / 3;
     if (innings <= 0) {
       notes.push("Season stat summary is not available from current upstream payload.");
       return { season: null, recent: null };
     }
 
-    const era = (totals.er * 9) / innings;
-    const whip = (totals.bb + totals.hits) / innings;
-    const k9 = (totals.k * 9) / innings;
+    const era = (seasonEr * 9) / innings;
+    const whip = (seasonBb + seasonHits) / innings;
+    const k9 = (seasonK * 9) / innings;
 
     const season: PlayerInsights["season"] = {
       headline: `ERA ${formatFixed(era, 2)} · WHIP ${formatFixed(whip, 2)} · K/9 ${formatFixed(k9, 1)}`,
@@ -462,6 +513,7 @@ function buildMlbSeasonAndRecent(
       source: "derived",
       sampleSize: seasonSlice.length,
     };
+    notes.push(`Pitching highlights derived from ${seasonSlice.length} recent appearances.`);
 
     const recent: PlayerInsights["recent"] = {
       headline: `Last ${recentSlice.length}: ERA ${formatFixed(era, 2)} · WHIP ${formatFixed(whip, 2)}`,
@@ -502,22 +554,57 @@ function buildMlbSeasonAndRecent(
     tb: 0,
   });
 
-  if (totals.ab <= 0) {
+  const seasonAb = seasonStats.ab ?? totals.ab;
+  const seasonHits = seasonStats.hits ?? totals.hits;
+  const seasonBb = seasonStats.bb ?? totals.bb;
+  const seasonHbp = seasonStats.hbp ?? totals.hbp;
+  const seasonSf = seasonStats.sf ?? totals.sf;
+  const seasonHr = seasonStats.hr ?? totals.hr;
+  const seasonRbi = seasonStats.rbi ?? totals.rbi;
+  const seasonDoubles = seasonStats.doubles ?? totals.doubles;
+  const seasonTriples = seasonStats.triples ?? totals.triples;
+  const seasonTb = seasonStats.tb ?? totals.tb;
+
+  if (seasonAb <= 0 && seasonHr <= 0 && seasonRbi <= 0) {
     notes.push("Season stat summary is not available from current upstream payload.");
     return { season: null, recent: null };
   }
 
-  const singles = Math.max(0, totals.hits - totals.doubles - totals.triples - totals.hr);
-  const totalBases = totals.tb > 0 ? totals.tb : singles + totals.doubles * 2 + totals.triples * 3 + totals.hr * 4;
-  const avg = totals.hits / totals.ab;
+  if (seasonAb <= 0 && (seasonHr > 0 || seasonRbi > 0)) {
+    notes.push("Using HR/RBI totals because AB/H inputs were missing for slash metrics.");
+    const season: PlayerInsights["season"] = {
+      headline: `HR ${Math.round(seasonHr)} · RBI ${Math.round(seasonRbi)}`,
+      metrics: [
+        { key: "hr", label: "HR", value: String(Math.round(seasonHr)) },
+        { key: "rbi", label: "RBI", value: String(Math.round(seasonRbi)) },
+      ],
+      source: "derived",
+      sampleSize: seasonSlice.length,
+    };
+    const recent: PlayerInsights["recent"] = {
+      headline: `Last ${recentSlice.length}: HR ${Math.round(totals.hr)} · RBI ${Math.round(totals.rbi)}`,
+      source: "derived",
+      games: recentSlice.map((game) => ({
+        date: game.date,
+        opponent: game.opponent,
+        result: game.result,
+        line: `HR ${Math.round(game.stats.hr ?? 0)} · RBI ${Math.round(game.stats.rbi ?? 0)}`,
+      })),
+    };
+    return { season, recent };
+  }
 
-  const obpDenominator = totals.ab + totals.bb + totals.hbp + totals.sf;
-  const obp = obpDenominator > 0 ? (totals.hits + totals.bb + totals.hbp) / obpDenominator : null;
-  if (totals.hbp === 0 || totals.sf === 0) {
+  const singles = Math.max(0, seasonHits - seasonDoubles - seasonTriples - seasonHr);
+  const totalBases = seasonTb > 0 ? seasonTb : singles + seasonDoubles * 2 + seasonTriples * 3 + seasonHr * 4;
+  const avg = seasonHits / seasonAb;
+
+  const obpDenominator = seasonAb + seasonBb + seasonHbp + seasonSf;
+  const obp = obpDenominator > 0 ? (seasonHits + seasonBb + seasonHbp) / obpDenominator : null;
+  if (seasonHbp === 0 || seasonSf === 0) {
     notes.push("MLB OBP used available fields; HBP/SF were missing in part of the game log.");
   }
 
-  const slg = totalBases / totals.ab;
+  const slg = totalBases / seasonAb;
   const ops = obp !== null ? obp + slg : null;
 
   const seasonMetrics: StatMetric[] = [
@@ -525,8 +612,8 @@ function buildMlbSeasonAndRecent(
     ...(obp !== null ? [{ key: "obp", label: "OBP", value: formatAvg(obp) }] : []),
     { key: "slg", label: "SLG", value: formatAvg(slg) },
     ...(ops !== null ? [{ key: "ops", label: "OPS", value: formatAvg(ops) }] : []),
-    { key: "hr", label: "HR", value: String(Math.round(totals.hr)) },
-    { key: "rbi", label: "RBI", value: String(Math.round(totals.rbi)) },
+    { key: "hr", label: "HR", value: String(Math.round(seasonHr)) },
+    { key: "rbi", label: "RBI", value: String(Math.round(seasonRbi)) },
   ];
 
   const seasonHeadlineParts = [
@@ -534,8 +621,8 @@ function buildMlbSeasonAndRecent(
     obp !== null ? `OBP ${formatAvg(obp)}` : undefined,
     `SLG ${formatAvg(slg)}`,
     ops !== null ? `OPS ${formatAvg(ops)}` : undefined,
-    `HR ${Math.round(totals.hr)}`,
-    `RBI ${Math.round(totals.rbi)}`,
+    `HR ${Math.round(seasonHr)}`,
+    `RBI ${Math.round(seasonRbi)}`,
   ].filter(Boolean) as string[];
 
   const season: PlayerInsights["season"] = {
@@ -544,6 +631,7 @@ function buildMlbSeasonAndRecent(
     source: "derived",
     sampleSize: seasonSlice.length,
   };
+  notes.push(`Hitting highlights derived from ${seasonSlice.length} recent games.`);
 
   const recent: PlayerInsights["recent"] = {
     headline: `Last ${recentSlice.length}: ${season.headline}`,
@@ -561,6 +649,7 @@ function buildMlbSeasonAndRecent(
 
 function buildNflSeasonAndRecent(
   games: ParsedGame[],
+  seasonStats: Record<string, number>,
   position: string | undefined,
   notes: string[],
 ): {
@@ -594,28 +683,37 @@ function buildNflSeasonAndRecent(
     recTd: 0,
   });
 
-  const gamesCount = seasonSlice.length;
+  const seasonTotals = {
+    passYds: seasonStats.passYds ?? totals.passYds,
+    passTd: seasonStats.passTd ?? totals.passTd,
+    int: seasonStats.int ?? totals.int,
+    rushYds: seasonStats.rushYds ?? totals.rushYds,
+    rushTd: seasonStats.rushTd ?? totals.rushTd,
+    recYds: seasonStats.recYds ?? totals.recYds,
+    recTd: seasonStats.recTd ?? totals.recTd,
+  };
+  const gamesCount = Math.max(1, Math.round(seasonStats.gamesplayed ?? seasonStats.games ?? seasonSlice.length));
   if (gamesCount === 0) {
     notes.push("Season stat summary is not available from current upstream payload.");
     return { season: null, recent: null };
   }
 
   let seasonMetrics: StatMetric[] = [];
-  if (pos === "QB" || totals.passYds > 0) {
+  if (pos === "QB" || seasonTotals.passYds > 0) {
     seasonMetrics = [
-      { key: "pass_ypg", label: "Pass YPG", value: formatFixed(totals.passYds / gamesCount, 1) },
-      { key: "pass_tdpg", label: "Pass TD/G", value: formatFixed(totals.passTd / gamesCount, 2) },
-      { key: "intpg", label: "INT/G", value: formatFixed(totals.int / gamesCount, 2) },
+      { key: "pass_ypg", label: "Pass YPG", value: formatFixed(seasonTotals.passYds / gamesCount, 1) },
+      { key: "pass_tdpg", label: "Pass TD/G", value: formatFixed(seasonTotals.passTd / gamesCount, 2) },
+      { key: "intpg", label: "INT/G", value: formatFixed(seasonTotals.int / gamesCount, 2) },
     ];
-  } else if (pos === "RB" || totals.rushYds > 0) {
+  } else if (pos === "RB" || seasonTotals.rushYds > 0) {
     seasonMetrics = [
-      { key: "rush_ypg", label: "Rush YPG", value: formatFixed(totals.rushYds / gamesCount, 1) },
-      { key: "rush_tdpg", label: "Rush TD/G", value: formatFixed(totals.rushTd / gamesCount, 2) },
+      { key: "rush_ypg", label: "Rush YPG", value: formatFixed(seasonTotals.rushYds / gamesCount, 1) },
+      { key: "rush_tdpg", label: "Rush TD/G", value: formatFixed(seasonTotals.rushTd / gamesCount, 2) },
     ];
   } else {
     seasonMetrics = [
-      { key: "rec_ypg", label: "Rec YPG", value: formatFixed(totals.recYds / gamesCount, 1) },
-      { key: "rec_tdpg", label: "Rec TD/G", value: formatFixed(totals.recTd / gamesCount, 2) },
+      { key: "rec_ypg", label: "Rec YPG", value: formatFixed(seasonTotals.recYds / gamesCount, 1) },
+      { key: "rec_tdpg", label: "Rec TD/G", value: formatFixed(seasonTotals.recTd / gamesCount, 2) },
     ];
   }
 
@@ -656,6 +754,7 @@ function buildNflSeasonAndRecent(
 function buildSeasonAndRecent(
   sport: SportKey,
   games: ParsedGame[],
+  seasonStats: Record<string, number>,
   position: string | undefined,
   notes: string[],
 ): {
@@ -663,12 +762,12 @@ function buildSeasonAndRecent(
   recent: PlayerInsights["recent"];
 } {
   if (sport === "nba") {
-    return buildNbaSeasonAndRecent(games, notes);
+    return buildNbaSeasonAndRecent(games, seasonStats, notes);
   }
   if (sport === "mlb") {
-    return buildMlbSeasonAndRecent(games, position, notes);
+    return buildMlbSeasonAndRecent(games, seasonStats, position, notes);
   }
-  return buildNflSeasonAndRecent(games, position, notes);
+  return buildNflSeasonAndRecent(games, seasonStats, position, notes);
 }
 
 function combineMeta(
@@ -710,7 +809,23 @@ function teamAbbrevFromPayload(payload: unknown): string | undefined {
 
   const teamObj = asObject(data.team);
   const nested = readString(teamObj?.abbreviation);
-  return nested ? nested.toUpperCase() : undefined;
+  if (nested) {
+    return nested.toUpperCase();
+  }
+
+  const games = extractGameRows(data);
+  for (const game of games) {
+    const fromTeam = readString(asObject(game.team)?.abbreviation);
+    if (fromTeam) {
+      return fromTeam.toUpperCase();
+    }
+    const fromEntry = readString(asObject(asObject(game.event)?.team)?.abbreviation);
+    if (fromEntry) {
+      return fromEntry.toUpperCase();
+    }
+  }
+
+  return undefined;
 }
 
 export async function getPlayerInsights(
@@ -750,6 +865,7 @@ export async function getPlayerInsights(
 
   let gamelogMeta: Meta | null = null;
   let parsedGames: ParsedGame[] = [];
+  let seasonStats: Record<string, number> = {};
   let teamAbbrev = profile?.teamAbbrev;
   if (mode === "advanced") {
     const gamelogEnvelope = await getGameLog({ sport, playerId, dataMode: resolvedMode, cacheBust });
@@ -760,6 +876,7 @@ export async function getPlayerInsights(
     } else {
       const parsed = parseGames(gamelogEnvelope.data);
       parsedGames = parsed.games;
+      seasonStats = extractSeasonStats(gamelogEnvelope.data);
       notes.push(...parsed.notes);
       teamAbbrev = teamAbbrev ?? teamAbbrevFromPayload(gamelogEnvelope.data);
     }
@@ -782,7 +899,7 @@ export async function getPlayerInsights(
   let season: PlayerInsights["season"] = null;
   let recent: PlayerInsights["recent"] = null;
   if (mode === "advanced") {
-    const derived = buildSeasonAndRecent(sport, parsedGames, profile?.position, notes);
+    const derived = buildSeasonAndRecent(sport, parsedGames, seasonStats, profile?.position, notes);
     season = derived.season;
     recent = derived.recent;
   }

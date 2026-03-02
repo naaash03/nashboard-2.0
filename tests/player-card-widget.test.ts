@@ -12,6 +12,11 @@ describe("PlayerCardWidget search wiring", () => {
     expect(url).toContain("dataMode=live");
   });
 
+  it("appends cacheBust when provided", () => {
+    const url = buildPlayerSearchUrl("daniel jones", "live", 8, "nfl", 12);
+    expect(url).toContain("cacheBust=12");
+  });
+
   it("normalizes player names for exact-match Enter selection", () => {
     expect(normalizePlayerName("  LeBron   James  ")).toBe("lebron james");
     expect(normalizePlayerName("Clay-Holmes")).toBe("clay holmes");

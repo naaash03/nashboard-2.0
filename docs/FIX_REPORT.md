@@ -1,6 +1,23 @@
 ﻿# FIX REPORT
 
 ## Changelog (2026-03-02)
+- Live default reliability + dev fixture override model:
+  - Added unified resolver in `lib/dataMode.ts` (single source of truth).
+  - Effective mode precedence is now:
+    1) explicit query `dataMode`
+    2) dev override (`devOverrideMode`) in non-production only
+    3) persisted preference mode (`preferenceMode`, read from `/api/preferences/data-mode`)
+    4) fallback `live`
+  - Dev Fixture toggle is now local-only:
+    - shown only in dev / local override-enabled environments
+    - stored in session storage (`nashboard.devDataModeOverride`)
+    - does not call `PUT /api/preferences/data-mode`
+  - Data Health now shows:
+    - preference mode
+    - dev override mode
+    - effective mode + resolution source
+  - Refresh All now sends `cacheBust=<refreshTick>` through widget fetches and provider calls (MLB/NBA/NFL widget routes and providers updated).
+
 - Misc widgets reliability + UX hardening:
   - Added team typeahead endpoint:
     - `GET /api/teams/search?sport=nfl|mlb|nba&q=...&limit=8&dataMode=live|fixture&cacheBust=...`
@@ -26,6 +43,10 @@
     - MLB pitchers: ERA / WHIP / K/9 derived from gamelog when needed.
     - MLB hitters: AVG / OBP / SLG / OPS / HR / RBI derived from gamelog fields when available.
     - NBA: PPG / RPG / APG + TS% when `PTS/FGA/FTA` inputs are available; otherwise TS% is omitted with a note.
+  - Live profile hydration strengthened:
+    - player profile resolution now prioritizes core athlete + common athlete endpoints
+    - site athlete 404s are treated as non-fatal and surfaced as notes
+    - advanced sections render compactly and avoid empty boxes when data is missing.
   - Refresh All now actively busts cache:
     - widget requests append `cacheBust=<refreshTick>`
     - provider fetch layer bypasses in-memory/persistent cache when `cacheBust` is present

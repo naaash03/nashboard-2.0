@@ -1,3 +1,9 @@
+import {
+  type DataMode,
+  type DataModeResolution,
+  resolveDataModeFromRequest as resolveDataModeFromRequestShared,
+} from "@/lib/dataMode";
+
 export function isDbConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim().length > 0);
 }
@@ -44,44 +50,10 @@ export function appBaseUrl(): string {
   return "http://localhost:3000";
 }
 
-export function envDefaultDataMode(): "live" | "fixture" {
-  return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
+export function envDefaultDataMode(): DataMode {
+  return "live";
 }
-
-function parseCookieValue(cookieHeader: string | null, key: string): string | null {
-  if (!cookieHeader) {
-    return null;
-  }
-
-  for (const part of cookieHeader.split(";")) {
-    const [rawName, ...rawValue] = part.trim().split("=");
-    if (rawName === key) {
-      return decodeURIComponent(rawValue.join("="));
-    }
-  }
-  return null;
-}
-
-export type DataModeResolution = {
-  resolvedDataMode: "live" | "fixture";
-  queryDataMode: "live" | "fixture" | null;
-  cookieDataMode: "live" | "fixture" | null;
-  envDataMode: "live" | "fixture";
-};
 
 export function resolveDataModeFromRequest(req: Request): DataModeResolution {
-  const { searchParams } = new URL(req.url);
-  const queryRaw = searchParams.get("dataMode");
-  const queryDataMode = queryRaw === "fixture" || queryRaw === "live" ? queryRaw : null;
-
-  const cookieRaw = parseCookieValue(req.headers.get("cookie"), "nashboard_dataMode");
-  const cookieDataMode = cookieRaw === "fixture" || cookieRaw === "live" ? cookieRaw : null;
-
-  const envDataMode = envDefaultDataMode();
-  return {
-    resolvedDataMode: queryDataMode ?? cookieDataMode ?? envDataMode ?? "live",
-    queryDataMode,
-    cookieDataMode,
-    envDataMode,
-  };
+  return resolveDataModeFromRequestShared(req);
 }

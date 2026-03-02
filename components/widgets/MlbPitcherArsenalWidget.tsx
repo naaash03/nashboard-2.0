@@ -56,7 +56,7 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
     }
 
     const mode = props.mode.toLowerCase();
-    const url = `/api/widgets/mlb-pitcher-arsenal?playerId=${encodeURIComponent(playerId)}&mode=${mode}&dataMode=${props.dataMode}`;
+    const url = `/api/widgets/mlb-pitcher-arsenal?playerId=${encodeURIComponent(playerId)}&mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(url);
     setLoading(true);
 
@@ -75,7 +75,7 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
     } finally {
       setLoading(false);
     }
-  }, [props.mode, props.dataMode]);
+  }, [props.dataMode, props.mode, props.refreshTick]);
 
   useEffect(() => {
     if (!activePlayerId) {

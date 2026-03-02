@@ -51,7 +51,7 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
 
   const load = useCallback(async () => {
     const mode = props.mode.toLowerCase();
-    const url = `/api/widgets/mlb-next-7-games?teamKey=${encodeURIComponent(teamKey)}&mode=${mode}&dataMode=${props.dataMode}`;
+    const url = `/api/widgets/mlb-next-7-games?teamKey=${encodeURIComponent(teamKey)}&mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(url);
     setLoading(true);
 
@@ -70,7 +70,7 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
     } finally {
       setLoading(false);
     }
-  }, [props.mode, props.dataMode, teamKey]);
+  }, [props.dataMode, props.mode, props.refreshTick, teamKey]);
 
   useEffect(() => {
     void load();

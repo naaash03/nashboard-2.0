@@ -576,6 +576,11 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const extraRows = data ? sportExtraRows(data, sportKey) : [];
   const physicalLine = data ? profilePhysicalLine(data) : null;
   const activeMeta = props.mode === "ADVANCED" ? (insightsMeta ?? meta) : meta;
+  const hasLiveContext = Boolean(insights?.live);
+  const hasSeasonMetrics = Boolean(insights?.season && insights.season.metrics.length > 0);
+  const hasRecentGames = Boolean(insights?.recent?.games && insights.recent.games.length > 0);
+  const hasInjuryStatus = Boolean(insights?.injury && (insights.injury.status || insights.injury.detail));
+  const hasAdvancedSectionData = hasLiveContext || hasSeasonMetrics || hasRecentGames || hasInjuryStatus;
 
   return (
     <div className="space-y-2 text-xs">
@@ -677,18 +682,20 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
           {isInsightsLoading ? <p className="text-neutral-400">Loading advanced insights...</p> : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Live Context</summary>
-            <p className="mt-1 text-neutral-300">{formatLiveLine(insights)}</p>
-          </details>
+          {hasLiveContext ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Live Context</summary>
+              <p className="mt-1 text-neutral-300">{formatLiveLine(insights)}</p>
+            </details>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Season Highlights</summary>
-            {insights?.season ? (
+          {hasSeasonMetrics ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Season Highlights</summary>
               <div className="mt-2 space-y-2">
-                <p className="text-neutral-300">{insights.season.headline}</p>
+                <p className="text-neutral-300">{insights?.season?.headline}</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {insights.season.metrics.slice(0, 6).map((metric) => (
+                  {(insights?.season?.metrics ?? []).slice(0, 6).map((metric) => (
                     <div key={metric.key} className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-1">
                       <p className="text-[10px] uppercase tracking-wide text-neutral-400">{metric.label}</p>
                       <p className="text-sm font-semibold text-neutral-100">{metric.value}</p>
@@ -696,17 +703,15 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                   ))}
                 </div>
               </div>
-            ) : (
-              <p className="mt-1 text-neutral-400">Not available.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Recent Games</summary>
-            {insights?.recent?.games && insights.recent.games.length > 0 ? (
+          {hasRecentGames ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Recent Games</summary>
               <div className="mt-2 max-h-52 space-y-1 overflow-auto">
-                <p className="text-neutral-300">{insights.recent.headline}</p>
-                {insights.recent.games.map((game, index) => (
+                <p className="text-neutral-300">{insights?.recent?.headline}</p>
+                {(insights?.recent?.games ?? []).map((game, index) => (
                   <div key={`${game.date ?? "na"}-${index}`} className="rounded border border-neutral-700 bg-neutral-900/70 px-2 py-1">
                     <p className="text-[11px] text-neutral-200">
                       {(game.date ?? "-")} · {(game.opponent ?? "TBD")} · {(game.result ?? "-")}
@@ -715,22 +720,25 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="mt-1 text-neutral-400">Not available.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Status / Injury</summary>
-            {insights?.injury ? (
+          {hasInjuryStatus ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Status / Injury</summary>
               <div className="mt-1">
-                <p className="text-neutral-300">{insights.injury.status ?? "Status unavailable"}</p>
-                {insights.injury.detail ? <p className="text-neutral-400">{insights.injury.detail}</p> : null}
+                <p className="text-neutral-300">{insights?.injury?.status ?? "Status unavailable"}</p>
+                {insights?.injury?.detail ? <p className="text-neutral-400">{insights.injury.detail}</p> : null}
               </div>
-            ) : (
-              <p className="mt-1 text-neutral-400">Not available.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
+
+          {!isInsightsLoading && !hasAdvancedSectionData ? (
+            <p className="rounded border border-neutral-800 bg-black/20 px-2 py-1 text-neutral-400">
+              No data available.
+              {insights?.metaNotes?.[0] ? ` ${insights.metaNotes[0]}` : ""}
+            </p>
+          ) : null}
 
           {insights?.metaNotes && insights.metaNotes.length > 0 ? (
             <details className="rounded border border-neutral-800 bg-black/20 p-2">

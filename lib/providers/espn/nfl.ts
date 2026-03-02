@@ -5,6 +5,7 @@ import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
 import type { Meta, Player, PlayerSearchResult, SlateGame } from "@/lib/providers/types";
 
 type ModeArg = "live" | "fixture";
+type CacheBustArg = string | number | null | undefined;
 
 type EspnScoreboard = {
   events?: Array<{
@@ -626,7 +627,7 @@ function fixtureScenario(): string {
   return (process.env.NASHBOARD_FIXTURE_SCENARIO ?? "default").toLowerCase();
 }
 
-export async function getScoreboard(dateISO: string, dataMode?: ModeArg): Promise<{ games: SlateGame[]; meta: Meta }> {
+export async function getScoreboard(dateISO: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ games: SlateGame[]; meta: Meta }> {
   const mode = getDataMode(dataMode);
   const scenario = fixtureScenario();
   const fixtureFile = mode === "fixture"
@@ -641,6 +642,7 @@ export async function getScoreboard(dateISO: string, dataMode?: ModeArg): Promis
     fixtureFile,
     ttlSeconds: 60,
     dataMode: mode,
+    cacheBust,
   });
 
   return { games: normalizeGames(response.data), meta: response.meta };
@@ -650,6 +652,7 @@ export async function getMostRecentSlateBefore(
   dateISO: string,
   dataMode?: ModeArg,
   maxDays = 60,
+  cacheBust?: CacheBustArg,
 ): Promise<{ dateISO: string | null; games: SlateGame[]; meta: Meta }> {
   const mode = getDataMode(dataMode);
   const scenario = fixtureScenario();
@@ -660,6 +663,7 @@ export async function getMostRecentSlateBefore(
       fixtureFile: "scoreboard_with_games.json",
       ttlSeconds: 60,
       dataMode: mode,
+      cacheBust,
     });
     const games = normalizeGames(response.data);
     const historicalDate = games[0]?.date?.slice(0, 10) ?? null;
@@ -675,7 +679,7 @@ export async function getMostRecentSlateBefore(
     const probe = new Date(start);
     probe.setUTCDate(probe.getUTCDate() - i);
     const probeIso = probe.toISOString().slice(0, 10);
-    const slate = await getScoreboard(probeIso, dataMode);
+    const slate = await getScoreboard(probeIso, dataMode, cacheBust);
     if (slate.games.length > 0) {
       return { dateISO: probeIso, games: slate.games, meta: slate.meta };
     }
@@ -698,6 +702,7 @@ export async function getNextLeagueSlateAfter(
   dateISO: string,
   dataMode?: ModeArg,
   maxDays = 21,
+  cacheBust?: CacheBustArg,
 ): Promise<{ nextDateISO: string | null; games: SlateGame[]; schedulePosted: boolean; meta: Meta }> {
   const mode = getDataMode(dataMode);
   const scenario = fixtureScenario();
@@ -709,6 +714,7 @@ export async function getNextLeagueSlateAfter(
       fixtureFile,
       ttlSeconds: 60,
       dataMode: mode,
+      cacheBust,
     });
 
     const events = response.data.games ?? response.data.events ?? [];
@@ -725,7 +731,7 @@ export async function getNextLeagueSlateAfter(
     const probe = new Date(start);
     probe.setUTCDate(probe.getUTCDate() + i);
     const probeIso = probe.toISOString().slice(0, 10);
-    const slate = await getScoreboard(probeIso, mode);
+    const slate = await getScoreboard(probeIso, mode, cacheBust);
     if (slate.games.length > 0) {
       return {
         nextDateISO: probeIso,
@@ -805,7 +811,7 @@ export async function searchPlayers(query: string, limit = 8, dataMode?: ModeArg
   };
 }
 
-export async function getPlayer(playerId: string, dataMode?: ModeArg): Promise<{ player: Player | null; meta: Meta }> {
+export async function getPlayer(playerId: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ player: Player | null; meta: Meta }> {
   const mode = getDataMode(dataMode);
 
   if (!playerId) {
@@ -822,31 +828,43 @@ export async function getPlayer(playerId: string, dataMode?: ModeArg): Promise<{
   }
 
   if (mode === "fixture") {
-    const response = await fetchEspnJson<EspnAthleteDetails>({ endpoint: `/player/${playerId}`, fixtureFile: "player_details.json", ttlSeconds: 60, dataMode: mode });
+    const response = await fetchEspnJson<EspnAthleteDetails>({
+      endpoint: `/player/${playerId}`,
+      fixtureFile: "player_details.json",
+      ttlSeconds: 60,
+      dataMode: mode,
+      cacheBust,
+    });
     return { player: normalizePlayer(response.data), meta: response.meta };
   }
 
   const url = `https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${encodeURIComponent(playerId)}`;
-  const response = await fetchEspnJson<EspnAthleteDetails>({ endpoint: url, ttlSeconds: 60, dataMode: mode });
+  const response = await fetchEspnJson<EspnAthleteDetails>({ endpoint: url, ttlSeconds: 60, dataMode: mode, cacheBust });
   return { player: normalizePlayer(response.data), meta: response.meta };
 }
 
-export async function getTeamNextGame(teamKey: string, fromDateISO: string, dataMode?: ModeArg): Promise<{ game: SlateGame | null; meta: Meta }> {
+export async function getTeamNextGame(teamKey: string, fromDateISO: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ game: SlateGame | null; meta: Meta }> {
   const mode = getDataMode(dataMode);
 
   if (mode === "fixture") {
-    const response = await fetchEspnJson<EspnScoreboard>({ endpoint: `/team-next/${teamKey}`, fixtureFile: "team_next_game.json", ttlSeconds: 60, dataMode: mode });
+    const response = await fetchEspnJson<EspnScoreboard>({
+      endpoint: `/team-next/${teamKey}`,
+      fixtureFile: "team_next_game.json",
+      ttlSeconds: 60,
+      dataMode: mode,
+      cacheBust,
+    });
     const games = normalizeGames(response.data);
     const match = games.find((game) => game.homeTeam.key === teamKey || game.awayTeam.key === teamKey) ?? null;
     return { game: match, meta: response.meta };
   }
 
-  const next = await getNextLeagueSlateAfter(fromDateISO, mode);
+  const next = await getNextLeagueSlateAfter(fromDateISO, mode, 21, cacheBust);
   const game = next.games.find((candidate) => candidate.homeTeam.key === teamKey || candidate.awayTeam.key === teamKey) ?? null;
   return { game, meta: next.meta };
 }
 
-export async function getTeamRecentRbLeader(teamKey: string, dataMode?: ModeArg): Promise<{ playerName: string | null; meta: Meta }> {
+export async function getTeamRecentRbLeader(teamKey: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ playerName: string | null; meta: Meta }> {
   const mode = getDataMode(dataMode);
   if (mode === "fixture") {
     const response = await fetchEspnJson<{ runningBacks?: Array<{ fullName?: string }> }>({
@@ -854,6 +872,7 @@ export async function getTeamRecentRbLeader(teamKey: string, dataMode?: ModeArg)
       fixtureFile: "rb_roster_or_depth.json",
       ttlSeconds: 60,
       dataMode: mode,
+      cacheBust,
     });
     return {
       playerName: response.data.runningBacks?.[0]?.fullName ?? null,
@@ -863,7 +882,7 @@ export async function getTeamRecentRbLeader(teamKey: string, dataMode?: ModeArg)
 
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${teamKey}/roster`;
-    const response = await fetchEspnJson<EspnRoster>({ endpoint: url, ttlSeconds: 60, dataMode: mode });
+    const response = await fetchEspnJson<EspnRoster>({ endpoint: url, ttlSeconds: 60, dataMode: mode, cacheBust });
     const rb = response.data.athletes?.find((athlete) => athlete.position?.abbreviation === "RB");
     return {
       playerName: rb?.displayName ?? null,

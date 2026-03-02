@@ -276,7 +276,7 @@ function nextGameLabel(team: TeamAdvanced | undefined): string {
   return compact([team.nextGame.when, `${prefix} ${team.nextGame.vs ?? "TBD"}`]);
 }
 
-function playerInsightsSummary(insight: PlayerInsights | undefined): string {
+export function playerInsightsSummary(insight: PlayerInsights | undefined): string {
   if (!insight) {
     return "Insights not available";
   }

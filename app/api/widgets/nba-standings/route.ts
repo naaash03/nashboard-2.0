@@ -18,10 +18,11 @@ function fallbackMeta(mode: "live" | "fixture", warning: string): Meta {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   try {
-    const standings = await getStandingsSnapshot(mode, resolvedDataMode);
+    const standings = await getStandingsSnapshot(mode, resolvedDataMode, cacheBust);
     return NextResponse.json({
       data: shapeNbaStandings(standings.data, mode),
       meta: standings.meta,

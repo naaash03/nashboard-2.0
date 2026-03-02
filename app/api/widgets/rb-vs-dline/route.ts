@@ -35,6 +35,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const teamKey = (searchParams.get("teamKey") ?? "").trim().toUpperCase();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!teamKey) {
@@ -42,11 +43,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    const nextGameResult = await getTeamNextGame(teamKey, todayIso(), resolvedDataMode);
+    const nextGameResult = await getTeamNextGame(teamKey, todayIso(), resolvedDataMode, cacheBust);
     const nextGame = nextGameResult.game;
 
     if (!nextGame) {
-      const leader = await getTeamRecentRbLeader(teamKey, resolvedDataMode);
+      const leader = await getTeamRecentRbLeader(teamKey, resolvedDataMode, cacheBust);
       return NextResponse.json({
         data: {
           emptyState: true,
@@ -71,6 +72,7 @@ export async function GET(req: Request) {
       fixtureFile: "rb_roster_or_depth.json",
       ttlSeconds: 300,
       dataMode: resolvedDataMode,
+      cacheBust,
     });
 
     const defenseResponse = await fetchEspnJson<DefenseFixture>({
@@ -78,6 +80,7 @@ export async function GET(req: Request) {
       fixtureFile: "opponent_run_defense_stats.json",
       ttlSeconds: 300,
       dataMode: resolvedDataMode,
+      cacheBust,
     });
 
     const rb = rosterResponse.data.runningBacks?.[0];

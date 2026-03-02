@@ -19,10 +19,11 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const teamKey = (searchParams.get("teamKey") ?? "NYM").trim().toUpperCase();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   try {
-    const providerResult = await mlbProvider.getNextSevenGames(teamKey, mode, resolvedDataMode);
+    const providerResult = await mlbProvider.getNextSevenGames(teamKey, mode, resolvedDataMode, cacheBust);
     const shaped = providerResult.data ? shapeMlbNext7Games(providerResult.data, mode) : null;
 
     return NextResponse.json({

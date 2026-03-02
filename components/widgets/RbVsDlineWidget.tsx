@@ -102,7 +102,7 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
     signal: AbortSignal,
   ): Promise<{ data: RbData | null; meta: WidgetMeta | null }> => {
     const mode = props.mode.toLowerCase();
-    const endpointUrl = `/api/widgets/rb-vs-dline?teamKey=${encodeURIComponent(key)}&mode=${mode}&dataMode=${props.dataMode}`;
+    const endpointUrl = `/api/widgets/rb-vs-dline?teamKey=${encodeURIComponent(key)}&mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(endpointUrl);
 
     const res = await fetch(endpointUrl, { cache: "no-store", signal });
@@ -115,7 +115,7 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
       data: json.data ?? null,
       meta: json.meta ?? null,
     };
-  }, [props.dataMode, props.mode]);
+  }, [props.dataMode, props.mode, props.refreshTick]);
 
   useEffect(() => {
     if (!appliedTeamKey) {

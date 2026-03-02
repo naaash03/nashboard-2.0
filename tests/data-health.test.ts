@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 describe("data health endpoint", () => {
   it("returns consistent status fields and non-negative cache age", async () => {
     process.env.DATABASE_URL = "";
-    process.env.NASHBOARD_DATA_MODE = "live";
     const mod = await import("@/app/api/health/data/route");
 
-    const res = await mod.GET(new Request("http://localhost/api/health/data?dataMode=fixture"));
+    const res = await mod.GET(new Request("http://localhost/api/health/data?dataMode=fixture&preferenceMode=live"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -20,23 +19,22 @@ describe("data health endpoint", () => {
     }
   });
 
-  it("resolves dataMode priority query > cookie > env", async () => {
-    process.env.NASHBOARD_DATA_MODE = "live";
+  it("resolves dataMode priority query > dev override > preference", async () => {
     const mod = await import("@/app/api/health/data/route");
 
-    const cookieOnly = await mod.GET(new Request("http://localhost/api/health/data", {
-      headers: { cookie: "nashboard_dataMode=fixture" },
-    }));
-    const cookieBody = await cookieOnly.json();
-    expect(cookieBody.resolvedDataMode).toBe("fixture");
-    expect(cookieBody.cookieDataMode).toBe("fixture");
+    const devWins = await mod.GET(new Request("http://localhost/api/health/data?preferenceMode=live&devOverrideMode=fixture"));
+    const devBody = await devWins.json();
+    expect(devBody.resolvedDataMode).toBe("fixture");
+    expect(devBody.devOverrideDataMode).toBe("fixture");
+    expect(devBody.preferenceDataMode).toBe("live");
+    expect(devBody.resolutionSource).toBe("dev_override");
 
-    const queryWins = await mod.GET(new Request("http://localhost/api/health/data?dataMode=live", {
-      headers: { cookie: "nashboard_dataMode=fixture" },
-    }));
+    const queryWins = await mod.GET(new Request("http://localhost/api/health/data?dataMode=live&preferenceMode=live&devOverrideMode=fixture"));
     const queryBody = await queryWins.json();
     expect(queryBody.resolvedDataMode).toBe("live");
     expect(queryBody.queryDataMode).toBe("live");
-    expect(queryBody.cookieDataMode).toBe("fixture");
+    expect(queryBody.devOverrideDataMode).toBe("fixture");
+    expect(queryBody.preferenceDataMode).toBe("live");
+    expect(queryBody.resolutionSource).toBe("query");
   });
 });

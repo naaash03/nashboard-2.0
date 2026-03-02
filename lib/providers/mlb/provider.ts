@@ -4,6 +4,7 @@ import { MLB_TEAM_OPTIONS, resolveMlbTeam } from "@/lib/providers/mlb/teamMap";
 import type { Meta, Mode } from "@/lib/providers/types";
 
 type ModeArg = "live" | "fixture";
+type CacheBustArg = string | number | null | undefined;
 
 export type MlbNextGame = {
   date: string;
@@ -31,8 +32,8 @@ export type PitcherArsenal = {
 };
 
 export interface MlbProvider {
-  getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg): Promise<{ data: MlbNextGames | null; meta: Meta }>;
-  getPitcherArsenal(playerId: string, dataMode?: ModeArg): Promise<{ data: PitcherArsenal | null; meta: Meta }>;
+  getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: MlbNextGames | null; meta: Meta }>;
+  getPitcherArsenal(playerId: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: PitcherArsenal | null; meta: Meta }>;
 }
 
 type MlbScheduleGame = {
@@ -180,7 +181,7 @@ function fallbackMeta(sourceDataMode: ModeArg, warning: string): Meta {
 }
 
 export const mlbProvider: MlbProvider = {
-  async getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg) {
+  async getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg) {
     const resolved = getMlbDataMode(dataMode);
     const team = resolveMlbTeam(teamKey);
 
@@ -206,6 +207,7 @@ export const mlbProvider: MlbProvider = {
       fixtureFile: "next7_nym.json",
       ttlSeconds: 300,
       dataMode: resolved,
+      cacheBust,
     });
 
     const games = normalizeUpcomingGames(team.id, response.data, mode);
@@ -223,7 +225,7 @@ export const mlbProvider: MlbProvider = {
     };
   },
 
-  async getPitcherArsenal(playerId: string, dataMode?: ModeArg) {
+  async getPitcherArsenal(playerId: string, dataMode?: ModeArg, cacheBust?: CacheBustArg) {
     const resolved = getMlbDataMode(dataMode);
     const currentYear = new Date().getUTCFullYear();
 
@@ -235,6 +237,7 @@ export const mlbProvider: MlbProvider = {
       fixtureFile: "pitcher_arsenal_sample.json",
       ttlSeconds: 300,
       dataMode: resolved,
+      cacheBust,
     });
 
     const player = response.data.people?.[0];

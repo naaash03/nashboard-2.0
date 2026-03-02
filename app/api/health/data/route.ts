@@ -5,6 +5,7 @@ import { fetchEspnJson, getDataMode, getEspnHealthSnapshot } from "@/lib/provide
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const probe = searchParams.get("probe") === "1";
+  const cacheBust = searchParams.get("cacheBust");
   const modeResolution = resolveDataModeFromRequest(req);
   const mode = getDataMode(modeResolution.resolvedDataMode);
 
@@ -16,6 +17,7 @@ export async function GET(req: Request) {
         fixtureFile: "scoreboard_with_games.json",
         ttlSeconds: 30,
         dataMode: mode,
+        cacheBust,
       });
     } catch {
       // keep health snapshot diagnostics
@@ -60,9 +62,12 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     resolvedDataMode: modeResolution.resolvedDataMode,
+    resolutionSource: modeResolution.source,
     queryDataMode: modeResolution.queryDataMode,
-    cookieDataMode: modeResolution.cookieDataMode,
-    envDefaultMode: modeResolution.envDataMode,
+    devOverrideDataMode: modeResolution.devOverrideDataMode,
+    preferenceDataMode: modeResolution.preferenceDataMode,
+    fallbackDataMode: modeResolution.fallbackDataMode,
+    isDevEnvironment: modeResolution.isDevEnvironment,
     providerMode: mode,
     status: {
       db: process.env.DATABASE_URL ? "configured" : "unconfigured",

@@ -17,9 +17,11 @@ type EndpointHealth = {
 
 type DataHealth = {
   resolvedDataMode?: string;
+  resolutionSource?: string;
   queryDataMode?: string | null;
-  cookieDataMode?: string | null;
-  envDefaultMode?: string;
+  devOverrideDataMode?: string | null;
+  preferenceDataMode?: string | null;
+  fallbackDataMode?: string;
   providerMode?: string;
   status?: { db?: string; espn?: string; fixture?: string };
   cache?: { hit?: boolean; miss?: boolean; lastCacheAgeSeconds?: number | null };
@@ -32,17 +34,34 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
   const [lastError, setLastError] = useState<string | null>(null);
 
   const load = useCallback(async (probe = false) => {
-    const res = await fetch(`/api/health/data?dataMode=${props.dataMode}${probe ? "&probe=1" : ""}`, { cache: "no-store" });
+    const params = new URLSearchParams();
+    params.set("dataMode", props.dataMode);
+    params.set("preferenceMode", props.preferenceDataMode);
+    if (props.devOverrideDataMode) {
+      params.set("devOverrideMode", props.devOverrideDataMode);
+    }
+    if (probe) {
+      params.set("probe", "1");
+    }
+    params.set("cacheBust", String(props.refreshTick));
+    const res = await fetch(`/api/health/data?${params.toString()}`, { cache: "no-store" });
     const json = (await res.json()) as DataHealth;
     setData(json);
-  }, [props.dataMode]);
+  }, [props.dataMode, props.devOverrideDataMode, props.preferenceDataMode, props.refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
       try {
-        const res = await fetch(`/api/health/data?dataMode=${props.dataMode}`, { cache: "no-store" });
+        const params = new URLSearchParams();
+        params.set("dataMode", props.dataMode);
+        params.set("preferenceMode", props.preferenceDataMode);
+        if (props.devOverrideDataMode) {
+          params.set("devOverrideMode", props.devOverrideDataMode);
+        }
+        params.set("cacheBust", String(props.refreshTick));
+        const res = await fetch(`/api/health/data?${params.toString()}`, { cache: "no-store" });
         const json = (await res.json()) as DataHealth;
         if (!cancelled) {
           setData(json);
@@ -59,28 +78,34 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.refreshTick, props.dataMode]);
+  }, [props.dataMode, props.devOverrideDataMode, props.preferenceDataMode, props.refreshTick]);
 
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
         <p className="font-medium">Data Health</p>
-        <label className="flex items-center gap-2">
-          <span>Dev Fixture Data</span>
-          <input
-            type="checkbox"
-            checked={props.dataMode === "fixture"}
-            onChange={(event) => void props.onDataModeChange(event.target.checked ? "fixture" : "live")}
-          />
-        </label>
+        {props.showDevFixtureToggle ? (
+          <label className="flex items-center gap-2">
+            <span>Dev Fixture Override</span>
+            <input
+              type="checkbox"
+              checked={props.devOverrideDataMode === "fixture"}
+              onChange={(event) => void props.onDataModeChange(event.target.checked ? "fixture" : "live")}
+            />
+          </label>
+        ) : null}
       </div>
 
       {data ? (
         <>
-          <p>Resolved mode: {data.resolvedDataMode}</p>
+          <p>Preference mode: {props.preferenceDataMode}</p>
+          <p>Dev override: {props.devOverrideDataMode ?? "off"}</p>
+          <p>Effective mode: {data.resolvedDataMode ?? props.dataMode}</p>
+          <p>Effective source: {data.resolutionSource ?? props.dataModeSource}</p>
           <p>Query mode: {data.queryDataMode ?? "-"}</p>
-          <p>Cookie mode: {data.cookieDataMode ?? "-"}</p>
-          <p>Env default mode: {data.envDefaultMode}</p>
+          <p>Preference mode (resolver): {data.preferenceDataMode ?? "-"}</p>
+          <p>Dev override (resolver): {data.devOverrideDataMode ?? "-"}</p>
+          <p>Fallback mode: {data.fallbackDataMode ?? "live"}</p>
           <p>Provider mode: {data.providerMode}</p>
           <p>DB status: {data.status?.db}</p>
           <p>ESPN status: {data.status?.espn}</p>

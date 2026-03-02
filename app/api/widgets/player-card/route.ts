@@ -8,6 +8,7 @@ export async function GET(req: Request) {
   const sport = (searchParams.get("sport") ?? "NFL").toUpperCase();
   const playerId = (searchParams.get("playerId") ?? "").trim();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (sport !== "NFL") {
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const response = await getPlayer(playerId, resolvedDataMode);
+    const response = await getPlayer(playerId, resolvedDataMode, cacheBust);
     if (!response.player) {
       return NextResponse.json({
         data: null,

@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const playerId = (searchParams.get("playerId") ?? "").trim();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!playerId) {
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const providerResult = await mlbProvider.getPitcherArsenal(playerId, resolvedDataMode);
+    const providerResult = await mlbProvider.getPitcherArsenal(playerId, resolvedDataMode, cacheBust);
     const shaped = providerResult.data ? shapeMlbPitcherArsenal(providerResult.data, mode) : null;
 
     return NextResponse.json({

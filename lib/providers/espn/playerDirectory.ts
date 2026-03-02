@@ -700,6 +700,20 @@ export async function getPlayerProfile(
   if (mode === "live") {
     const config = SPORT_CONFIG[sport];
     try {
+      const commonResponse = await fetchEspnJson<unknown>({
+        endpoint: `https://site.web.api.espn.com/apis/common/v3/sports/${config.sportPath}/${config.league}/athletes/${encodeURIComponent(playerId)}`,
+        ttlSeconds: 600,
+        dataMode: mode,
+        cacheBust: normalizeCacheBust(cacheBust),
+      });
+      const commonMapped = mapProfilePayload(commonResponse.data, playerId);
+      mergedProfile = mergeProfiles(mergedProfile, commonMapped.profile);
+      mergedMeta = mergeWarning(commonResponse.meta, commonMapped.warning);
+    } catch {
+      notes.push("Common athlete profile endpoint returned limited data.");
+    }
+
+    try {
       const siteResponse = await fetchEspnJson<unknown>({
         endpoint: `https://site.api.espn.com/apis/site/v2/sports/${config.sportPath}/${config.league}/athletes/${encodeURIComponent(playerId)}`,
         ttlSeconds: 600,
@@ -710,7 +724,7 @@ export async function getPlayerProfile(
       mergedProfile = mergeProfiles(mergedProfile, siteMapped.profile);
       mergedMeta = mergeWarning(siteResponse.meta, siteMapped.warning);
     } catch {
-      notes.push("Using ESPN core athlete profile (league site athlete endpoint unavailable).");
+      notes.push("Using ESPN core athlete profile (site athlete endpoint returned 404 for this league).");
     }
   }
 

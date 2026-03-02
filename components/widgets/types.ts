@@ -1,4 +1,6 @@
-﻿export type WidgetMode = "BEGINNER" | "ADVANCED";
+import type { DataMode, DataModeSource } from "@/lib/dataMode";
+
+export type WidgetMode = "BEGINNER" | "ADVANCED";
 
 export type WidgetMeta = {
   sourceUsed: string;
@@ -11,7 +13,7 @@ export type WidgetMeta = {
   upstreamMessage?: string;
   cacheHit?: boolean;
   cacheAgeSeconds?: number;
-  dataMode?: "live" | "fixture";
+  dataMode?: DataMode;
 };
 
 export type WidgetCommonProps = {
@@ -25,8 +27,10 @@ export type WidgetCommonProps = {
   onPersist: (next: { mode?: WidgetMode; config?: Record<string, unknown>; playerId?: string }) => Promise<void>;
   onReportBug: (bundle: Record<string, unknown>) => void;
   refreshTick: number;
-  dataMode: "live" | "fixture";
-  onDataModeChange: (next: "live" | "fixture") => Promise<void>;
+  dataMode: DataMode;
+  preferenceDataMode: DataMode;
+  devOverrideDataMode: DataMode | null;
+  dataModeSource: DataModeSource;
+  showDevFixtureToggle: boolean;
+  onDataModeChange: (next: DataMode) => Promise<void>;
 };
-
-

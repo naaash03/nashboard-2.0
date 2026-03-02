@@ -2,6 +2,7 @@
 import type { Meta, Mode, SlateGame } from "@/lib/providers/types";
 
 type ModeArg = "live" | "fixture";
+type CacheBustArg = string | number | null | undefined;
 
 type EspnScoreboard = {
   events?: Array<{
@@ -188,7 +189,7 @@ function normalizeStandings(payload: EspnStandingsResponse, mode: Mode): NbaStan
   };
 }
 
-export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg): Promise<{ games: SlateGame[]; meta: Meta; dateUsed: string }> {
+export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ games: SlateGame[]; meta: Meta; dateUsed: string }> {
   const resolved = getDataMode(dataMode);
   const dateUsed = new Date().toISOString().slice(0, 10);
 
@@ -199,6 +200,7 @@ export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg): Promise<{ 
     fixtureSubdir: "nba",
     ttlSeconds: 90,
     dataMode: resolved,
+    cacheBust,
   });
 
   return {
@@ -208,7 +210,7 @@ export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg): Promise<{ 
   };
 }
 
-export async function getStandingsSnapshot(mode: Mode, dataMode?: ModeArg): Promise<{ data: NbaStandingsSnapshot; meta: Meta }> {
+export async function getStandingsSnapshot(mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: NbaStandingsSnapshot; meta: Meta }> {
   const resolved = getDataMode(dataMode);
 
   const response = await fetchEspnJson<EspnStandingsResponse>({
@@ -217,6 +219,7 @@ export async function getStandingsSnapshot(mode: Mode, dataMode?: ModeArg): Prom
     fixtureSubdir: "nba",
     ttlSeconds: 120,
     dataMode: resolved,
+    cacheBust,
   });
 
   return {

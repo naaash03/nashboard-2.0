@@ -1,0 +1,26 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { playerInsightsSummary } from "@/components/widgets/WatchlistWidget";
+
+describe("watchlist advanced players pipeline", () => {
+  it("uses batch insights endpoint for advanced player rows", () => {
+    const source = readFileSync("components/widgets/WatchlistWidget.tsx", "utf8");
+    expect(source.includes("/api/players/insights/batch")).toBe(true);
+  });
+
+  it("builds non-empty summary when insights include season or recent data", () => {
+    const summary = playerInsightsSummary({
+      sport: "nba",
+      playerId: "1966",
+      season: {
+        headline: "PPG 26.4 · RPG 8.1 · APG 7.2",
+        metrics: [
+          { key: "ppg", label: "PPG", value: "26.4" },
+        ],
+        source: "derived",
+      },
+      recent: null,
+    });
+    expect(summary).toContain("PPG");
+  });
+});

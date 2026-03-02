@@ -1,15 +1,24 @@
-﻿"use client";
+"use client";
 
-const KEY = "nashboard_dev_data_mode_v1";
+import { isDevDataModeOverrideEnabled, normalizeDataMode, type DataMode } from "@/lib/dataMode";
 
-export function getGuestDataMode(): "live" | "fixture" {
-  if (typeof window === "undefined") return "live";
-  const value = window.sessionStorage.getItem(KEY);
-  return value === "fixture" ? "fixture" : "live";
+const KEY = "nashboard.devDataModeOverride";
+
+export function getDevDataModeOverride(): DataMode | null {
+  if (typeof window === "undefined") return null;
+  if (!isDevDataModeOverrideEnabled()) return null;
+  return normalizeDataMode(window.sessionStorage.getItem(KEY));
 }
 
-export function setGuestDataMode(mode: "live" | "fixture"): void {
+export function setDevDataModeOverride(mode: DataMode | null): void {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(KEY, mode);
+  if (!isDevDataModeOverrideEnabled()) {
+    window.sessionStorage.removeItem(KEY);
+    return;
+  }
+  if (mode === "fixture") {
+    window.sessionStorage.setItem(KEY, mode);
+    return;
+  }
+  window.sessionStorage.removeItem(KEY);
 }
-

@@ -11,6 +11,7 @@ type FetchOptions = {
   fixtureFile?: string;
   ttlSeconds?: number;
   dataMode?: "live" | "fixture";
+  cacheBust?: string | number | null;
 };
 
 type FetchResult<T> = {
@@ -47,6 +48,17 @@ function resolvedDataMode(override?: "live" | "fixture"): "live" | "fixture" {
     return override;
   }
   return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
+}
+
+function resolveCacheBustToken(value: FetchOptions["cacheBust"]): string | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function baseUrl(endpoint: string): string {
@@ -153,6 +165,8 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
   const ttlSeconds = options.ttlSeconds ?? 300;
   const cacheKey = keyFor(options.endpoint, options.params);
   const dataMode = resolvedDataMode(options.dataMode);
+  const cacheBustToken = resolveCacheBustToken(options.cacheBust);
+  const bypassCache = typeof cacheBustToken === "string";
 
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(options.params ?? {})) {
@@ -184,22 +198,24 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
     };
   }
 
-  const mem = inMemory.get(cacheKey);
-  if (mem && mem.expiresAtMs > Date.now()) {
-    const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
-    return {
-      data: mem.payload as T,
-      meta: {
-        sourceUsed: "cache",
-        updatedAt: mem.updatedAt,
-        requestId,
-        endpointUrl,
-        upstreamStatus: 200,
-        cacheHit: true,
-        cacheAgeSeconds: ageSeconds,
-        dataMode,
-      },
-    };
+  if (!bypassCache) {
+    const mem = inMemory.get(cacheKey);
+    if (mem && mem.expiresAtMs > Date.now()) {
+      const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
+      return {
+        data: mem.payload as T,
+        meta: {
+          sourceUsed: "cache",
+          updatedAt: mem.updatedAt,
+          requestId,
+          endpointUrl,
+          upstreamStatus: 200,
+          cacheHit: true,
+          cacheAgeSeconds: ageSeconds,
+          dataMode,
+        },
+      };
+    }
   }
 
   let lastError: unknown;
@@ -238,6 +254,8 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
           requestId,
           endpointUrl,
           upstreamStatus: response.status,
+          cacheHit: false,
+          warning: bypassCache ? "Cache bypass requested via cacheBust." : undefined,
           dataMode,
         },
       };
@@ -247,23 +265,25 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
     }
   }
 
-  const cached = await readPersistentCache<T>(options.endpoint, options.params);
-  if (cached) {
-    return {
-      data: cached.payload,
-      meta: {
-        sourceUsed: "cache",
-        updatedAt: new Date(Date.now() - cached.ageSeconds * 1000).toISOString(),
-        requestId,
-        endpointUrl,
-        upstreamStatus: lastStatus,
-        upstreamMessage: String(lastError),
-        warning: "Using last cached response because MLB Stats API is currently unavailable.",
-        cacheHit: true,
-        cacheAgeSeconds: cached.ageSeconds,
-        dataMode,
-      },
-    };
+  if (!bypassCache) {
+    const cached = await readPersistentCache<T>(options.endpoint, options.params);
+    if (cached) {
+      return {
+        data: cached.payload,
+        meta: {
+          sourceUsed: "cache",
+          updatedAt: new Date(Date.now() - cached.ageSeconds * 1000).toISOString(),
+          requestId,
+          endpointUrl,
+          upstreamStatus: lastStatus,
+          upstreamMessage: String(lastError),
+          warning: "Using last cached response because MLB Stats API is currently unavailable.",
+          cacheHit: true,
+          cacheAgeSeconds: cached.ageSeconds,
+          dataMode,
+        },
+      };
+    }
   }
 
   throw new Error(`MLB fetch failed with no cache fallback: ${String(lastError)}`);

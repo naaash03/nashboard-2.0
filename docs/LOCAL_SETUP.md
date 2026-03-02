@@ -117,6 +117,6 @@ http://192.168.220.1:3000
 5. Use `/api/health/origin` to debug host/origin/cookie mismatches.
 
 ## Notes
-- Data mode resolution: query `dataMode` -> cookie `nashboard_dataMode` -> env `NASHBOARD_DATA_MODE` -> `live`.
+- Data mode resolution: query `dataMode` -> dev override (non-production only) -> persisted preference (`/api/preferences/data-mode`) -> `live`.
 - Cookies are hostname-scoped: `localhost` cookies are not sent to `192.168.x.x`, and vice versa.
 - `next.config.ts` uses `allowedDevOrigins` for localhost, loopback, and `NASHBOARD_DEV_HOST`.
