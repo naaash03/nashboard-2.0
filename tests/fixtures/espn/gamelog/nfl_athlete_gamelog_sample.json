@@ -1,0 +1,80 @@
+{
+  "teamAbbrev": "IND",
+  "events": [
+    {
+      "date": "2025-12-28",
+      "opponent": "HOU",
+      "result": "W 27-20",
+      "stats": {
+        "passComp": 24,
+        "passAtt": 36,
+        "passYds": 268,
+        "passTd": 2,
+        "int": 1,
+        "rushAtt": 5,
+        "rushYds": 24,
+        "rushTd": 0
+      }
+    },
+    {
+      "date": "2025-12-21",
+      "opponent": "TEN",
+      "result": "L 17-24",
+      "stats": {
+        "passComp": 21,
+        "passAtt": 33,
+        "passYds": 243,
+        "passTd": 1,
+        "int": 0,
+        "rushAtt": 4,
+        "rushYds": 19,
+        "rushTd": 0
+      }
+    },
+    {
+      "date": "2025-12-14",
+      "opponent": "JAX",
+      "result": "W 30-23",
+      "stats": {
+        "passComp": 27,
+        "passAtt": 39,
+        "passYds": 294,
+        "passTd": 2,
+        "int": 1,
+        "rushAtt": 6,
+        "rushYds": 32,
+        "rushTd": 1
+      }
+    },
+    {
+      "date": "2025-12-07",
+      "opponent": "PIT",
+      "result": "L 20-24",
+      "stats": {
+        "passComp": 23,
+        "passAtt": 35,
+        "passYds": 251,
+        "passTd": 2,
+        "int": 2,
+        "rushAtt": 3,
+        "rushYds": 16,
+        "rushTd": 0
+      }
+    },
+    {
+      "date": "2025-11-30",
+      "opponent": "NYJ",
+      "result": "W 21-14",
+      "stats": {
+        "passComp": 19,
+        "passAtt": 30,
+        "passYds": 221,
+        "passTd": 1,
+        "int": 0,
+        "rushAtt": 4,
+        "rushYds": 28,
+        "rushTd": 0
+      }
+    }
+  ]
+}

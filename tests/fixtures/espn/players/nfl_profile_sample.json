@@ -3,7 +3,7 @@
     "id": "3917792",
     "fullName": "Daniel Jones",
     "displayName": "Daniel Jones",
-    "team": { "displayName": "Indianapolis Colts" },
+    "team": { "displayName": "Indianapolis Colts", "abbreviation": "IND" },
     "position": { "abbreviation": "QB" },
     "headshot": { "href": "https://a.espncdn.com/i/headshots/nfl/players/full/3917792.png" },
     "jersey": "17",

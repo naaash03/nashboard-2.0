@@ -1,0 +1,40 @@
+{
+  "teamAbbrev": "LAL",
+  "seasonTotals": {
+    "pts": 26.4,
+    "reb": 8.1,
+    "ast": 7.2
+  },
+  "events": [
+    {
+      "date": "2026-02-28",
+      "opponent": "BOS",
+      "result": "W 118-113",
+      "stats": { "pts": 32, "reb": 8, "ast": 9 }
+    },
+    {
+      "date": "2026-02-26",
+      "opponent": "DEN",
+      "result": "L 104-109",
+      "stats": { "pts": 27, "reb": 7, "ast": 8 }
+    },
+    {
+      "date": "2026-02-24",
+      "opponent": "PHX",
+      "result": "W 121-117",
+      "stats": { "pts": 29, "reb": 9, "ast": 10 }
+    },
+    {
+      "date": "2026-02-22",
+      "opponent": "GS",
+      "result": "W 114-108",
+      "stats": { "pts": 30, "reb": 6, "ast": 11 }
+    },
+    {
+      "date": "2026-02-20",
+      "opponent": "DAL",
+      "result": "L 110-116",
+      "stats": { "pts": 25, "reb": 8, "ast": 7 }
+    }
+  ]
+}
