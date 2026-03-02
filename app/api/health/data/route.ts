@@ -7,23 +7,76 @@ export async function GET(req: Request) {
   const probe = searchParams.get("probe") === "1";
   const cacheBust = searchParams.get("cacheBust");
   const modeResolution = resolveDataModeFromRequest(req);
-  const mode = getDataMode(modeResolution.resolvedDataMode);
+  const requestedMode = modeResolution.resolvedDataMode;
+  let effectiveDataMode: "live" | "fixture" = requestedMode === "fixture" ? "fixture" : "live";
+  let effectiveSource: "live" | "fixture" = effectiveDataMode;
+  let hydrationOccurred = false;
+  const hydrationNotes: string[] = [];
 
   if (probe) {
-    try {
-      await fetchEspnJson<{ events?: unknown[] }>({
-        endpoint: "/scoreboard",
-        params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
-        fixtureFile: "scoreboard_with_games.json",
-        ttlSeconds: 30,
-        dataMode: mode,
-        cacheBust,
-      });
-    } catch {
-      // keep health snapshot diagnostics
+    if (requestedMode === "auto") {
+      try {
+        const liveProbe = await fetchEspnJson<{ events?: unknown[] }>({
+          endpoint: "/scoreboard",
+          params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
+          fixtureFile: "scoreboard_with_games.json",
+          ttlSeconds: 30,
+          dataMode: "live",
+          cacheBust,
+        });
+        const hasEvents = Array.isArray(liveProbe.data?.events) && liveProbe.data.events.length > 0;
+        if (hasEvents) {
+          effectiveDataMode = "live";
+          effectiveSource = "live";
+        } else {
+          await fetchEspnJson<{ events?: unknown[] }>({
+            endpoint: "/scoreboard",
+            params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
+            fixtureFile: "scoreboard_with_games.json",
+            ttlSeconds: 30,
+            dataMode: "fixture",
+            cacheBust,
+          });
+          effectiveDataMode = "fixture";
+          effectiveSource = "fixture";
+          hydrationOccurred = true;
+          hydrationNotes.push("AUTO fallback used fixture scoreboard because live payload was empty.");
+        }
+      } catch {
+        try {
+          await fetchEspnJson<{ events?: unknown[] }>({
+            endpoint: "/scoreboard",
+            params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
+            fixtureFile: "scoreboard_with_games.json",
+            ttlSeconds: 30,
+            dataMode: "fixture",
+            cacheBust,
+          });
+          effectiveDataMode = "fixture";
+          effectiveSource = "fixture";
+          hydrationOccurred = true;
+          hydrationNotes.push("AUTO fallback used fixture scoreboard because live probe failed.");
+        } catch {
+          // keep health snapshot diagnostics when both probes fail
+        }
+      }
+    } else {
+      try {
+        await fetchEspnJson<{ events?: unknown[] }>({
+          endpoint: "/scoreboard",
+          params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
+          fixtureFile: "scoreboard_with_games.json",
+          ttlSeconds: 30,
+          dataMode: getDataMode(requestedMode),
+          cacheBust,
+        });
+      } catch {
+        // keep health snapshot diagnostics
+      }
     }
   }
 
+  const providerMode = effectiveDataMode;
   const snapshot = getEspnHealthSnapshot();
   const hasErrors = Object.values(snapshot).some((item) => Boolean(item.lastErrorAt));
   const anySuccess = Object.values(snapshot).some((item) => Boolean(item.lastSuccessAt));
@@ -63,15 +116,18 @@ export async function GET(req: Request) {
   return NextResponse.json({
     resolvedDataMode: modeResolution.resolvedDataMode,
     resolutionSource: modeResolution.source,
+    effectiveDataMode,
+    effectiveSource,
+    hydrationOccurred,
+    hydrationNotes,
+    requestedDataMode: requestedMode,
     queryDataMode: modeResolution.queryDataMode,
-    devOverrideDataMode: modeResolution.devOverrideDataMode,
     preferenceDataMode: modeResolution.preferenceDataMode,
     fallbackDataMode: modeResolution.fallbackDataMode,
-    isDevEnvironment: modeResolution.isDevEnvironment,
-    providerMode: mode,
+    providerMode,
     status: {
       db: process.env.DATABASE_URL ? "configured" : "unconfigured",
-      fixture: mode === "fixture" ? "enabled" : "disabled",
+      fixture: effectiveDataMode === "fixture" ? "enabled" : "disabled",
       espn: anySuccess ? "ok" : timeoutSeen ? "timeout" : blockedSeen ? "blocked" : hasErrors ? "error" : "empty",
     },
     cache: {

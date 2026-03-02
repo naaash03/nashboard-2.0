@@ -5,7 +5,7 @@ import { getTodaysSlate } from "@/lib/providers/espn/nba";
 import { shapeNbaTonightsSlate } from "@/lib/templates/nbaTonightsSlate";
 import type { Meta } from "@/lib/providers/types";
 
-function fallbackMeta(mode: "live" | "fixture", warning: string): Meta {
+function fallbackMeta(mode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
     sourceUsed: mode === "fixture" ? "fixture" : "espn",
     updatedAt: new Date().toISOString(),
@@ -47,3 +47,4 @@ export async function GET(req: Request) {
     }, { status: 502 });
   }
 }
+

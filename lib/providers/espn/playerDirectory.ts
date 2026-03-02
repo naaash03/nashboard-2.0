@@ -3,7 +3,7 @@ import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type CacheBustArg = string | number | null | undefined;
 
 type SportConfig = {
@@ -116,6 +116,10 @@ function normalizeCacheBust(value: CacheBustArg): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function directMode(mode: ModeArg): "live" | "fixture" {
+  return getDataMode(mode);
 }
 
 function extractIdFromRef(value: unknown): string | undefined {
@@ -306,14 +310,57 @@ function mergeWarning(meta: Meta, warning?: string): Meta {
   };
 }
 
-function fallbackMeta(dataMode: ModeArg, sourceUsed: Meta["sourceUsed"], warning?: string): Meta {
+function fallbackMeta(dataMode: ModeArg, sourceUsed: Meta["sourceUsed"], warning?: string, notes?: string[]): Meta {
   return {
     sourceUsed,
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
     warning,
+    notes,
     dataMode,
   };
+}
+
+function appendMetaWarning(meta: Meta, warning?: string): Meta {
+  if (!warning) {
+    return meta;
+  }
+  return {
+    ...meta,
+    warning: meta.warning ? `${meta.warning} ${warning}` : warning,
+  };
+}
+
+function appendMetaNotes(meta: Meta, notes: string[]): Meta {
+  if (notes.length === 0) {
+    return meta;
+  }
+  return {
+    ...meta,
+    notes: [...(meta.notes ?? []), ...notes],
+  };
+}
+
+function pickModeSource(mode: "live" | "fixture"): Meta["sourceUsed"] {
+  return mode === "fixture" ? "fixture" : "espn";
+}
+
+function isPlayerProfileComplete(profile: PlayerProfile | null): boolean {
+  if (!profile || !profile.fullName) {
+    return false;
+  }
+  const hasTeam = Boolean(profile.teamName || profile.teamAbbrev);
+  const hasHeadshot = Boolean(profile.headshot);
+  const hasBio = Boolean(
+    profile.position
+      || profile.jersey
+      || typeof profile.age === "number"
+      || profile.height
+      || profile.weight
+      || profile.bats
+      || profile.throws,
+  );
+  return hasTeam && (hasHeadshot || hasBio);
 }
 
 function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profile: PlayerProfile | null; warning?: string } {
@@ -473,13 +520,13 @@ export function getSportEndpointConfig(sportInput: SportKey): SportConfig {
 
 export async function getCoreAthlete(args: CoreAthleteArgs): Promise<Envelope<unknown>> {
   const sport = resolveSportKey(args.sport);
-  const mode = getDataMode(args.dataMode);
+  const mode = directMode(args.dataMode ?? "auto");
   const playerId = args.playerId.trim();
 
   if (!playerId) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
+      meta: fallbackMeta(mode, pickModeSource(mode), "playerId is required"),
       error: {
         message: "playerId is required",
         code: "MISSING_PLAYER_ID",
@@ -509,7 +556,7 @@ export async function getCoreAthlete(args: CoreAthleteArgs): Promise<Envelope<un
   } catch (error) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
+      meta: fallbackMeta(mode, pickModeSource(mode), String(error)),
       error: {
         message: `Failed to load core athlete profile: ${String(error)}`,
         code: "UPSTREAM_ERROR",
@@ -520,13 +567,13 @@ export async function getCoreAthlete(args: CoreAthleteArgs): Promise<Envelope<un
 
 export async function getGameLog(args: GameLogArgs): Promise<Envelope<unknown>> {
   const sport = resolveSportKey(args.sport);
-  const mode = getDataMode(args.dataMode);
+  const mode = directMode(args.dataMode ?? "auto");
   const playerId = args.playerId.trim();
 
   if (!playerId) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
+      meta: fallbackMeta(mode, pickModeSource(mode), "playerId is required"),
       error: {
         message: "playerId is required",
         code: "MISSING_PLAYER_ID",
@@ -552,7 +599,7 @@ export async function getGameLog(args: GameLogArgs): Promise<Envelope<unknown>> 
   } catch (error) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
+      meta: fallbackMeta(mode, pickModeSource(mode), String(error)),
       error: {
         message: `Failed to load player gamelog: ${String(error)}`,
         code: "UPSTREAM_ERROR",
@@ -563,7 +610,7 @@ export async function getGameLog(args: GameLogArgs): Promise<Envelope<unknown>> 
 
 export async function getScoreboard(args: ScoreboardArgs): Promise<Envelope<unknown>> {
   const sport = resolveSportKey(args.sport);
-  const mode = getDataMode(args.dataMode);
+  const mode = directMode(args.dataMode ?? "auto");
 
   try {
     const config = SPORT_CONFIG[sport];
@@ -586,7 +633,7 @@ export async function getScoreboard(args: ScoreboardArgs): Promise<Envelope<unkn
   } catch (error) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", String(error)),
+      meta: fallbackMeta(mode, pickModeSource(mode), String(error)),
       error: {
         message: `Failed to load scoreboard: ${String(error)}`,
         code: "UPSTREAM_ERROR",
@@ -595,16 +642,18 @@ export async function getScoreboard(args: ScoreboardArgs): Promise<Envelope<unkn
   }
 }
 
-async function searchPlayersByOptions(args: SearchArgs): Promise<Envelope<PlayerSearchResult[]>> {
+async function searchPlayersByOptionsForMode(
+  args: SearchArgs,
+  mode: "live" | "fixture",
+): Promise<Envelope<PlayerSearchResult[]>> {
   const sport = resolveSportKey(args.sport);
-  const mode = getDataMode(args.dataMode);
   const trimmed = args.query.trim();
   const limit = Math.max(1, Math.min(8, Math.floor(args.limit ?? 8)));
 
   if (!trimmed) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "q is required"),
+      meta: fallbackMeta(mode, pickModeSource(mode), "q is required"),
       error: {
         message: "q is required",
         code: "MISSING_QUERY",
@@ -637,9 +686,50 @@ async function searchPlayersByOptions(args: SearchArgs): Promise<Envelope<Player
     const warning = `Common player search unavailable, returning empty results: ${String(error)}`;
     return {
       data: [],
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", warning),
+      meta: fallbackMeta(mode, pickModeSource(mode), warning),
     };
   }
+}
+
+async function searchPlayersByOptions(args: SearchArgs): Promise<Envelope<PlayerSearchResult[]>> {
+  const mode = args.dataMode ?? "auto";
+  if (mode !== "auto") {
+    return searchPlayersByOptionsForMode(args, directMode(mode));
+  }
+
+  const liveEnvelope = await searchPlayersByOptionsForMode({ ...args, dataMode: "live" }, "live");
+  if (!liveEnvelope.error && (liveEnvelope.data?.length ?? 0) > 0) {
+    return {
+      ...liveEnvelope,
+      meta: appendMetaNotes(liveEnvelope.meta, ["AUTO mode selected live player search response."]),
+    };
+  }
+
+  const fixtureEnvelope = await searchPlayersByOptionsForMode({ ...args, dataMode: "fixture" }, "fixture");
+  if (!fixtureEnvelope.error && (fixtureEnvelope.data?.length ?? 0) > 0) {
+    const notes = liveEnvelope.error
+      ? ["AUTO fallback used fixture player search because live search failed."]
+      : ["AUTO fallback used fixture player search because live search returned no results."];
+    return {
+      ...fixtureEnvelope,
+      meta: appendMetaNotes(
+        appendMetaWarning(fixtureEnvelope.meta, "AUTO fallback applied for player search."),
+        notes,
+      ),
+    };
+  }
+
+  return {
+    data: fixtureEnvelope.data ?? liveEnvelope.data ?? [],
+    meta: appendMetaNotes(
+      appendMetaWarning(
+        liveEnvelope.meta,
+        "AUTO fallback could not improve player search response.",
+      ),
+      ["AUTO mode tried live and fixture player search; returning best available response."],
+    ),
+    error: liveEnvelope.error ?? fixtureEnvelope.error,
+  };
 }
 
 export async function searchPlayers(
@@ -662,20 +752,19 @@ export async function searchPlayers(
   });
 }
 
-export async function getPlayerProfile(
+async function getPlayerProfileForMode(
   sportInput: SportKey,
   playerIdInput: string,
-  dataMode?: ModeArg,
+  mode: "live" | "fixture",
   cacheBust?: CacheBustArg,
 ): Promise<Envelope<PlayerProfile>> {
   const sport = resolveSportKey(sportInput);
-  const mode = getDataMode(dataMode);
   const playerId = playerIdInput.trim();
 
   if (!playerId) {
     return {
       data: null,
-      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
+      meta: fallbackMeta(mode, pickModeSource(mode), "playerId is required"),
       error: {
         message: "playerId is required",
         code: "MISSING_PLAYER_ID",
@@ -737,7 +826,78 @@ export async function getPlayerProfile(
 
   return {
     data: mergedProfile,
-    meta: mergeWarning(mergedMeta, notes.length > 0 ? notes.join(" ") : undefined),
+    meta: appendMetaNotes(
+      mergeWarning(mergedMeta, notes.length > 0 ? notes.join(" ") : undefined),
+      notes,
+    ),
+  };
+}
+
+export async function getPlayerProfile(
+  sportInput: SportKey,
+  playerIdInput: string,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+): Promise<Envelope<PlayerProfile>> {
+  const sport = resolveSportKey(sportInput);
+  const mode = dataMode ?? "auto";
+  const playerId = playerIdInput.trim();
+
+  if (!playerId) {
+    return {
+      data: null,
+      meta: fallbackMeta(mode, mode === "fixture" ? "fixture" : "espn", "playerId is required"),
+      error: {
+        message: "playerId is required",
+        code: "MISSING_PLAYER_ID",
+      },
+    };
+  }
+
+  if (mode !== "auto") {
+    return getPlayerProfileForMode(sport, playerId, directMode(mode), cacheBust);
+  }
+
+  const liveEnvelope = await getPlayerProfileForMode(sport, playerId, "live", cacheBust);
+  const liveComplete = !liveEnvelope.error && isPlayerProfileComplete(liveEnvelope.data);
+  if (liveComplete) {
+    return {
+      ...liveEnvelope,
+      meta: appendMetaNotes(liveEnvelope.meta, ["AUTO mode selected live profile response."]),
+    };
+  }
+
+  const fixtureEnvelope = await getPlayerProfileForMode(sport, playerId, "fixture", cacheBust);
+  if (!fixtureEnvelope.error && fixtureEnvelope.data) {
+    const hydratedProfile = liveEnvelope.data
+      ? mergeProfiles(fixtureEnvelope.data, liveEnvelope.data)
+      : fixtureEnvelope.data;
+    const usedHydration = Boolean(liveEnvelope.data);
+    const warning = usedHydration
+      ? "AUTO mode hydrated missing live profile fields from fixture."
+      : "AUTO mode used fixture profile because live profile was incomplete.";
+    return {
+      data: hydratedProfile,
+      meta: appendMetaNotes(
+        appendMetaWarning(
+          {
+            ...(usedHydration ? liveEnvelope.meta : fixtureEnvelope.meta),
+            dataMode: usedHydration ? "live" : "fixture",
+          },
+          warning,
+        ),
+        [warning],
+      ),
+    };
+  }
+
+  return {
+    data: liveEnvelope.data,
+    meta: appendMetaNotes(
+      appendMetaWarning(liveEnvelope.meta, "AUTO mode could not improve profile response with fixture."),
+      ["AUTO mode tried live and fixture profile sources; returning best available response."],
+    ),
+    error: liveEnvelope.error ?? fixtureEnvelope.error,
   };
 }
 

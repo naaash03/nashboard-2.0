@@ -9,7 +9,7 @@ import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
 import type { PlayerInsights, SportKey } from "@/lib/types/playerInsights";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type InsightsMode = "beginner" | "advanced";
 type CacheBustArg = string | number | null | undefined;
 
@@ -796,6 +796,87 @@ function combineMeta(
   };
 }
 
+function appendMetaWarning(meta: Meta, warning?: string): Meta {
+  if (!warning) {
+    return meta;
+  }
+  return {
+    ...meta,
+    warning: meta.warning ? `${meta.warning} ${warning}` : warning,
+  };
+}
+
+function appendMetaNotes(meta: Meta, notes: string[]): Meta {
+  if (notes.length === 0) {
+    return meta;
+  }
+  return {
+    ...meta,
+    notes: [...(meta.notes ?? []), ...notes],
+  };
+}
+
+function hasSeasonMetrics(insights: PlayerInsights | null | undefined): boolean {
+  return Boolean(insights?.season?.metrics && insights.season.metrics.length > 0);
+}
+
+function hasRecentGames(insights: PlayerInsights | null | undefined): boolean {
+  return Boolean(insights?.recent?.games && insights.recent.games.length > 0);
+}
+
+function isPlayerInsightsComplete(
+  insights: PlayerInsights | null | undefined,
+  sport: SportKey,
+  mode: InsightsMode,
+): boolean {
+  if (!insights) {
+    return false;
+  }
+  if (mode !== "advanced") {
+    return Boolean(insights.fullName || insights.teamName || insights.teamAbbrev || insights.live);
+  }
+
+  const hasStats = hasSeasonMetrics(insights) || hasRecentGames(insights);
+  if (sport === "mlb") {
+    return hasStats;
+  }
+  if (sport === "nba") {
+    return hasStats;
+  }
+  if (sport === "nfl") {
+    return hasStats;
+  }
+  return hasStats;
+}
+
+function hydratePlayerInsights(primary: PlayerInsights | null, fallback: PlayerInsights | null): PlayerInsights | null {
+  if (!primary && !fallback) {
+    return null;
+  }
+  if (!primary) {
+    return fallback;
+  }
+  if (!fallback) {
+    return primary;
+  }
+
+  const primaryHasSeason = hasSeasonMetrics(primary);
+  const primaryHasRecent = hasRecentGames(primary);
+
+  return {
+    ...fallback,
+    ...primary,
+    fullName: primary.fullName ?? fallback.fullName,
+    teamAbbrev: primary.teamAbbrev ?? fallback.teamAbbrev,
+    teamName: primary.teamName ?? fallback.teamName,
+    injury: primary.injury ?? fallback.injury ?? null,
+    live: primary.live ?? fallback.live ?? null,
+    season: primaryHasSeason ? primary.season : (fallback.season ?? primary.season),
+    recent: primaryHasRecent ? primary.recent : (fallback.recent ?? primary.recent),
+    metaNotes: [...(primary.metaNotes ?? []), ...(fallback.metaNotes ?? [])],
+  };
+}
+
 function teamAbbrevFromPayload(payload: unknown): string | undefined {
   const data = asObject(payload);
   if (!data) {
@@ -828,11 +909,11 @@ function teamAbbrevFromPayload(payload: unknown): string | undefined {
   return undefined;
 }
 
-export async function getPlayerInsights(
+async function getPlayerInsightsForMode(
   sport: SportKey,
   playerIdInput: string,
   mode: InsightsMode,
-  dataMode?: ModeArg,
+  dataMode: "live" | "fixture",
   cacheBust?: CacheBustArg,
 ): Promise<Envelope<PlayerInsights>> {
   const resolvedMode = getDataMode(dataMode);
@@ -920,5 +1001,55 @@ export async function getPlayerInsights(
   return {
     data,
     meta: combineMeta(resolvedMode, [gamelogMeta, liveMeta, profileEnvelope.meta], notes),
+  };
+}
+
+export async function getPlayerInsights(
+  sport: SportKey,
+  playerIdInput: string,
+  mode: InsightsMode,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+): Promise<Envelope<PlayerInsights>> {
+  const requestedMode = dataMode ?? "auto";
+  if (requestedMode !== "auto") {
+    return getPlayerInsightsForMode(sport, playerIdInput, mode, getDataMode(requestedMode), cacheBust);
+  }
+
+  const liveEnvelope = await getPlayerInsightsForMode(sport, playerIdInput, mode, "live", cacheBust);
+  const liveComplete = !liveEnvelope.error && isPlayerInsightsComplete(liveEnvelope.data, sport, mode);
+  if (liveComplete) {
+    return {
+      ...liveEnvelope,
+      meta: appendMetaNotes(liveEnvelope.meta, ["AUTO mode selected live player insights response."]),
+    };
+  }
+
+  const fixtureEnvelope = await getPlayerInsightsForMode(sport, playerIdInput, mode, "fixture", cacheBust);
+  if (!fixtureEnvelope.error && fixtureEnvelope.data) {
+    const hydrated = hydratePlayerInsights(liveEnvelope.data, fixtureEnvelope.data);
+    const hydratedComplete = isPlayerInsightsComplete(hydrated, sport, mode);
+    const warning = hydratedComplete
+      ? "AUTO mode hydrated missing live insights fields from fixture."
+      : "AUTO mode used fixture player insights because live insights were incomplete.";
+    return {
+      data: hydratedComplete ? hydrated : fixtureEnvelope.data,
+      meta: appendMetaNotes(
+        appendMetaWarning(
+          hydratedComplete ? { ...liveEnvelope.meta, dataMode: "live" } : { ...fixtureEnvelope.meta, dataMode: "fixture" },
+          warning,
+        ),
+        [warning],
+      ),
+    };
+  }
+
+  return {
+    ...liveEnvelope,
+    meta: appendMetaNotes(
+      appendMetaWarning(liveEnvelope.meta, "AUTO mode could not improve player insights response with fixture."),
+      ["AUTO mode tried live and fixture insights sources; returning best available response."],
+    ),
+    error: liveEnvelope.error ?? fixtureEnvelope.error,
   };
 }

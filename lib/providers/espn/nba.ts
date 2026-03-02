@@ -1,7 +1,7 @@
 ﻿import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
 import type { Meta, Mode, SlateGame } from "@/lib/providers/types";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type CacheBustArg = string | number | null | undefined;
 
 type EspnScoreboard = {

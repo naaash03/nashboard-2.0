@@ -1,22 +1,27 @@
 ﻿# FIX REPORT
 
 ## Changelog (2026-03-02)
-- Live default reliability + dev fixture override model:
-  - Added unified resolver in `lib/dataMode.ts` (single source of truth).
+- Auto default reliability + fallback hydration:
+  - Added/updated unified resolver in `lib/dataMode.ts` (single source of truth).
   - Effective mode precedence is now:
-    1) explicit query `dataMode`
-    2) dev override (`devOverrideMode`) in non-production only
-    3) persisted preference mode (`preferenceMode`, read from `/api/preferences/data-mode`)
-    4) fallback `live`
-  - Dev Fixture toggle is now local-only:
-    - shown only in dev / local override-enabled environments
-    - stored in session storage (`nashboard.devDataModeOverride`)
-    - does not call `PUT /api/preferences/data-mode`
-  - Data Health now shows:
-    - preference mode
-    - dev override mode
-    - effective mode + resolution source
-  - Refresh All now sends `cacheBust=<refreshTick>` through widget fetches and provider calls (MLB/NBA/NFL widget routes and providers updated).
+    1) explicit query `dataMode` (`auto|live|fixture`)
+    2) persisted preference mode (`preferenceMode`, read from `/api/preferences/data-mode`)
+    3) fallback `auto`
+  - Removed all Dev Fixture Override code paths from runtime UI.
+  - `/api/preferences/data-mode` now supports and defaults to `auto`.
+  - `DataHealthWidget` now shows:
+    - persisted preference mode
+    - effective mode/source for the health request
+    - whether AUTO hydration/fallback occurred
+  - Preference API:
+    - `GET /api/preferences/data-mode` returns persisted `mode` (`auto|live|fixture`)
+    - `PUT /api/preferences/data-mode` accepts `{ "mode": "auto" | "live" | "fixture" }`
+  - AUTO behavior:
+    - live-first for player/team endpoints
+    - fallback to fixture when live is incomplete or fails
+    - hydration merges fixture fields into live payloads when possible
+    - metadata warnings/notes annotate AUTO fallback/hydration decisions
+  - Refresh All continues to send `cacheBust=<refreshTick>` through widget and provider requests.
 
 - Misc widgets reliability + UX hardening:
   - Added team typeahead endpoint:
@@ -154,19 +159,18 @@
 - Global fixture mode consistency:
   - Added request resolver in `lib/config/env.ts` with precedence:
     1) query `dataMode`
-    2) cookie `nashboard_dataMode`
-    3) env `NASHBOARD_DATA_MODE`
-    4) default `live`
-  - Dashboard now writes `nashboard_dataMode` cookie (`Path=/; SameSite=Lax`) whenever mode changes.
-  - Health and widget routes now consume resolved mode so direct `/api/health/data?probe=1` reflects cookie-selected fixture mode.
+    2) persisted preference mode from `/api/preferences/data-mode`
+    3) default `auto`
+  - Removed runtime dev override/session-storage data mode path.
+  - Health and widget routes now consume resolved mode so direct `/api/health/data?probe=1` reflects live/fixture outcome under AUTO.
 - LAN dev-origin warning fix:
   - Updated `next.config.ts` `allowedDevOrigins` with:
     - `localhost:3000`
     - `127.0.0.1:3000`
     - `192.168.220.1:3000`
 - Data visibility + diagnostics upgrades:
-  - Added explicit `dataMode=live|fixture` plumbing across widget APIs and frontend calls.
-  - Added persisted `Dev Fixture Data` toggle (session in guest mode; server preference in signed-in mode via `/api/preferences/data-mode`).
+  - Added explicit `dataMode=auto|live|fixture` plumbing across widget APIs and frontend calls.
+  - Added `auto` data mode with live-first fallback/hydration in providers used by Player Card and Watchlist.
   - Upgraded ESPN client metadata and endpoint observability (endpoint URL, upstream status/message, source mode, cache diagnostics).
   - Upgraded Data Health endpoint/widget:
     - separate statuses for DB (`configured`/`unconfigured`), ESPN (`ok`/`error`/`timeout`/`blocked`/`empty`), Fixture (`enabled`/`disabled`)

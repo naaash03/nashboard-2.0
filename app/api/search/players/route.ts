@@ -9,6 +9,7 @@ export async function GET(req: Request) {
   const q = (searchParams.get("q") ?? "").trim();
   const limit = Math.max(1, Math.min(8, Number(searchParams.get("limit") ?? "8")));
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
+  const providerMode = resolvedDataMode === "auto" ? "live" : resolvedDataMode;
   const requestId = randomUUID();
 
   if (sport !== "NFL") {
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const result = await searchPlayers(q, limit, resolvedDataMode);
+    const result = await searchPlayers(q, limit, providerMode);
     return NextResponse.json({
       results: result.results,
       userFacingMessage: result.diagnostics.userFacingMessage ?? null,

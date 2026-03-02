@@ -96,7 +96,7 @@ function selectedPlayerNameFromConfig(config: Record<string, unknown>, sportKey:
 
 export function buildPlayerSearchUrl(
   query: string,
-  dataMode: "live" | "fixture",
+  dataMode: "auto" | "live" | "fixture",
   limit = 8,
   sport: SportKey = "nfl",
   cacheBust?: string | number,

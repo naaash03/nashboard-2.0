@@ -3,7 +3,7 @@ import { fetchMlbJson, getMlbDataMode } from "@/lib/providers/mlb/client";
 import { MLB_TEAM_OPTIONS, resolveMlbTeam } from "@/lib/providers/mlb/teamMap";
 import type { Meta, Mode } from "@/lib/providers/types";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type CacheBustArg = string | number | null | undefined;
 
 export type MlbNextGame = {

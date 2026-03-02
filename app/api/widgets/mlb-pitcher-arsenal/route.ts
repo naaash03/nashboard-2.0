@@ -5,7 +5,7 @@ import { mlbProvider } from "@/lib/providers/mlb";
 import { shapeMlbPitcherArsenal } from "@/lib/templates/mlbPitcherArsenal";
 import type { Meta } from "@/lib/providers/types";
 
-function fallbackMeta(mode: "live" | "fixture", warning: string): Meta {
+function fallbackMeta(mode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
     sourceUsed: mode === "fixture" ? "fixture" : "mlb",
     updatedAt: new Date().toISOString(),
@@ -49,3 +49,4 @@ export async function GET(req: Request) {
     }, { status: 502 });
   }
 }
+

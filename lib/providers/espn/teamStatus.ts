@@ -4,7 +4,7 @@ import { getScoreboard } from "@/lib/providers/espn/playerDirectory";
 import type { Envelope, SportKey } from "@/lib/types/players";
 import type { TeamStatus, TeamStatusBatch } from "@/lib/types/teamStatus";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type CacheBustArg = string | number | null | undefined;
 
 type ScoreboardPayload = {

@@ -29,8 +29,5 @@ export type WidgetCommonProps = {
   refreshTick: number;
   dataMode: DataMode;
   preferenceDataMode: DataMode;
-  devOverrideDataMode: DataMode | null;
   dataModeSource: DataModeSource;
-  showDevFixtureToggle: boolean;
-  onDataModeChange: (next: DataMode) => Promise<void>;
 };

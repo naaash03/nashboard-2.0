@@ -5,7 +5,7 @@ import { normalizeSportKey, searchPlayers } from "@/lib/providers/espn/playerDir
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, PlayerSearchResult } from "@/lib/types/players";
 
-function fallbackMeta(dataMode: "live" | "fixture", warning: string): Meta {
+function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
     sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
     updatedAt: new Date().toISOString(),

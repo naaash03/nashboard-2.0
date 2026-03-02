@@ -11,4 +11,9 @@ describe("dashboard data-mode persistence boundaries", () => {
     const source = readFileSync("components/dashboard/DashboardPage.tsx", "utf8");
     expect(source.includes('fetch("/api/preferences/data-mode"')).toBe(true);
   });
+
+  it("removes Dev Fixture Override UI text", () => {
+    const source = readFileSync("components/widgets/DataHealthWidget.tsx", "utf8");
+    expect(source.includes("Dev Fixture Override")).toBe(false);
+  });
 });

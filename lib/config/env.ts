@@ -51,7 +51,7 @@ export function appBaseUrl(): string {
 }
 
 export function envDefaultDataMode(): DataMode {
-  return "live";
+  return "auto";
 }
 
 export function resolveDataModeFromRequest(req: Request): DataModeResolution {

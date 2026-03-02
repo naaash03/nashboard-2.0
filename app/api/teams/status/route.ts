@@ -6,7 +6,7 @@ import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
 import type { TeamStatus } from "@/lib/types/teamStatus";
 
-function fallbackMeta(dataMode: "live" | "fixture", warning: string): Meta {
+function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
     sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
     updatedAt: new Date().toISOString(),
@@ -61,3 +61,4 @@ export async function GET(req: Request) {
     return NextResponse.json(envelope, { status: 500 });
   }
 }
+

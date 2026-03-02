@@ -23,8 +23,7 @@ import {
   updateLayout,
   type GuestWidgetInstance,
 } from "@/lib/guest/guestDashboard";
-import { getDevDataModeOverride, setDevDataModeOverride } from "@/lib/guest/devDataMode";
-import { isDevDataModeOverrideEnabled, resolveDataMode, type DataMode } from "@/lib/dataMode";
+import { resolveDataMode, type DataMode } from "@/lib/dataMode";
 
 type Sport = "NFL" | "NBA" | "MLB";
 
@@ -94,23 +93,19 @@ export default function DashboardPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [preferenceDataMode, setPreferenceDataMode] = useState<DataMode>("live");
-  const [devOverrideDataMode, setDevOverrideDataModeState] = useState<DataMode | null>(null);
+  const [preferenceDataMode, setPreferenceDataMode] = useState<DataMode>("auto");
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [bugBundle, setBugBundle] = useState<Record<string, unknown> | null>(null);
   const [refreshAt, setRefreshAt] = useState(0);
   const loadRequestRef = useRef(0);
 
   const isGuestMode = mode !== "signed_in";
-  const showDevFixtureToggle = isDevDataModeOverrideEnabled();
   const modeResolution = useMemo(
     () => resolveDataMode({
       preferenceDataMode,
-      devOverrideDataMode,
-      fallbackDataMode: "live",
-      isDevEnvironment: showDevFixtureToggle,
+      fallbackDataMode: "auto",
     }),
-    [devOverrideDataMode, preferenceDataMode, showDevFixtureToggle],
+    [preferenceDataMode],
   );
   const dataMode = modeResolution.resolvedDataMode;
 
@@ -118,10 +113,6 @@ export default function DashboardPage({
     () => [...widgets].sort((a, b) => a.y - b.y || a.x - b.x),
     [widgets],
   );
-
-  useEffect(() => {
-    setDevOverrideDataModeState(getDevDataModeOverride());
-  }, []);
 
   const loadGuest = useCallback(() => {
     const guest = getGuestDashboard();
@@ -133,7 +124,7 @@ export default function DashboardPage({
       shareToken: null,
     });
     setWidgets(guest.widgets);
-    setPreferenceDataMode("live");
+    setPreferenceDataMode("auto");
     setLoading(false);
   }, []);
 
@@ -157,8 +148,8 @@ export default function DashboardPage({
       setWidgets((payload.widgets ?? []).map((widget) => ({ ...widget, config: widget.config ?? {} })));
       const pref = await fetch("/api/preferences/data-mode", { cache: "no-store" })
         .then((res) => res.json())
-        .catch(() => ({ mode: "live" }));
-      setPreferenceDataMode(pref.mode === "fixture" ? "fixture" : "live");
+        .catch(() => ({ mode: "auto" }));
+      setPreferenceDataMode(pref.mode === "fixture" || pref.mode === "live" || pref.mode === "auto" ? pref.mode : "auto");
     } catch (loadError) {
       setError(String(loadError));
     } finally {
@@ -394,16 +385,6 @@ export default function DashboardPage({
     setRefreshTick((current) => current + 1);
   }, [refreshAt]);
 
-  const onDataModeChange = useCallback(async (next: DataMode) => {
-    if (!showDevFixtureToggle) {
-      return;
-    }
-    const nextOverride = next === "fixture" ? "fixture" : null;
-    setDevOverrideDataModeState(nextOverride);
-    setDevDataModeOverride(nextOverride);
-    setRefreshTick((current) => current + 1);
-  }, [showDevFixtureToggle]);
-
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.hidden) return;
@@ -426,7 +407,7 @@ export default function DashboardPage({
   const copyBugBundle = async () => {
     if (!bugBundle) return;
     const health = await fetch(
-      `/api/health/data?dataMode=${dataMode}&preferenceMode=${preferenceDataMode}${devOverrideDataMode ? `&devOverrideMode=${devOverrideDataMode}` : ""}`,
+      `/api/health/data?dataMode=${dataMode}&preferenceMode=${preferenceDataMode}`,
       { cache: "no-store" },
     )
       .then((res) => res.json())
@@ -435,7 +416,6 @@ export default function DashboardPage({
       ...bugBundle,
       appInfo: {
         preferenceMode: preferenceDataMode,
-        devOverrideMode: devOverrideDataMode ?? "none",
         mode: health?.resolvedDataMode ?? dataMode,
         modeSource: health?.resolutionSource ?? modeResolution.source,
         user: isGuestMode ? "guest" : dashboard?.id,
@@ -571,10 +551,7 @@ export default function DashboardPage({
                     refreshTick={refreshTick}
                     dataMode={dataMode}
                     preferenceDataMode={preferenceDataMode}
-                    devOverrideDataMode={devOverrideDataMode}
                     dataModeSource={modeResolution.source}
-                    showDevFixtureToggle={showDevFixtureToggle}
-                    onDataModeChange={onDataModeChange}
                     onPersist={(next) => persistWidget(widget.id, next)}
                     onReportBug={(bundle) => {
                       const parsed = bundle as ReportBugPayload;

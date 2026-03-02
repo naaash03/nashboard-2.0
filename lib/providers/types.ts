@@ -6,13 +6,14 @@ export type Meta = {
   sourceUsed: DataSource;
   updatedAt: string;
   warning?: string;
+  notes?: string[];
   requestId: string;
   cacheHit?: boolean;
   cacheAgeSeconds?: number;
   endpointUrl?: string;
   upstreamStatus?: number;
   upstreamMessage?: string;
-  dataMode?: "live" | "fixture";
+  dataMode?: "auto" | "live" | "fixture";
 };
 
 export type ApiResponse<T> = {

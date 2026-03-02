@@ -8,12 +8,12 @@ function keyFor(userId: string): string {
 
 export async function GET() {
   if (!process.env.DATABASE_URL) {
-    return NextResponse.json({ mode: "live", persisted: false, error: "DB not configured" });
+    return NextResponse.json({ mode: "auto", persisted: false, error: "DB not configured" });
   }
 
   const viewer = await getViewer();
   if (!viewer.userId) {
-    return NextResponse.json({ mode: "live", persisted: false });
+    return NextResponse.json({ mode: "auto", persisted: false });
   }
 
   const { prisma } = await import("@/lib/db/prisma");
@@ -27,8 +27,11 @@ export async function GET() {
     },
   });
 
-  const payload = row?.payload as { mode?: "live" | "fixture" } | undefined;
-  return NextResponse.json({ mode: payload?.mode === "fixture" ? "fixture" : "live", persisted: Boolean(row) });
+  const payload = row?.payload as { mode?: "auto" | "live" | "fixture" } | undefined;
+  const mode = payload?.mode === "fixture" || payload?.mode === "live" || payload?.mode === "auto"
+    ? payload.mode
+    : "auto";
+  return NextResponse.json({ mode, persisted: Boolean(row) });
 }
 
 export async function PUT(req: Request) {
@@ -41,8 +44,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
 
-  const body = (await req.json()) as { mode?: "live" | "fixture" };
-  const mode = body.mode === "fixture" ? "fixture" : "live";
+  const body = (await req.json()) as { mode?: "auto" | "live" | "fixture" };
+  const mode = body.mode === "fixture" || body.mode === "live" || body.mode === "auto" ? body.mode : "auto";
 
   const { prisma } = await import("@/lib/db/prisma");
   const now = new Date();

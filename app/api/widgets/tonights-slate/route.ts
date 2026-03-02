@@ -7,7 +7,7 @@ import type { Meta } from "@/lib/providers/types";
 
 type SlateState = "today" | "next_slate" | "schedule_not_posted";
 
-function buildDiagnostics(meta: Meta | null, fallbackMode: "live" | "fixture") {
+function buildDiagnostics(meta: Meta | null, fallbackMode: "auto" | "live" | "fixture") {
   return {
     endpointUrl: meta?.endpointUrl ?? null,
     upstreamStatus: meta?.upstreamStatus ?? null,

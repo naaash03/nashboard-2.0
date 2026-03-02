@@ -4,7 +4,7 @@ import path from "node:path";
 import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
 import type { Meta, Player, PlayerSearchResult, SlateGame } from "@/lib/providers/types";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type CacheBustArg = string | number | null | undefined;
 
 type EspnScoreboard = {

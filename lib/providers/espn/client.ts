@@ -56,9 +56,12 @@ function hashParams(params: FetchOptions["params"]): string {
   return createHash("sha256").update(stableParams(params)).digest("hex");
 }
 
-function resolvedDataMode(override?: "live" | "fixture"): "live" | "fixture" {
-  if (override) {
+function resolvedDataMode(override?: "auto" | "live" | "fixture"): "live" | "fixture" {
+  if (override === "live" || override === "fixture") {
     return override;
+  }
+  if (override === "auto") {
+    return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
   }
   return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
 }
@@ -306,7 +309,7 @@ export async function fetchEspnJson<T>(options: FetchOptions): Promise<FetchResu
   throw new Error(`ESPN fetch failed with no cache fallback: ${String(lastError)}`);
 }
 
-export function getDataMode(override?: "live" | "fixture"): "live" | "fixture" {
+export function getDataMode(override?: "auto" | "live" | "fixture"): "live" | "fixture" {
   return resolvedDataMode(override);
 }
 

@@ -18,8 +18,11 @@ type EndpointHealth = {
 type DataHealth = {
   resolvedDataMode?: string;
   resolutionSource?: string;
+  effectiveDataMode?: string;
+  effectiveSource?: string;
+  hydrationOccurred?: boolean;
+  hydrationNotes?: string[];
   queryDataMode?: string | null;
-  devOverrideDataMode?: string | null;
   preferenceDataMode?: string | null;
   fallbackDataMode?: string;
   providerMode?: string;
@@ -37,9 +40,6 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
     const params = new URLSearchParams();
     params.set("dataMode", props.dataMode);
     params.set("preferenceMode", props.preferenceDataMode);
-    if (props.devOverrideDataMode) {
-      params.set("devOverrideMode", props.devOverrideDataMode);
-    }
     if (probe) {
       params.set("probe", "1");
     }
@@ -47,7 +47,7 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
     const res = await fetch(`/api/health/data?${params.toString()}`, { cache: "no-store" });
     const json = (await res.json()) as DataHealth;
     setData(json);
-  }, [props.dataMode, props.devOverrideDataMode, props.preferenceDataMode, props.refreshTick]);
+  }, [props.dataMode, props.preferenceDataMode, props.refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +57,6 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
         const params = new URLSearchParams();
         params.set("dataMode", props.dataMode);
         params.set("preferenceMode", props.preferenceDataMode);
-        if (props.devOverrideDataMode) {
-          params.set("devOverrideMode", props.devOverrideDataMode);
-        }
         params.set("cacheBust", String(props.refreshTick));
         const res = await fetch(`/api/health/data?${params.toString()}`, { cache: "no-store" });
         const json = (await res.json()) as DataHealth;
@@ -78,34 +75,23 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
     return () => {
       cancelled = true;
     };
-  }, [props.dataMode, props.devOverrideDataMode, props.preferenceDataMode, props.refreshTick]);
+  }, [props.dataMode, props.preferenceDataMode, props.refreshTick]);
 
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
         <p className="font-medium">Data Health</p>
-        {props.showDevFixtureToggle ? (
-          <label className="flex items-center gap-2">
-            <span>Dev Fixture Override</span>
-            <input
-              type="checkbox"
-              checked={props.devOverrideDataMode === "fixture"}
-              onChange={(event) => void props.onDataModeChange(event.target.checked ? "fixture" : "live")}
-            />
-          </label>
-        ) : null}
       </div>
 
       {data ? (
         <>
           <p>Preference mode: {props.preferenceDataMode}</p>
-          <p>Dev override: {props.devOverrideDataMode ?? "off"}</p>
-          <p>Effective mode: {data.resolvedDataMode ?? props.dataMode}</p>
-          <p>Effective source: {data.resolutionSource ?? props.dataModeSource}</p>
+          <p>Effective mode: {data.effectiveDataMode ?? data.resolvedDataMode ?? props.dataMode}</p>
+          <p>Effective source: {data.effectiveSource ?? data.resolutionSource ?? props.dataModeSource}</p>
+          <p>Hydration used: {data.hydrationOccurred ? "yes" : "no"}</p>
           <p>Query mode: {data.queryDataMode ?? "-"}</p>
           <p>Preference mode (resolver): {data.preferenceDataMode ?? "-"}</p>
-          <p>Dev override (resolver): {data.devOverrideDataMode ?? "-"}</p>
-          <p>Fallback mode: {data.fallbackDataMode ?? "live"}</p>
+          <p>Fallback mode: {data.fallbackDataMode ?? "auto"}</p>
           <p>Provider mode: {data.providerMode}</p>
           <p>DB status: {data.status?.db}</p>
           <p>ESPN status: {data.status?.espn}</p>
@@ -114,6 +100,17 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
           <p>Last cache age: {Math.max(0, Number(data.cache?.lastCacheAgeSeconds ?? 0))}s</p>
 
           <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Test ESPN now</button>
+
+          {data.hydrationNotes && data.hydrationNotes.length > 0 ? (
+            <details className="rounded border border-neutral-700 bg-black/20 p-2">
+              <summary className="cursor-pointer text-[11px] text-neutral-300">Hydration notes</summary>
+              <ul className="mt-1 space-y-1 text-neutral-400">
+                {data.hydrationNotes.map((note, index) => (
+                  <li key={`${index}-${note}`}>- {note}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
 
           <details className="rounded border border-neutral-700 bg-black/20 p-2">
             <summary className="cursor-pointer text-[11px] text-neutral-300">Endpoint diagnostics</summary>

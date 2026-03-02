@@ -5,7 +5,7 @@ import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
 import type { SportKey, TeamAdvanced } from "@/lib/types/playerInsights";
 
-type ModeArg = "live" | "fixture";
+type ModeArg = "auto" | "live" | "fixture";
 type ViewMode = "beginner" | "advanced";
 type CacheBustArg = string | number | null | undefined;
 
@@ -264,11 +264,66 @@ function combineMeta(dataMode: ModeArg, candidates: Array<Meta | null>, notes: s
   };
 }
 
-export async function getTeamsAdvanced(
+function appendMetaWarning(meta: Meta, warning?: string): Meta {
+  if (!warning) {
+    return meta;
+  }
+  return {
+    ...meta,
+    warning: meta.warning ? `${meta.warning} ${warning}` : warning,
+  };
+}
+
+function appendMetaNotes(meta: Meta, notes: string[]): Meta {
+  if (notes.length === 0) {
+    return meta;
+  }
+  return {
+    ...meta,
+    notes: [...(meta.notes ?? []), ...notes],
+  };
+}
+
+function isTeamAdvancedComplete(team: TeamAdvanced): boolean {
+  const hasIdentity = Boolean(team.teamKey);
+  const hasDetail = Boolean(
+    team.status?.hasGameToday
+      || team.nextGame
+      || team.record
+      || team.standings
+      || team.lastGame,
+  );
+  return hasIdentity && hasDetail;
+}
+
+function mergeTeamAdvanced(liveTeam: TeamAdvanced | undefined, fixtureTeam: TeamAdvanced | undefined): TeamAdvanced | null {
+  if (!liveTeam && !fixtureTeam) {
+    return null;
+  }
+  if (!liveTeam) {
+    return fixtureTeam ?? null;
+  }
+  if (!fixtureTeam) {
+    return liveTeam;
+  }
+
+  const liveStatusHasSignal = liveTeam.status.hasGameToday || Boolean(liveTeam.status.state || liveTeam.status.displayClock || liveTeam.status.opponent);
+  return {
+    teamKey: liveTeam.teamKey || fixtureTeam.teamKey,
+    status: liveStatusHasSignal ? liveTeam.status : fixtureTeam.status,
+    nextGame: liveTeam.nextGame ?? fixtureTeam.nextGame ?? null,
+    record: liveTeam.record ?? fixtureTeam.record ?? null,
+    standings: liveTeam.standings ?? fixtureTeam.standings ?? null,
+    lastGame: liveTeam.lastGame ?? fixtureTeam.lastGame ?? null,
+    metaNotes: [...(liveTeam.metaNotes ?? []), ...(fixtureTeam.metaNotes ?? [])],
+  };
+}
+
+async function getTeamsAdvancedForMode(
   sport: SportKey,
   teamKeys: string[],
   mode: ViewMode,
-  dataMode?: ModeArg,
+  dataMode: "live" | "fixture",
   cacheBust?: CacheBustArg,
 ): Promise<Envelope<{ sport: SportKey; teams: TeamAdvanced[] }>> {
   const resolvedMode = getDataMode(dataMode);
@@ -399,5 +454,70 @@ export async function getTeamsAdvanced(
       teams,
     },
     meta: combineMeta(resolvedMode, [statusEnvelope.meta, scoreboardMeta, standingsMeta], notes),
+  };
+}
+
+export async function getTeamsAdvanced(
+  sport: SportKey,
+  teamKeys: string[],
+  mode: ViewMode,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+): Promise<Envelope<{ sport: SportKey; teams: TeamAdvanced[] }>> {
+  const requestedMode = dataMode ?? "auto";
+  if (requestedMode !== "auto") {
+    return getTeamsAdvancedForMode(sport, teamKeys, mode, getDataMode(requestedMode), cacheBust);
+  }
+
+  const liveEnvelope = await getTeamsAdvancedForMode(sport, teamKeys, mode, "live", cacheBust);
+  const liveTeams = liveEnvelope.data?.teams ?? [];
+  const liveComplete = !liveEnvelope.error && liveTeams.length > 0 && liveTeams.every((team) => isTeamAdvancedComplete(team));
+  if (liveComplete) {
+    return {
+      ...liveEnvelope,
+      meta: appendMetaNotes(liveEnvelope.meta, ["AUTO mode selected live team advanced response."]),
+    };
+  }
+
+  const fixtureEnvelope = await getTeamsAdvancedForMode(sport, teamKeys, mode, "fixture", cacheBust);
+  if (!fixtureEnvelope.error && fixtureEnvelope.data?.teams) {
+    const fixtureByKey = fixtureEnvelope.data.teams.reduce<Record<string, TeamAdvanced>>((acc, team) => {
+      acc[team.teamKey.toUpperCase()] = team;
+      return acc;
+    }, {});
+    const liveByKey = liveTeams.reduce<Record<string, TeamAdvanced>>((acc, team) => {
+      acc[team.teamKey.toUpperCase()] = team;
+      return acc;
+    }, {});
+    const normalizedKeys = Array.from(new Set(teamKeys.map((key) => key.trim().toUpperCase()).filter(Boolean)));
+    const teams = normalizedKeys
+      .map((key) => mergeTeamAdvanced(liveByKey[key], fixtureByKey[key]))
+      .filter((team): team is TeamAdvanced => team !== null);
+    const allComplete = teams.length > 0 && teams.every((team) => isTeamAdvancedComplete(team));
+    const hydrationWarning = allComplete
+      ? "AUTO mode hydrated incomplete live team rows with fixture fields."
+      : "AUTO mode used fixture team rows because live team details were incomplete.";
+    return {
+      data: {
+        sport,
+        teams: allComplete ? teams : fixtureEnvelope.data.teams,
+      },
+      meta: appendMetaNotes(
+        appendMetaWarning(
+          allComplete ? { ...liveEnvelope.meta, dataMode: "live" } : { ...fixtureEnvelope.meta, dataMode: "fixture" },
+          hydrationWarning,
+        ),
+        [hydrationWarning],
+      ),
+    };
+  }
+
+  return {
+    ...liveEnvelope,
+    meta: appendMetaNotes(
+      appendMetaWarning(liveEnvelope.meta, "AUTO mode could not improve teams advanced response with fixture."),
+      ["AUTO mode tried live and fixture team advanced sources; returning best available response."],
+    ),
+    error: liveEnvelope.error ?? fixtureEnvelope.error,
   };
 }

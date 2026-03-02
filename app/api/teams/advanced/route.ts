@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { getTeamsAdvanced } from "@/lib/providers/espn/teamAdvanced";
@@ -12,7 +12,7 @@ type TeamsAdvancedResponse = {
   teams: TeamAdvanced[];
 };
 
-function fallbackMeta(dataMode: "live" | "fixture", warning: string): Meta {
+function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
     sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
     updatedAt: new Date().toISOString(),
@@ -71,3 +71,4 @@ export async function GET(req: Request) {
     return NextResponse.json(envelope, { status: 500 });
   }
 }
+

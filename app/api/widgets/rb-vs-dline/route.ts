@@ -37,17 +37,18 @@ export async function GET(req: Request) {
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
   const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
+  const providerMode = resolvedDataMode === "auto" ? "live" : resolvedDataMode;
 
   if (!teamKey) {
     return NextResponse.json({ error: "teamKey is required" }, { status: 400 });
   }
 
   try {
-    const nextGameResult = await getTeamNextGame(teamKey, todayIso(), resolvedDataMode, cacheBust);
+    const nextGameResult = await getTeamNextGame(teamKey, todayIso(), providerMode, cacheBust);
     const nextGame = nextGameResult.game;
 
     if (!nextGame) {
-      const leader = await getTeamRecentRbLeader(teamKey, resolvedDataMode, cacheBust);
+      const leader = await getTeamRecentRbLeader(teamKey, providerMode, cacheBust);
       return NextResponse.json({
         data: {
           emptyState: true,
@@ -71,7 +72,7 @@ export async function GET(req: Request) {
       endpoint: `/rb-roster/${teamKey}`,
       fixtureFile: "rb_roster_or_depth.json",
       ttlSeconds: 300,
-      dataMode: resolvedDataMode,
+      dataMode: providerMode,
       cacheBust,
     });
 
@@ -79,7 +80,7 @@ export async function GET(req: Request) {
       endpoint: `/run-defense/${opponent.key}`,
       fixtureFile: "opponent_run_defense_stats.json",
       ttlSeconds: 300,
-      dataMode: resolvedDataMode,
+      dataMode: providerMode,
       cacheBust,
     });
 
