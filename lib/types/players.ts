@@ -11,6 +11,7 @@ export type PlayerSearchResult = {
 export type PlayerProfile = {
   playerId: string;
   fullName: string;
+  teamAbbrev?: string;
   teamName?: string;
   position?: string;
   headshot?: string;
@@ -20,6 +21,10 @@ export type PlayerProfile = {
   weight?: string;
   bats?: string;
   throws?: string;
+  injury?: {
+    status?: string;
+    detail?: string;
+  } | null;
   whyItMatters?: string;
   tooltip?: string;
   stats?: Record<string, string | number | null>;

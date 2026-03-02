@@ -255,6 +255,10 @@ function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profil
   if (teamName) {
     profile.teamName = teamName;
   }
+  const teamAbbrev = readString(team?.abbreviation) ?? readString(team?.shortDisplayName);
+  if (teamAbbrev) {
+    profile.teamAbbrev = teamAbbrev.toUpperCase();
+  }
 
   const positionName =
     readString(position?.abbreviation)
@@ -304,6 +308,15 @@ function mapProfilePayload(payload: unknown, fallbackPlayerId: string): { profil
   const throws = readString(throwingHand?.abbreviation) ?? readString(throwingHand?.displayName) ?? readString(throwingHand?.name) ?? readString(athlete.throws);
   if (throws) {
     profile.throws = throws;
+  }
+
+  const injuries = Array.isArray(athlete.injuries) ? athlete.injuries : [];
+  const injury = injuries.length > 0 ? asObject(injuries[0]) : null;
+  if (injury) {
+    profile.injury = {
+      status: readString(injury.status) ?? readString(injury.type),
+      detail: readString(injury.detail) ?? readString(injury.shortComment) ?? readString(injury.longComment),
+    };
   }
 
   const warning = !profile.teamName && !profile.position && !profile.headshot
