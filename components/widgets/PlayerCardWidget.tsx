@@ -447,6 +447,35 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     };
   }, [insightsRequestKey, props.dataMode, props.mode, props.refreshTick, selectedPlayerId, sportKey]);
 
+  const clearSelectionForSport = useCallback(async () => {
+    if (!selectedPlayerId) {
+      return;
+    }
+
+    setSelectedPlayerId("");
+    setData(null);
+    setMeta(null);
+    setInsights(null);
+    setInsightsMeta(null);
+    setWarning(null);
+    lastFetchedProfileKeyRef.current = "";
+    lastFetchedInsightsKeyRef.current = "";
+
+    const playerBySport = normalizePlayerBySport(props.config.playerBySport);
+    delete playerBySport[sportKey];
+
+    await props.onPersist({
+      config: {
+        ...props.config,
+        sportKey,
+        playerId: "",
+        playerName: "",
+        playerBySport,
+      },
+      playerId: undefined,
+    });
+  }, [props, selectedPlayerId, sportKey]);
+
   const onSelect = async (player: PlayerSearchResult) => {
     setSelectedPlayerId(player.playerId);
     setQuery(player.fullName);
@@ -487,6 +516,21 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     }
     if (query.trim().length >= 3 && results.length > 0) {
       setEnterHint("Select a player from the list.");
+    }
+  };
+
+  const onQueryChange = (value: string) => {
+    setQuery(value);
+    setEnterHint(null);
+
+    if (!selectedPlayerId) {
+      return;
+    }
+
+    const normalizedInput = normalizePlayerName(value);
+    const normalizedSelectedName = normalizePlayerName(data?.fullName ?? configPlayerName ?? "");
+    if (normalizedInput !== normalizedSelectedName) {
+      void clearSelectionForSport();
     }
   };
 
@@ -559,10 +603,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
         <input
           value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setEnterHint(null);
-          }}
+          onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={onEnter}
           placeholder={`Search ${sportLabel(sportKey)} player (3+ chars)`}
           className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"

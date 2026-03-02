@@ -1,6 +1,19 @@
 ﻿# FIX REPORT
 
 ## Changelog (2026-03-02)
+- Misc widgets reliability + UX hardening:
+  - Added team typeahead endpoint:
+    - `GET /api/teams/search?sport=nfl|mlb|nba&q=...&limit=8&dataMode=live|fixture&cacheBust=...`
+    - normalized response rows: `{ teamKey, displayName, league, logo? }`
+  - Watchlist Teams now uses search/typeahead (same style as Player Card) instead of manual team key entry.
+  - Team Enter behavior is now safe:
+    - adds only on exact match (team name/key) or keyboard-highlighted suggestion
+    - no top-result implicit add fallback.
+  - Player Card search/input safety:
+    - when typed text no longer matches the current selected player, selection is cleared and persisted for that sport
+    - prevents stale/wrong player card render while typing a new player.
+  - Player/Team advanced derivation notes are surfaced as structured `metaNotes[]` in insights payloads.
+
 - Production reliability pass (LIVE mode + refresh discipline):
   - Unified ESPN player data access now prioritizes stable endpoints:
     - player search: `https://site.web.api.espn.com/apis/common/v3/search`
@@ -16,7 +29,7 @@
   - Refresh All now actively busts cache:
     - widget requests append `cacheBust=<refreshTick>`
     - provider fetch layer bypasses in-memory/persistent cache when `cacheBust` is present
-    - metadata reflects fresh fetch (`cacheHit=false`) on cache-busted requests.
+    - metadata reflects fresh fetch (`cacheHit=false`) on cache-busted requests, so updated timestamps move immediately after refresh.
   - Player Card Enter-selection safety fix:
     - suggestions remain visible while typing
     - Enter selects only an exact normalized name match

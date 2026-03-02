@@ -1,10 +1,11 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
 import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import { getGuestWatchlist, type GuestWatchlistItem } from "@/lib/guest/watchlist";
-import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
+import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey, TeamSearchResult } from "@/lib/types/players";
 import type { PlayerInsights, TeamAdvanced } from "@/lib/types/playerInsights";
 import type { TeamStatus } from "@/lib/types/teamStatus";
 import { stableKey } from "@/lib/utils/stableKey";
@@ -33,6 +34,7 @@ type TeamWatchlistNamesBySport = Record<SportKey, Record<string, string>>;
 type ViewMode = "teams" | "players";
 type TeamsAdvancedEnvelope = Envelope<{ sport: SportKey; teams: TeamAdvanced[] }>;
 type PlayerInsightsBatchEnvelope = Envelope<{ sport: SportKey; players: PlayerInsights[] }>;
+type TeamSearchEnvelope = Envelope<TeamSearchResult[]>;
 
 const TEAM_LIMIT = 10;
 const PLAYER_LIMIT = 10;
@@ -205,6 +207,26 @@ function compact(parts: Array<string | undefined>): string {
   return values.length > 0 ? values.join(" · ") : "—";
 }
 
+export function normalizeTeamSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s]|_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function selectExactTeamResult(query: string, results: TeamSearchResult[]): TeamSearchResult | null {
+  const normalizedQuery = normalizeTeamSearchText(query);
+  if (!normalizedQuery) {
+    return null;
+  }
+
+  return results.find((result) =>
+    normalizeTeamSearchText(result.displayName) === normalizedQuery
+    || result.teamKey.toLowerCase() === normalizedQuery,
+  ) ?? null;
+}
+
 function teamStatusLabel(status: TeamStatus | undefined): string {
   if (!status || !status.hasGameToday) {
     return "No game today";
@@ -286,8 +308,11 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
   const [teamWatchlist, setTeamWatchlist] = useState<TeamWatchlistBySport>(normalizeTeamWatchlist(props.config.teamWatchlist));
   const [teamWatchlistNames, setTeamWatchlistNames] = useState<TeamWatchlistNamesBySport>(normalizeTeamWatchlistNames(props.config.teamWatchlistNames));
 
-  const [teamKeyInput, setTeamKeyInput] = useState("");
-  const [teamNameInput, setTeamNameInput] = useState("");
+  const [teamQuery, setTeamQuery] = useState("");
+  const [teamResults, setTeamResults] = useState<TeamSearchResult[]>([]);
+  const [isTeamSearching, setIsTeamSearching] = useState(false);
+  const [teamActiveIndex, setTeamActiveIndex] = useState(-1);
+  const [teamSearchHint, setTeamSearchHint] = useState<string | null>(null);
   const [teamError, setTeamError] = useState<string | null>(null);
 
   const [playerQuery, setPlayerQuery] = useState("");
@@ -305,6 +330,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
   const useServer = shouldUseServerWatchlist(props);
   const migratedRef = useRef(false);
+  const lastTeamSearchReqKeyRef = useRef("");
+  const teamSearchAbortRef = useRef<AbortController | null>(null);
   const lastStatusReqKeyRef = useRef("");
   const lastStatusFetchAtRef = useRef(0);
   const statusAbortRef = useRef<AbortController | null>(null);
@@ -430,6 +457,10 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
   const teamsForSport = useMemo(() => teamWatchlist[sportKey] ?? [], [sportKey, teamWatchlist]);
   const playersForSport = useMemo(() => playerWatchlist[sportKey] ?? [], [playerWatchlist, sportKey]);
+  const trimmedTeamQuery = useMemo(() => teamQuery.trim(), [teamQuery]);
+  const debouncedTeamQuery = useDebouncedValue(trimmedTeamQuery, 300);
+  const trimmedPlayerQuery = useMemo(() => playerQuery.trim(), [playerQuery]);
+  const debouncedPlayerQuery = useDebouncedValue(trimmedPlayerQuery, 250);
   const currentPlayerIds = useMemo(
     () => Array.from(new Set(playersForSport.map((player) => player.playerId.trim()).filter(Boolean))).sort(),
     [playersForSport],
@@ -459,6 +490,15 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       refreshTick: props.refreshTick,
     }),
     [currentPlayerIds, props.dataMode, props.mode, props.refreshTick, sportKey],
+  );
+  const teamSearchReqKey = useMemo(
+    () => stableKey({
+      sportKey,
+      q: debouncedTeamQuery.toLowerCase(),
+      dataMode: props.dataMode,
+      refreshTick: props.refreshTick,
+    }),
+    [debouncedTeamQuery, props.dataMode, props.refreshTick, sportKey],
   );
 
   const refreshTeamStatuses = useCallback(async (): Promise<void> => {
@@ -637,7 +677,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     };
   }, [currentPlayerIds.length, playersModeActive, props.mode, refreshPlayerInsights]);
 
-  const runPlayerSearch = useCallback(async (value: string): Promise<PlayerSearchResultMin[]> => {
+  const runPlayerSearch = useCallback(async (value: string, signal: AbortSignal): Promise<PlayerSearchResultMin[]> => {
     if (value.trim().length < 3) {
       return [];
     }
@@ -645,12 +685,11 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     const endpointUrl = `/api/players/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setLastEndpoint(endpointUrl);
 
-    const response = await fetch(endpointUrl, { cache: "no-store" });
+    const response = await fetch(endpointUrl, { cache: "no-store", signal });
     const json = (await response.json()) as Envelope<PlayerSearchResult[]>;
 
     if (!response.ok || json.error) {
-      setPlayerError(json.error?.message ?? "Player search failed.");
-      return [];
+      throw new Error(json.error?.message ?? "Player search failed.");
     }
 
     setLastCallMeta(json.meta);
@@ -665,43 +704,121 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     }));
   }, [props.dataMode, props.refreshTick, sportKey]);
 
+  const runTeamSearch = useCallback(async (value: string, signal: AbortSignal): Promise<TeamSearchResult[]> => {
+    if (value.trim().length < 2) {
+      return [];
+    }
+
+    const endpointUrl = `/api/teams/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&limit=8&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
+    setLastEndpoint(endpointUrl);
+
+    const response = await fetch(endpointUrl, { cache: "no-store", signal });
+    const json = (await response.json()) as TeamSearchEnvelope;
+
+    if (!response.ok || json.error) {
+      throw new Error(json.error?.message ?? "Team search failed.");
+    }
+
+    setLastCallMeta(json.meta);
+    setTeamError(json.meta.warning ?? null);
+    return json.data ?? [];
+  }, [props.dataMode, props.refreshTick, sportKey]);
+
   useEffect(() => {
-    if (viewMode !== "players") {
+    if (!playersModeActive) {
+      setPlayerResults([]);
       return;
     }
 
-    let cancelled = false;
-    const id = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const results = await runPlayerSearch(playerQuery);
-          if (!cancelled) {
-            setPlayerResults(results);
-          }
-        } catch (error) {
-          if (!cancelled) {
-            setPlayerError(String(error));
-            setPlayerResults([]);
-          }
+    if (debouncedPlayerQuery.length < 3) {
+      setPlayerResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const results = await runPlayerSearch(debouncedPlayerQuery, controller.signal);
+        if (controller.signal.aborted) {
+          return;
         }
-      })();
-    }, 250);
+        setPlayerResults(results);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setPlayerError(String(error));
+          setPlayerResults([]);
+        }
+      }
+    })();
 
     return () => {
-      cancelled = true;
-      window.clearTimeout(id);
+      controller.abort();
     };
-  }, [playerQuery, runPlayerSearch, viewMode]);
+  }, [debouncedPlayerQuery, playersModeActive, runPlayerSearch]);
 
-  const addTeam = async (event: React.FormEvent) => {
-    event.preventDefault();
+  useEffect(() => {
+    if (!teamsModeActive) {
+      teamSearchAbortRef.current?.abort();
+      lastTeamSearchReqKeyRef.current = "";
+      setTeamResults([]);
+      setTeamActiveIndex(-1);
+      setIsTeamSearching(false);
+      setTeamSearchHint(null);
+      return;
+    }
+
+    if (debouncedTeamQuery.length < 2) {
+      teamSearchAbortRef.current?.abort();
+      setTeamResults([]);
+      setTeamActiveIndex(-1);
+      setIsTeamSearching(false);
+      setTeamSearchHint(null);
+      return;
+    }
+
+    if (teamSearchReqKey === lastTeamSearchReqKeyRef.current) {
+      return;
+    }
+
+    lastTeamSearchReqKeyRef.current = teamSearchReqKey;
+    teamSearchAbortRef.current?.abort();
+    const controller = new AbortController();
+    teamSearchAbortRef.current = controller;
+    setIsTeamSearching(true);
+
+    void (async () => {
+      try {
+        const results = await runTeamSearch(debouncedTeamQuery, controller.signal);
+        if (controller.signal.aborted) {
+          return;
+        }
+        setTeamResults(results);
+        setTeamActiveIndex(-1);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setTeamError(String(error));
+          setTeamResults([]);
+          setTeamActiveIndex(-1);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsTeamSearching(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedTeamQuery, runTeamSearch, teamSearchReqKey, teamsModeActive]);
+
+  const addTeamFromResult = useCallback(async (result: TeamSearchResult) => {
     setTeamError(null);
+    setTeamSearchHint(null);
 
-    const key = teamKeyInput.trim().toUpperCase();
-    const name = teamNameInput.trim();
-
+    const key = result.teamKey.trim().toUpperCase();
     if (!key) {
-      setTeamError("teamKey is required");
+      setTeamError("Selected team is missing a team key.");
       return;
     }
 
@@ -720,17 +837,19 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       ...teamWatchlistNames,
       [sportKey]: {
         ...teamWatchlistNames[sportKey],
-        [key]: name || teamWatchlistNames[sportKey][key] || key,
+        [key]: result.displayName || teamWatchlistNames[sportKey][key] || key,
       },
     };
 
     setTeamWatchlist(nextTeams);
     setTeamWatchlistNames(nextNames);
-    setTeamKeyInput("");
-    setTeamNameInput("");
+    setTeamQuery("");
+    setTeamResults([]);
+    setTeamActiveIndex(-1);
+    setIsTeamSearching(false);
 
     await persistConfig({ teamWatchlist: nextTeams, teamWatchlistNames: nextNames });
-  };
+  }, [currentTeamKeys, persistConfig, sportKey, teamWatchlist, teamWatchlistNames]);
 
   const removeTeam = async (teamKey: string) => {
     const key = teamKey.trim().toUpperCase();
@@ -748,6 +867,61 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setTeamWatchlist(nextTeams);
     setTeamWatchlistNames(nextNames);
     await persistConfig({ teamWatchlist: nextTeams, teamWatchlistNames: nextNames });
+  };
+
+  const onTeamSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (teamResults.length === 0) {
+        return;
+      }
+      setTeamActiveIndex((current) => {
+        const next = current + 1;
+        return next >= teamResults.length ? 0 : next;
+      });
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (teamResults.length === 0) {
+        return;
+      }
+      setTeamActiveIndex((current) => {
+        if (current <= 0) {
+          return teamResults.length - 1;
+        }
+        return current - 1;
+      });
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setTeamResults([]);
+      setTeamActiveIndex(-1);
+      return;
+    }
+
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+
+    const active = teamActiveIndex >= 0 && teamActiveIndex < teamResults.length
+      ? teamResults[teamActiveIndex]
+      : null;
+    const exact = selectExactTeamResult(teamQuery, teamResults);
+    const chosen = exact ?? active;
+
+    if (chosen) {
+      void addTeamFromResult(chosen);
+      return;
+    }
+
+    if (teamQuery.trim().length >= 2 && teamResults.length > 0) {
+      setTeamSearchHint("Select a team from the list.");
+    }
   };
 
   const addPlayer = async (player: PlayerSearchResultMin) => {
@@ -820,6 +994,13 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       setPlayerInsightsById({});
       setPlayerInsightsMeta(null);
       lastPlayerInsightsReqKeyRef.current = "";
+    } else {
+      setTeamResults([]);
+      setTeamQuery("");
+      setTeamActiveIndex(-1);
+      setTeamSearchHint(null);
+      setIsTeamSearching(false);
+      lastTeamSearchReqKeyRef.current = "";
     }
     await persistConfig({ viewMode: next });
   };
@@ -831,6 +1012,12 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setTeamError(null);
     setPlayerError(null);
     setLastProfile(null);
+    setTeamQuery("");
+    setTeamResults([]);
+    setTeamActiveIndex(-1);
+    setTeamSearchHint(null);
+    setIsTeamSearching(false);
+    lastTeamSearchReqKeyRef.current = "";
     lastQuickProfileKeyRef.current = "";
     setPlayerInsightsById({});
     setPlayerInsightsMeta(null);
@@ -879,23 +1066,46 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
       {viewMode === "teams" ? (
         <>
-          <form className="space-y-2" onSubmit={(event) => void addTeam(event)}>
+          <div className="space-y-2">
             <input
-              className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
-              placeholder="Team key (e.g. NYM)"
-              value={teamKeyInput}
-              onChange={(event) => setTeamKeyInput(event.target.value)}
+              className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+              placeholder={`Search ${sportLabel(sportKey)} teams (2+ chars)`}
+              value={teamQuery}
+              onKeyDown={onTeamSearchKeyDown}
+              onChange={(event) => {
+                setTeamQuery(event.target.value);
+                setTeamSearchHint(null);
+              }}
               disabled={props.locked}
             />
-            <input
-              className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
-              placeholder="Team name"
-              value={teamNameInput}
-              onChange={(event) => setTeamNameInput(event.target.value)}
-              disabled={props.locked}
-            />
-            <button className="w-full rounded border border-neutral-700 px-2 py-1" type="submit" disabled={props.locked}>Add team</button>
-          </form>
+
+            {trimmedTeamQuery.length < 2 ? <p className="text-neutral-400">Type 2+ chars to search teams.</p> : null}
+            {isTeamSearching ? <p className="text-neutral-400">Searching teams...</p> : null}
+            {teamSearchHint ? <p className="text-amber-300">{teamSearchHint}</p> : null}
+
+            {teamResults.length > 0 ? (
+              <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
+                {teamResults.map((result, index) => {
+                  const isActive = index === teamActiveIndex;
+                  return (
+                    <button
+                      key={`${sportKey}-team-search-${result.teamKey}-${result.displayName}`}
+                      type="button"
+                      className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left ${isActive ? "bg-neutral-700 text-white" : "hover:bg-neutral-800"}`}
+                      onMouseEnter={() => setTeamActiveIndex(index)}
+                      onClick={() => void addTeamFromResult(result)}
+                      disabled={props.locked}
+                    >
+                      {result.logo ? <img src={result.logo} alt={result.displayName} className="h-5 w-5 rounded object-contain" /> : null}
+                      <span className="min-w-0 truncate">
+                        {result.displayName} ({result.teamKey})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
 
           <p className="text-neutral-400">{currentTeamKeys.length}/{TEAM_LIMIT} teams in {sportLabel(sportKey)} watchlist.</p>
 
@@ -904,6 +1114,14 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             const label = teamWatchlistNames[sportKey][normalizedKey] ?? normalizedKey;
             const status = statusByTeam[normalizedKey];
             const advanced = teamAdvancedByKey[normalizedKey];
+            const recordLabel = advanced?.record
+              ? `${advanced.record.wins}-${advanced.record.losses}${advanced.record.pct ? ` (${advanced.record.pct})` : ""}${advanced.record.streak ? ` · ${advanced.record.streak}` : ""}${advanced.record.last10 ? ` · L10 ${advanced.record.last10}` : ""}`
+              : null;
+            const standingsLabel = advanced?.standings
+              ? `${advanced.standings.conference ?? "Conference"} rank ${advanced.standings.rank ?? "-"}`
+              : null;
+            const nextLabel = advanced?.nextGame ? nextGameLabel(advanced) : (!status?.hasGameToday ? "No game today" : null);
+            const hasAdvancedDetails = Boolean(nextLabel || recordLabel || standingsLabel || status?.hasGameToday);
             return (
               <div key={`${sportKey}-team-${normalizedKey}`} className="flex items-start justify-between rounded border border-neutral-700 bg-neutral-950 p-2">
                 <div className="min-w-0 flex-1 pr-2">
@@ -917,10 +1135,11 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                     <details className="mt-1 rounded border border-neutral-800 bg-black/20 p-2">
                       <summary className="cursor-pointer text-neutral-300">Details</summary>
                       <div className="mt-1 space-y-1 text-neutral-400">
-                        <p>Next: {nextGameLabel(advanced)}</p>
-                        <p>Record: {advanced?.record ? `${advanced.record.wins}-${advanced.record.losses}${advanced.record.pct ? ` (${advanced.record.pct})` : ""}${advanced.record.streak ? ` · ${advanced.record.streak}` : ""}${advanced.record.last10 ? ` · L10 ${advanced.record.last10}` : ""}` : "Not available"}</p>
-                        <p>Standings: {advanced?.standings ? `${advanced.standings.conference ?? "Conference"} rank ${advanced.standings.rank ?? "-"}` : "Not available"}</p>
-                        <p>Live detail: {teamLiveDetail(status)}</p>
+                        {nextLabel ? <p>Next: {nextLabel}</p> : null}
+                        {recordLabel ? <p>Record: {recordLabel}</p> : null}
+                        {standingsLabel ? <p>Standings: {standingsLabel}</p> : null}
+                        {status?.hasGameToday ? <p>Live detail: {teamLiveDetail(status)}</p> : null}
+                        {!hasAdvancedDetails ? <p>No additional details available.</p> : null}
                       </div>
                     </details>
                   )}
@@ -944,7 +1163,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             disabled={props.locked}
           />
 
-          {playerQuery.trim().length < 3 ? <p className="text-neutral-400">Type 3+ chars to search players.</p> : null}
+          {trimmedPlayerQuery.length < 3 ? <p className="text-neutral-400">Type 3+ chars to search players.</p> : null}
 
           {playerResults.length > 0 ? (
             <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">

@@ -1,0 +1,27 @@
+﻿{
+  "count": 2,
+  "items": [
+    {
+      "id": "13",
+      "displayName": "Los Angeles Lakers",
+      "type": "team",
+      "sport": "basketball",
+      "league": "nba",
+      "abbreviation": "LAL",
+      "logos": [
+        { "href": "https://a.espncdn.com/i/teamlogos/nba/500/lal.png" }
+      ]
+    },
+    {
+      "id": "2",
+      "displayName": "LA Clippers",
+      "type": "team",
+      "sport": "basketball",
+      "league": "nba",
+      "abbreviation": "LAC",
+      "logos": [
+        { "href": "https://a.espncdn.com/i/teamlogos/nba/500/lac.png" }
+      ]
+    }
+  ]
+}

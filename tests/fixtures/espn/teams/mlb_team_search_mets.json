@@ -1,0 +1,27 @@
+﻿{
+  "count": 2,
+  "items": [
+    {
+      "id": "21",
+      "displayName": "New York Mets",
+      "type": "team",
+      "sport": "baseball",
+      "league": "mlb",
+      "abbreviation": "NYM",
+      "logos": [
+        { "href": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png" }
+      ]
+    },
+    {
+      "id": "22",
+      "displayName": "New York Yankees",
+      "type": "team",
+      "sport": "baseball",
+      "league": "mlb",
+      "abbreviation": "NYY",
+      "logos": [
+        { "href": "https://a.espncdn.com/i/teamlogos/mlb/500/nyy.png" }
+      ]
+    }
+  ]
+}

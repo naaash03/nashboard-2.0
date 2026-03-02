@@ -19,6 +19,9 @@ describe("players insights batch api route", () => {
       playerId: expect.any(String),
       sport: "nba",
     }));
+    const first = body.data.players[0];
+    const summary = first.season?.headline ?? first.recent?.headline ?? "";
+    expect(summary.length).toBeGreaterThan(0);
   });
 
   it("returns 400 envelope when playerIds is missing", async () => {

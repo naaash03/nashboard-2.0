@@ -12,6 +12,13 @@ export type PlayerSearchResult = {
   teamLogoUrl?: string;
 };
 
+export type TeamSearchResult = {
+  teamKey: string;
+  displayName: string;
+  league: SportKey;
+  logo?: string;
+};
+
 export type PlayerProfile = {
   playerId: string;
   fullName: string;
