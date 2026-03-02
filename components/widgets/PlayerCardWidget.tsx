@@ -1,9 +1,11 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
 import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
+import { stableKey } from "@/lib/utils/stableKey";
 
 type PlayerBySportConfig = Partial<Record<SportKey, { playerId: string; playerName?: string }>>;
 
@@ -64,6 +66,21 @@ function selectedPlayerIdFromConfig(config: Record<string, unknown>, sportKey: S
   const configSport = normalizeSportKey(config.sportKey);
   if (configSport === sportKey && typeof config.playerId === "string") {
     return config.playerId;
+  }
+
+  return "";
+}
+
+function selectedPlayerNameFromConfig(config: Record<string, unknown>, sportKey: SportKey): string {
+  const playerBySport = normalizePlayerBySport(config.playerBySport);
+  const fromSport = playerBySport[sportKey]?.playerName;
+  if (fromSport) {
+    return fromSport;
+  }
+
+  const configSport = normalizeSportKey(config.sportKey);
+  if (configSport === sportKey && typeof config.playerName === "string") {
+    return config.playerName;
   }
 
   return "";
@@ -136,10 +153,12 @@ function sportExtraRows(profile: PlayerProfile, sport: SportKey): Array<{ label:
 }
 
 export default function PlayerCardWidget(props: WidgetCommonProps) {
+  const initialSport = normalizeSportKey(props.config.sportKey);
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlayerSearchResult[]>([]);
-  const [sportKey, setSportKey] = useState<SportKey>(normalizeSportKey(props.config.sportKey));
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string>(selectedPlayerIdFromConfig(props.config, normalizeSportKey(props.config.sportKey)));
+  const [sportKey, setSportKey] = useState<SportKey>(initialSport);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>(selectedPlayerIdFromConfig(props.config, initialSport));
   const [data, setData] = useState<PlayerProfile | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -147,74 +166,107 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastSearchRaw, setLastSearchRaw] = useState<SearchResponse | null>(null);
   const [showRawSearch, setShowRawSearch] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+
+  const lastExecutedSearchKeyRef = useRef("");
+  const lastFetchedProfileKeyRef = useRef("");
+
+  const configSportKey = normalizeSportKey(props.config.sportKey);
+  const configPlayerId = selectedPlayerIdFromConfig(props.config, configSportKey);
+  const configPlayerName = selectedPlayerNameFromConfig(props.config, configSportKey);
 
   const trimmed = useMemo(() => query.trim(), [query]);
+  const debouncedQuery = useDebouncedValue(trimmed, 300);
 
   useEffect(() => {
-    const nextSport = normalizeSportKey(props.config.sportKey);
-    const nextPlayerId = selectedPlayerIdFromConfig(props.config, nextSport);
-
-    if (nextSport !== sportKey) {
-      setSportKey(nextSport);
+    if (configSportKey !== sportKey) {
+      setSportKey(configSportKey);
+      setResults([]);
+      setWarning(null);
     }
+  }, [configSportKey, sportKey]);
 
-    if (nextPlayerId !== selectedPlayerId) {
-      setSelectedPlayerId(nextPlayerId);
+  useEffect(() => {
+    if (configPlayerId !== selectedPlayerId) {
+      setSelectedPlayerId(configPlayerId);
     }
-  }, [props.config, selectedPlayerId, sportKey]);
+  }, [configPlayerId, selectedPlayerId]);
 
-  const runSearch = useCallback(async (value: string): Promise<PlayerSearchResult[]> => {
-    if (value.length < 3) {
+  useEffect(() => {
+    if (configPlayerId && configPlayerName && query.trim().length === 0) {
+      setQuery(configPlayerName);
+    }
+  }, [configPlayerId, configPlayerName, query]);
+
+  const searchRequestKey = useMemo(
+    () => stableKey({ sportKey, query: debouncedQuery.toLowerCase(), dataMode: props.dataMode }),
+    [debouncedQuery, props.dataMode, sportKey],
+  );
+
+  useEffect(() => {
+    if (debouncedQuery.length < 3) {
+      setIsSearching(false);
+      setResults([]);
       setLastSearchRaw(null);
-      return [];
+      return;
     }
 
-    const endpointUrl = buildPlayerSearchUrl(value, props.dataMode, 8, sportKey);
-    setEndpoint(endpointUrl);
-    const response = await fetch(endpointUrl, { cache: "no-store" });
-    const json = (await response.json()) as SearchResponse;
-    setLastSearchRaw(json);
-
-    if (!response.ok || json.error) {
-      setWarning(json.error?.message ?? "Search is temporarily unavailable.");
-      return [];
+    if (searchRequestKey === lastExecutedSearchKeyRef.current) {
+      return;
     }
+    lastExecutedSearchKeyRef.current = searchRequestKey;
 
-    setWarning(json.meta.warning ?? null);
-    return json.data ?? [];
-  }, [props.dataMode, sportKey]);
+    const controller = new AbortController();
+    setIsSearching(true);
 
-  useEffect(() => {
-    let cancelled = false;
+    void (async () => {
+      try {
+        const endpointUrl = buildPlayerSearchUrl(debouncedQuery, props.dataMode, 8, sportKey);
+        setEndpoint(endpointUrl);
 
-    const id = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const nextResults = await runSearch(trimmed);
-          if (!cancelled) {
-            setResults(nextResults);
-            setLastError(null);
-          }
-        } catch (error) {
-          if (!cancelled) {
-            setWarning("Player search temporarily unavailable. Try again in a minute.");
-            setLastError(String(error));
-            setResults([]);
-          }
+        const response = await fetch(endpointUrl, { cache: "no-store", signal: controller.signal });
+        const json = (await response.json()) as SearchResponse;
+        if (controller.signal.aborted) {
+          return;
         }
-      })();
-    }, 250);
+        setLastSearchRaw(json);
+
+        if (!response.ok || json.error) {
+          setWarning(json.error?.message ?? "Search is temporarily unavailable.");
+          setResults([]);
+          return;
+        }
+
+        setWarning(json.meta.warning ?? null);
+        setResults(json.data ?? []);
+        setLastError(null);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setWarning("Player search temporarily unavailable. Try again in a minute.");
+        setLastError(String(error));
+        setResults([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
+      }
+    })();
 
     return () => {
-      cancelled = true;
-      window.clearTimeout(id);
+      controller.abort();
     };
-  }, [trimmed, runSearch]);
+  }, [debouncedQuery, props.dataMode, searchRequestKey, sportKey]);
 
-  const loadPlayer = useCallback(async (playerId: string): Promise<{ data: PlayerProfile | null; meta: WidgetMeta | null }> => {
+  const loadPlayer = useCallback(async (
+    playerId: string,
+    signal: AbortSignal,
+  ): Promise<{ data: PlayerProfile | null; meta: WidgetMeta | null }> => {
     const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
     setEndpoint(endpointUrl);
-    const response = await fetch(endpointUrl, { cache: "no-store" });
+    const response = await fetch(endpointUrl, { cache: "no-store", signal });
     const json = (await response.json()) as PlayerProfileResponse;
 
     if (!response.ok || json.error) {
@@ -227,40 +279,66 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     };
   }, [props.dataMode, sportKey]);
 
+  const profileRequestKey = useMemo(
+    () => selectedPlayerId
+      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode })
+      : "",
+    [props.dataMode, selectedPlayerId, sportKey],
+  );
+
   useEffect(() => {
     if (!selectedPlayerId) {
       setData(null);
       setMeta(null);
+      setIsProfileLoading(false);
+      lastFetchedProfileKeyRef.current = "";
       return;
     }
 
-    let cancelled = false;
+    if (profileRequestKey === lastFetchedProfileKeyRef.current) {
+      return;
+    }
+    lastFetchedProfileKeyRef.current = profileRequestKey;
+
+    const controller = new AbortController();
+    setIsProfileLoading(true);
+
     void (async () => {
       try {
-        const result = await loadPlayer(selectedPlayerId);
-        if (cancelled) return;
+        const result = await loadPlayer(selectedPlayerId, controller.signal);
+        if (controller.signal.aborted) {
+          return;
+        }
         setData(result.data);
         setMeta(result.meta);
         setWarning(result.meta?.warning ?? null);
         setLastError(null);
       } catch (error) {
-        if (!cancelled) {
-          setWarning(String(error));
-          setLastError(String(error));
-          setData(null);
+        if (controller.signal.aborted) {
+          return;
+        }
+        setWarning(String(error));
+        setLastError(String(error));
+        setData(null);
+        setMeta(null);
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsProfileLoading(false);
         }
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [loadPlayer, props.refreshTick, selectedPlayerId]);
+  }, [loadPlayer, profileRequestKey, selectedPlayerId]);
 
   const onSelect = async (player: PlayerSearchResult) => {
     setSelectedPlayerId(player.playerId);
     setQuery(player.fullName);
     setResults([]);
+    setLastSearchRaw(null);
+    setWarning(null);
 
     const playerBySport = normalizePlayerBySport(props.config.playerBySport);
     playerBySport[sportKey] = {
@@ -302,7 +380,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     setSelectedPlayerId(nextSelectedPlayerId);
     setQuery(nextSelectedName);
     setResults([]);
+    setLastSearchRaw(null);
     setWarning(null);
+    if (!nextSelectedPlayerId) {
+      setData(null);
+      setMeta(null);
+      lastFetchedProfileKeyRef.current = "";
+    }
 
     await props.onPersist({
       config: {
@@ -362,6 +446,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       </div>
 
       {trimmed.length < 3 ? <p className="text-neutral-400">Type 3+ chars to search.</p> : null}
+      {isSearching ? <p className="text-neutral-400">Searching...</p> : null}
 
       {results.length > 0 ? (
         <div className="max-h-44 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
@@ -381,7 +466,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
-      {data ? (
+      {isProfileLoading ? (
+        <p className="text-neutral-400">Loading player profile...</p>
+      ) : data ? (
         <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
           <div className="flex items-center gap-2">
             <img src={data.headshot || "/globe.svg"} alt="headshot" className="h-11 w-11 rounded object-cover" />
@@ -421,9 +508,11 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       )}
 
       {warning ? <p className="text-amber-300">{warning}</p> : null}
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
-      </div>
+      {meta && data ? (
+        <div className="text-[10px] text-neutral-500">
+          Updated {to12h(meta.updatedAt)} · Source {meta.sourceUsed.toUpperCase()}
+        </div>
+      ) : null}
 
       <details className="rounded border border-neutral-700 bg-black/20 p-2">
         <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
@@ -466,3 +555,4 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     </div>
   );
 }
+
