@@ -6,6 +6,7 @@ import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import { getGuestWatchlist, type GuestWatchlistItem } from "@/lib/guest/watchlist";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
 import type { TeamStatus, TeamStatusBatch } from "@/lib/types/teamStatus";
+import { stableKey } from "@/lib/utils/stableKey";
 
 type WatchItem = GuestWatchlistItem;
 
@@ -32,6 +33,7 @@ type ViewMode = "teams" | "players";
 
 const TEAM_LIMIT = 10;
 const PLAYER_LIMIT = 10;
+const TEAM_STATUS_REFRESH_MS = 30_000;
 
 const MODE_TABS = [
   { key: "teams", label: "Teams" },
@@ -247,6 +249,10 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
   const useServer = shouldUseServerWatchlist(props);
   const migratedRef = useRef(false);
+  const lastStatusReqKeyRef = useRef("");
+  const lastStatusFetchAtRef = useRef(0);
+  const statusAbortRef = useRef<AbortController | null>(null);
+  const lastQuickProfileKeyRef = useRef("");
 
   useEffect(() => {
     setViewMode(normalizeViewMode(props.config.watchlistMode));
@@ -365,53 +371,99 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
   const teamsForSport = useMemo(() => teamWatchlist[sportKey] ?? [], [sportKey, teamWatchlist]);
   const playersForSport = useMemo(() => playerWatchlist[sportKey] ?? [], [playerWatchlist, sportKey]);
+  const currentTeamKeys = useMemo(
+    () => Array.from(new Set(teamsForSport.map((key) => key.trim().toUpperCase()).filter(Boolean))).sort(),
+    [teamsForSport],
+  );
+  const statusReqKey = useMemo(
+    () => stableKey({ sportKey, teamKeys: currentTeamKeys, dataMode: props.dataMode }),
+    [currentTeamKeys, props.dataMode, sportKey],
+  );
+  const teamsModeActive = viewMode === "teams";
 
-  useEffect(() => {
-    if (viewMode !== "teams") {
+  const refreshTeamStatuses = useCallback(async (): Promise<void> => {
+    if (!teamsModeActive) {
       return;
     }
 
-    if (teamsForSport.length === 0) {
+    if (currentTeamKeys.length === 0) {
       setStatusByTeam({});
       setTeamStatusMeta(null);
+      lastStatusReqKeyRef.current = "";
+      lastStatusFetchAtRef.current = 0;
       return;
     }
 
-    let cancelled = false;
-    void (async () => {
-      try {
-        const endpoint = `/api/teams/status/batch?sport=${sportKey}&teamKeys=${encodeURIComponent(teamsForSport.join(","))}&dataMode=${props.dataMode}`;
-        setLastEndpoint(endpoint);
+    const now = Date.now();
+    const keyChanged = statusReqKey !== lastStatusReqKeyRef.current;
+    const stale = now - lastStatusFetchAtRef.current >= TEAM_STATUS_REFRESH_MS;
+    if (!keyChanged && !stale) {
+      return;
+    }
 
-        const res = await fetch(endpoint, { cache: "no-store" });
-        const json = (await res.json()) as Envelope<TeamStatusBatch>;
-        if (!res.ok || json.error || !json.data) {
-          throw new Error(json.error?.message ?? "Failed to load team statuses");
-        }
+    statusAbortRef.current?.abort();
+    const controller = new AbortController();
+    statusAbortRef.current = controller;
 
-        if (cancelled) return;
+    try {
+      const endpoint = `/api/teams/status/batch?sport=${sportKey}&teamKeys=${encodeURIComponent(currentTeamKeys.join(","))}&dataMode=${props.dataMode}`;
+      setLastEndpoint(endpoint);
 
-        const map = json.data.statuses.reduce<Record<string, TeamStatus>>((acc, status) => {
-          acc[status.teamKey.toUpperCase()] = status;
-          return acc;
-        }, {});
-
-        setStatusByTeam(map);
-        setTeamStatusMeta(json.meta);
-        setLastCallMeta(json.meta);
-        setTeamError(json.meta.warning ?? null);
-      } catch (error) {
-        if (!cancelled) {
-          setTeamError(String(error));
-          setStatusByTeam({});
-        }
+      const res = await fetch(endpoint, { cache: "no-store", signal: controller.signal });
+      const json = (await res.json()) as Envelope<TeamStatusBatch>;
+      if (controller.signal.aborted) {
+        return;
       }
-    })();
+      if (!res.ok || json.error || !json.data) {
+        throw new Error(json.error?.message ?? "Failed to load team statuses");
+      }
+
+      const map = json.data.statuses.reduce<Record<string, TeamStatus>>((acc, status) => {
+        acc[status.teamKey.toUpperCase()] = status;
+        return acc;
+      }, {});
+
+      lastStatusReqKeyRef.current = statusReqKey;
+      lastStatusFetchAtRef.current = Date.now();
+      setStatusByTeam(map);
+      setTeamStatusMeta(json.meta);
+      setLastCallMeta(json.meta);
+      setTeamError(json.meta.warning ?? null);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setTeamError(String(error));
+      }
+    }
+  }, [currentTeamKeys, props.dataMode, sportKey, statusReqKey, teamsModeActive]);
+
+  useEffect(() => {
+    if (!teamsModeActive) {
+      statusAbortRef.current?.abort();
+      return;
+    }
+
+    void refreshTeamStatuses();
 
     return () => {
-      cancelled = true;
+      statusAbortRef.current?.abort();
     };
-  }, [props.dataMode, props.refreshTick, sportKey, teamsForSport, viewMode]);
+  }, [refreshTeamStatuses, statusReqKey, teamsModeActive]);
+
+  useEffect(() => {
+    if (!teamsModeActive || currentTeamKeys.length === 0) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (Date.now() - lastStatusFetchAtRef.current >= TEAM_STATUS_REFRESH_MS - 2000) {
+        void refreshTeamStatuses();
+      }
+    }, TEAM_STATUS_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentTeamKeys.length, refreshTeamStatuses, statusReqKey, teamsModeActive]);
 
   const runPlayerSearch = useCallback(async (value: string): Promise<PlayerSearchResultMin[]> => {
     if (value.trim().length < 3) {
@@ -481,12 +533,12 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       return;
     }
 
-    if (teamsForSport.includes(key)) {
+    if (currentTeamKeys.includes(key)) {
       setTeamError("Team is already in this sport watchlist.");
       return;
     }
 
-    if (teamsForSport.length >= TEAM_LIMIT) {
+    if (currentTeamKeys.length >= TEAM_LIMIT) {
       setTeamError(`Limit reached: ${TEAM_LIMIT} teams per sport.`);
       return;
     }
@@ -563,12 +615,19 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setPlayerWatchlist(nextWatchlist);
     if (lastProfile?.playerId === playerId) {
       setLastProfile(null);
+      lastQuickProfileKeyRef.current = "";
     }
 
     await persistConfig({ playerWatchlist: nextWatchlist });
   };
 
   const loadPlayerProfile = async (playerId: string) => {
+    const profileKey = `${sportKey}:${playerId}:${props.dataMode}`;
+    if (profileKey === lastQuickProfileKeyRef.current) {
+      return;
+    }
+    lastQuickProfileKeyRef.current = profileKey;
+
     const endpointUrl = `/api/players/profile?sport=${sportKey}&playerId=${encodeURIComponent(playerId)}&dataMode=${props.dataMode}`;
     setLastEndpoint(endpointUrl);
 
@@ -597,6 +656,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setPlayerQuery("");
     setTeamError(null);
     setPlayerError(null);
+    setLastProfile(null);
+    lastQuickProfileKeyRef.current = "";
     await persistConfig({ sportKey: nextSportKey });
   };
 
@@ -655,9 +716,9 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             <button className="w-full rounded border border-neutral-700 px-2 py-1" type="submit" disabled={props.locked}>Add team</button>
           </form>
 
-          <p className="text-neutral-400">{teamsForSport.length}/{TEAM_LIMIT} teams in {sportLabel(sportKey)} watchlist.</p>
+          <p className="text-neutral-400">{currentTeamKeys.length}/{TEAM_LIMIT} teams in {sportLabel(sportKey)} watchlist.</p>
 
-          {teamsForSport.map((key) => {
+          {currentTeamKeys.map((key) => {
             const normalizedKey = key.toUpperCase();
             const label = teamWatchlistNames[sportKey][normalizedKey] ?? normalizedKey;
             const status = statusByTeam[normalizedKey];
@@ -672,7 +733,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             );
           })}
 
-          {teamsForSport.length === 0 ? <p className="text-neutral-500">No teams added for this sport yet.</p> : null}
+          {currentTeamKeys.length === 0 ? <p className="text-neutral-500">No teams added for this sport yet.</p> : null}
           {teamError ? <p className="text-amber-300">{teamError}</p> : null}
           {legacyError ? <p className="text-amber-300">{legacyError}</p> : null}
         </>
