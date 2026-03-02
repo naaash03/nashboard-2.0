@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type RbData = {
@@ -25,62 +25,127 @@ type RbData = {
   recentLeader?: string | null;
 };
 
+type RbResponse = {
+  data?: RbData | null;
+  meta?: WidgetMeta;
+  error?: string | { message?: string };
+};
+
 function to12h(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+function normalizeTeamKey(input: unknown): string {
+  if (typeof input !== "string") {
+    return "";
+  }
+  return input.trim().toUpperCase();
+}
+
+function isValidTeamKey(input: string): boolean {
+  return /^[A-Z]{2,4}$/.test(input);
+}
+
+function parseErrorMessage(value: unknown): string {
+  if (!value) {
+    return "Failed to load RB vs D-Line";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "object" && typeof (value as { message?: unknown }).message === "string") {
+    return (value as { message: string }).message;
+  }
+  return "Failed to load RB vs D-Line";
+}
+
 export default function RbVsDlineWidget(props: WidgetCommonProps) {
-  const [teamKey, setTeamKey] = useState<string>((props.config.teamKey as string) ?? "");
+  const configTeamKey = useMemo(() => normalizeTeamKey(props.config.teamKey), [props.config.teamKey]);
+
+  const [inputTeamKey, setInputTeamKey] = useState<string>(configTeamKey);
+  const [appliedTeamKey, setAppliedTeamKey] = useState<string>(configTeamKey);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [data, setData] = useState<RbData | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const load = useCallback(async (key: string): Promise<{ data: RbData | null; meta: WidgetMeta | null }> => {
+  useEffect(() => {
+    setInputTeamKey(configTeamKey);
+    setAppliedTeamKey(configTeamKey);
+    setValidationError(null);
+  }, [configTeamKey]);
+
+  const load = useCallback(async (
+    key: string,
+    signal: AbortSignal,
+  ): Promise<{ data: RbData | null; meta: WidgetMeta | null }> => {
     const mode = props.mode.toLowerCase();
     const endpointUrl = `/api/widgets/rb-vs-dline?teamKey=${encodeURIComponent(key)}&mode=${mode}&dataMode=${props.dataMode}`;
     setEndpoint(endpointUrl);
-    const res = await fetch(endpointUrl, { cache: "no-store" });
-    const json = (await res.json()) as { data?: RbData | null; meta?: WidgetMeta; error?: string };
+
+    const res = await fetch(endpointUrl, { cache: "no-store", signal });
+    const json = (await res.json()) as RbResponse;
     if (!res.ok) {
-      throw new Error(json.error ?? "Failed to load RB vs D-Line");
+      throw new Error(parseErrorMessage(json.error));
     }
+
     return {
       data: json.data ?? null,
       meta: json.meta ?? null,
     };
-  }, [props.mode, props.dataMode]);
+  }, [props.dataMode, props.mode]);
 
   useEffect(() => {
-    if (!teamKey) return;
-    let cancelled = false;
+    if (!appliedTeamKey) {
+      setData(null);
+      setMeta(null);
+      return;
+    }
+
+    const controller = new AbortController();
 
     void (async () => {
       try {
-        const result = await load(teamKey);
-        if (!cancelled) {
-          setData(result.data);
-          setMeta(result.meta);
-          setLastError(null);
+        const result = await load(appliedTeamKey, controller.signal);
+        if (controller.signal.aborted) {
+          return;
         }
+        setData(result.data);
+        setMeta(result.meta);
+        setWarning(result.meta?.warning ?? null);
+        setLastError(null);
       } catch (error) {
-        if (!cancelled) {
-          setWarning(String(error));
-          setLastError(String(error));
+        if (controller.signal.aborted) {
+          return;
         }
+        setWarning(String(error));
+        setLastError(String(error));
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [teamKey, load, props.refreshTick]);
+  }, [appliedTeamKey, load]);
 
   async function applyTeam() {
-    await props.onPersist({ config: { ...props.config, teamKey } });
+    const normalized = inputTeamKey.trim().toUpperCase();
+    setInputTeamKey(normalized);
+
+    if (!isValidTeamKey(normalized)) {
+      setValidationError("Enter a valid team key (2-4 letters).");
+      return;
+    }
+
+    setValidationError(null);
+    setWarning(null);
+    setAppliedTeamKey(normalized);
+
+    await props.onPersist({ config: { ...props.config, teamKey: normalized } });
   }
 
   return (
@@ -97,12 +162,25 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
           <option value="ADVANCED">Advanced</option>
         </select>
       </div>
-      <div className="flex gap-2">
-        <input className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1" placeholder="Team key (e.g. PHI)" value={teamKey} onChange={(e) => setTeamKey(e.target.value.toUpperCase())} />
-        <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void applyTeam()} disabled={props.locked}>Set</button>
-      </div>
+      <form
+        className="flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void applyTeam();
+        }}
+      >
+        <input
+          className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+          placeholder="Team key (e.g. PHI)"
+          value={inputTeamKey}
+          onChange={(event) => setInputTeamKey(event.target.value.toUpperCase())}
+          disabled={props.locked}
+        />
+        <button className="rounded border border-neutral-700 px-2 py-1" type="submit" disabled={props.locked}>Set</button>
+      </form>
 
-      {!teamKey ? <p className="text-neutral-400">Set a team key to start.</p> : null}
+      {!appliedTeamKey ? <p className="text-neutral-400">Set a team key to start.</p> : null}
+      {validationError ? <p className="text-amber-300">{validationError}</p> : null}
       {warning ? <p className="text-amber-300">{warning}</p> : null}
 
       {data?.emptyState ? (
@@ -129,6 +207,7 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
       <details className="rounded border border-neutral-700 bg-black/20 p-2">
         <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
         <p>Endpoint: {endpoint}</p>
+        <p>Applied team: {appliedTeamKey || "-"}</p>
         <p>Last error: {lastError ?? "none"}</p>
         <pre className="overflow-auto text-[10px]">{JSON.stringify(meta, null, 2)}</pre>
       </details>
@@ -136,7 +215,7 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
       <button
         type="button"
         className="text-[10px] text-neutral-400 underline"
-        onClick={() => props.onReportBug({ widgetId: props.widgetId, meta, warning, teamKey, endpoint, lastError })}
+        onClick={() => props.onReportBug({ widgetId: props.widgetId, meta, warning, inputTeamKey, appliedTeamKey, endpoint, lastError })}
       >
         Report a bug
       </button>
