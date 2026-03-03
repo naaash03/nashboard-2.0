@@ -1,13 +1,14 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
-import { getPlayerProfile, normalizeSportKey } from "@/lib/providers/espn/playerDirectory";
+import { resolvePlayerProfile } from "@/lib/providers";
+import { normalizeSportKey } from "@/lib/providers/espn/playerDirectory";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, PlayerProfile } from "@/lib/types/players";
 
 function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
-    sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
+    sourceUsed: dataMode === "fixture" ? "fixture" : "apiSports",
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
     warning,
@@ -43,7 +44,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getPlayerProfile(sport, playerId, resolvedDataMode, cacheBust);
+    const envelope = await resolvePlayerProfile(sport, playerId, {
+      dataMode: resolvedDataMode,
+      cacheBust,
+    });
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }
@@ -63,4 +67,3 @@ export async function GET(req: Request) {
     return NextResponse.json(envelope, { status: 500 });
   }
 }
-

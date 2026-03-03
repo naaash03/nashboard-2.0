@@ -1,4 +1,59 @@
-﻿# FIX REPORT
+# FIX REPORT
+
+## Changelog (2026-03-03)
+- Hybrid provider architecture (AUTO mode):
+  - Added provider router in `lib/providers/index.ts` with deterministic source order:
+    1) API-Sports (primary live)
+    2) ESPN (secondary live fallback/hydration)
+    3) Fixture (tertiary fallback)
+  - Routes now use the hybrid resolver:
+    - `GET /api/players/search`
+    - `GET /api/players/profile`
+    - `GET /api/players/insights`
+    - `GET /api/players/insights/batch`
+    - `GET /api/teams/search`
+    - `GET /api/teams/advanced`
+  - Standard meta now includes hybrid diagnostics:
+    - `sourceUsed`
+    - `attemptedSources[]`
+    - `hydrationUsed`
+    - `dataModeEffective`
+    - `warnings[]` / `warning`
+
+- API-Sports provider modules:
+  - Added `lib/providers/apiSports/*`:
+    - `client.ts`, `config.ts`, `playerDirectory.ts`, `playerInsights.ts`, `teamDirectory.ts`, `teamAdvanced.ts`
+  - Uses existing env keys with compatibility resolution:
+    - API key: `API_SPORTS_KEY` (fallback `SPORTS_API_KEY`)
+    - base URLs: `MLB_API_BASE_URL|NFL_API_BASE_URL|NBA_API_BASE_URL` with fallback to `SPORTS_API_*_BASE_URL`
+  - Added cacheBust-aware fetch behavior with in-memory cache bypass.
+  - Added endpoint health snapshots for diagnostics (`getApiSportsHealthSnapshot`).
+
+- Fixture safety net for API-Sports:
+  - Added minimal MLB fixtures under `tests/fixtures/apiSports/mlb/`:
+    - `players_search_sample.json`
+    - `player_profile_sample.json`
+    - `player_insights_sample.json`
+    - `teams_search_sample.json`
+    - `team_advanced_sample.json`
+
+- Data Health diagnostics updates:
+  - `GET /api/health/data` now reports both providers:
+    - `status.apiSports`
+    - `status.espn`
+    - nested endpoint diagnostics in `endpoints.apiSports` and `endpoints.espn`
+  - Probe path now exercises both providers and surfaces effective source/mode from hybrid resolution.
+  - `DataHealthWidget` now displays API-Sports + ESPN health and keeps diagnostics collapsible by default.
+
+- Misc widget UI polish:
+  - Watchlist Teams rows no longer expose raw team key in main row/suggestion text (cleaner user-facing display).
+
+- AUTO mode behavior summary:
+  - AUTO is still default.
+  - If API-Sports is complete, response returns API-Sports.
+  - If API-Sports is partial, ESPN is used to fill gaps when possible.
+  - If both live sources are insufficient, fixture fallback is returned.
+  - `meta.notes` / warnings explain fallback or hydration decisions.
 
 ## Changelog (2026-03-02)
 - Auto default reliability + fallback hydration:
@@ -230,7 +285,7 @@
 - Added persistence models and logic for watchlist (NFL teams only, max 5), favorites, glossary, cached responses.
 - Rebuilt dashboard UI around fixed 4-column responsive grid, lock toggle, reset, refresh-all + auto refresh and hidden-tab pause.
 - Added widget library modal by sport and utilities category.
-- Added per-widget Beginner/Advanced mode switch and metadata footer (`Updated ... · Source ...`).
+- Added per-widget Beginner/Advanced mode switch and metadata footer (`Updated ... � Source ...`).
 - Added report-bug modal with copyable diagnostic bundle.
 - Added MLB scaffolding widgets (`MLB Next 7 Games`, `Pitcher Arsenal`) and provider stubs with placeholder UI.
 
@@ -297,6 +352,7 @@
 - [x] Data health endpoint
 - [x] Vitest fixture-mode tests for required offseason/stability cases
 - [x] MLB scaffolding widget slots + provider stub
+
 
 
 

@@ -27,6 +27,7 @@ export type PlayerInsights = {
 
 export type TeamAdvanced = {
   teamKey: string;
+  teamName?: string;
   status: TeamStatus;
   nextGame?: { when?: string; vs?: string; homeAway?: "home" | "away" } | null;
   record?: { wins: number; losses: number; pct?: string; streak?: string; last10?: string } | null;

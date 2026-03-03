@@ -1,13 +1,14 @@
 ﻿import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
-import { normalizeSportKey, searchPlayers } from "@/lib/providers/espn/playerDirectory";
+import { normalizeSportKey } from "@/lib/providers/espn/playerDirectory";
+import { resolvePlayersSearch } from "@/lib/providers";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, PlayerSearchResult } from "@/lib/types/players";
 
 function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
-    sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
+    sourceUsed: dataMode === "fixture" ? "fixture" : "apiSports",
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
     warning,
@@ -45,7 +46,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await searchPlayers(sport, query, resolvedDataMode, limit, cacheBust);
+    const envelope = await resolvePlayersSearch(sport, query, limit, {
+      dataMode: resolvedDataMode,
+      cacheBust,
+    });
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }

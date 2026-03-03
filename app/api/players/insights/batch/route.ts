@@ -1,7 +1,7 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
-import { getPlayerInsights } from "@/lib/providers/espn/playerInsights";
+import { resolvePlayerInsights } from "@/lib/providers";
 import { normalizeSportKey } from "@/lib/providers/espn/playerDirectory";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
@@ -14,7 +14,7 @@ type BatchResult = {
 
 function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
-    sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
+    sourceUsed: dataMode === "fixture" ? "fixture" : "apiSports",
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
     warning,
@@ -67,7 +67,11 @@ export async function GET(req: Request) {
 
   try {
     const uniqueIds = Array.from(new Set(playerIds));
-    const tasks = uniqueIds.map((playerId) => async () => getPlayerInsights(sport, playerId, mode, resolvedDataMode, cacheBust));
+    const tasks = uniqueIds.map((playerId) => async () => resolvePlayerInsights(sport, playerId, mode, {
+      dataMode: resolvedDataMode,
+      cacheBust,
+      mode,
+    }));
     const envelopes = await runWithConcurrency(tasks, 4);
 
     const players = envelopes
@@ -77,7 +81,7 @@ export async function GET(req: Request) {
     const warningMessages = envelopes
       .map((envelope) => envelope.meta.warning)
       .filter((warning): warning is string => Boolean(warning));
-    const sourceUsed = envelopes[0]?.meta.sourceUsed ?? (resolvedDataMode === "fixture" ? "fixture" : "espn");
+    const sourceUsed = envelopes[0]?.meta.sourceUsed ?? (resolvedDataMode === "fixture" ? "fixture" : "apiSports");
 
     const envelope: Envelope<BatchResult> = {
       data: {
@@ -107,4 +111,3 @@ export async function GET(req: Request) {
     return NextResponse.json(envelope, { status: 500 });
   }
 }
-

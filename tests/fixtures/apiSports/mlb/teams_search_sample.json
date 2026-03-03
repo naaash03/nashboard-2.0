@@ -1,0 +1,11 @@
+{
+  "response": [
+    {
+      "team": {
+        "name": "New York Mets",
+        "code": "NYM",
+        "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png"
+      }
+    }
+  ]
+}

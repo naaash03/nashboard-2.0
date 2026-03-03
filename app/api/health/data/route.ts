@@ -1,108 +1,150 @@
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
+import { resolvePlayersSearch } from "@/lib/providers";
+import { fetchApiSportsJson, getApiSportsHealthSnapshot } from "@/lib/providers/apiSports/client";
 import { fetchEspnJson, getDataMode, getEspnHealthSnapshot } from "@/lib/providers/espn/client";
+import type { DataSource } from "@/lib/providers/types";
+
+type EndpointHealth = {
+  endpoint: string;
+  lastSuccessAt?: string;
+  lastErrorAt?: string;
+  lastErrorMessage?: string;
+  lastStatus?: number;
+  cacheHit?: boolean;
+  cacheAgeSeconds?: number;
+  lastSourceUsed?: DataSource;
+  lastUrl?: string;
+};
+
+type ProviderStatus = "ok" | "error" | "timeout" | "blocked" | "empty";
+
+function providerStatus(snapshot: Record<string, EndpointHealth>): ProviderStatus {
+  const rows = Object.values(snapshot);
+  const anySuccess = rows.some((item) => Boolean(item.lastSuccessAt));
+  if (anySuccess) {
+    return "ok";
+  }
+
+  const hasErrors = rows.some((item) => Boolean(item.lastErrorAt));
+  if (!hasErrors) {
+    return "empty";
+  }
+
+  const timeoutSeen = rows.some((item) => {
+    const message = (item.lastErrorMessage ?? "").toLowerCase();
+    return message.includes("timeout") || message.includes("abort");
+  });
+  if (timeoutSeen) {
+    return "timeout";
+  }
+
+  const blockedSeen = rows.some((item) => {
+    const status = item.lastStatus ?? 0;
+    return status === 401 || status === 403 || status === 429;
+  });
+  if (blockedSeen) {
+    return "blocked";
+  }
+
+  return "error";
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const probe = searchParams.get("probe") === "1";
-  const cacheBust = searchParams.get("cacheBust");
+  const cacheBust = searchParams.get("cacheBust") ?? undefined;
   const modeResolution = resolveDataModeFromRequest(req);
   const requestedMode = modeResolution.resolvedDataMode;
+
   let effectiveDataMode: "live" | "fixture" = requestedMode === "fixture" ? "fixture" : "live";
-  let effectiveSource: "live" | "fixture" = effectiveDataMode;
+  let effectiveSource: DataSource | "unknown" = requestedMode === "fixture" ? "fixture" : "apiSports";
   let hydrationOccurred = false;
   const hydrationNotes: string[] = [];
 
   if (probe) {
-    if (requestedMode === "auto") {
-      try {
-        const liveProbe = await fetchEspnJson<{ events?: unknown[] }>({
-          endpoint: "/scoreboard",
-          params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
-          fixtureFile: "scoreboard_with_games.json",
-          ttlSeconds: 30,
-          dataMode: "live",
-          cacheBust,
-        });
-        const hasEvents = Array.isArray(liveProbe.data?.events) && liveProbe.data.events.length > 0;
-        if (hasEvents) {
-          effectiveDataMode = "live";
-          effectiveSource = "live";
-        } else {
-          await fetchEspnJson<{ events?: unknown[] }>({
-            endpoint: "/scoreboard",
-            params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
-            fixtureFile: "scoreboard_with_games.json",
-            ttlSeconds: 30,
-            dataMode: "fixture",
-            cacheBust,
-          });
-          effectiveDataMode = "fixture";
-          effectiveSource = "fixture";
-          hydrationOccurred = true;
-          hydrationNotes.push("AUTO fallback used fixture scoreboard because live payload was empty.");
-        }
-      } catch {
-        try {
-          await fetchEspnJson<{ events?: unknown[] }>({
-            endpoint: "/scoreboard",
-            params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
-            fixtureFile: "scoreboard_with_games.json",
-            ttlSeconds: 30,
-            dataMode: "fixture",
-            cacheBust,
-          });
-          effectiveDataMode = "fixture";
-          effectiveSource = "fixture";
-          hydrationOccurred = true;
-          hydrationNotes.push("AUTO fallback used fixture scoreboard because live probe failed.");
-        } catch {
-          // keep health snapshot diagnostics when both probes fail
-        }
+    const probeMode = requestedMode === "fixture" ? "fixture" : "live";
+
+    try {
+      await fetchApiSportsJson<unknown>({
+        sport: "mlb",
+        endpoint: "teams",
+        params: { search: "Mets" },
+        fixtureFile: "teams_search_sample.json",
+        ttlSeconds: 30,
+        dataMode: probeMode,
+        cacheBust,
+      });
+    } catch {
+      // diagnostics are recorded in provider snapshot
+    }
+
+    try {
+      await fetchEspnJson<unknown>({
+        endpoint: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+        params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
+        fixtureFile: "mlb_scoreboard_sample.json",
+        fixtureSubdir: "scoreboard",
+        ttlSeconds: 30,
+        dataMode: getDataMode(probeMode),
+        cacheBust,
+      });
+    } catch {
+      // diagnostics are recorded in provider snapshot
+    }
+
+    try {
+      const probeEnvelope = await resolvePlayersSearch("mlb", "Soto", 1, {
+        dataMode: requestedMode,
+        cacheBust,
+      });
+      effectiveSource = probeEnvelope.meta.sourceUsed;
+      effectiveDataMode = probeEnvelope.meta.dataModeEffective
+        ?? (probeEnvelope.meta.sourceUsed === "fixture" ? "fixture" : "live");
+      hydrationOccurred = Boolean(probeEnvelope.meta.hydrationUsed);
+      if (probeEnvelope.meta.notes?.length) {
+        hydrationNotes.push(...probeEnvelope.meta.notes);
       }
-    } else {
-      try {
-        await fetchEspnJson<{ events?: unknown[] }>({
-          endpoint: "/scoreboard",
-          params: { dates: new Date().toISOString().slice(0, 10).replaceAll("-", "") },
-          fixtureFile: "scoreboard_with_games.json",
-          ttlSeconds: 30,
-          dataMode: getDataMode(requestedMode),
-          cacheBust,
-        });
-      } catch {
-        // keep health snapshot diagnostics
+      if (probeEnvelope.meta.warnings?.length) {
+        hydrationNotes.push(...probeEnvelope.meta.warnings);
       }
+      if (probeEnvelope.meta.warning) {
+        hydrationNotes.push(probeEnvelope.meta.warning);
+      }
+    } catch {
+      // keep defaults
     }
   }
 
-  const providerMode = effectiveDataMode;
-  const snapshot = getEspnHealthSnapshot();
-  const hasErrors = Object.values(snapshot).some((item) => Boolean(item.lastErrorAt));
-  const anySuccess = Object.values(snapshot).some((item) => Boolean(item.lastSuccessAt));
-  const timeoutSeen = Object.values(snapshot).some((item) => (item.lastErrorMessage ?? "").toLowerCase().includes("timeout"));
-  const blockedSeen = Object.values(snapshot).some((item) => {
-    const status = item.lastStatus ?? 0;
-    return status === 401 || status === 403 || status === 429;
-  });
+  const espnSnapshot = getEspnHealthSnapshot();
+  const apiSportsSnapshot = getApiSportsHealthSnapshot();
+  const allSnapshotRows = [...Object.values(espnSnapshot), ...Object.values(apiSportsSnapshot)];
 
   let persistedCacheAge: number | null = null;
-  let persistedEndpoints: Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }> = {};
+  let persistedEndpoints: Record<string, Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>> = {};
 
   if (process.env.DATABASE_URL) {
     const { prisma } = await import("@/lib/db/prisma");
     const latest = await prisma.cachedResponse.findMany({
-      where: { provider: "espn" },
+      where: {
+        provider: {
+          in: ["espn", "apiSports"],
+        },
+      },
       orderBy: { fetchedAt: "desc" },
-      take: 20,
+      take: 40,
     });
 
     const now = Date.now();
     persistedCacheAge = latest[0] ? Math.max(0, Math.floor((now - latest[0].fetchedAt.getTime()) / 1000)) : null;
 
-    persistedEndpoints = latest.reduce<Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>>((acc, item) => {
-      if (!acc[item.endpoint]) {
-        acc[item.endpoint] = {
+    persistedEndpoints = latest.reduce<Record<string, Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>>>((acc, item) => {
+      if (!acc[item.provider]) {
+        acc[item.provider] = {};
+      }
+
+      if (!acc[item.provider][item.endpoint]) {
+        acc[item.provider][item.endpoint] = {
           fetchedAt: item.fetchedAt.toISOString(),
           ageSeconds: Math.max(0, Math.floor((now - item.fetchedAt.getTime()) / 1000)),
           sourceUsed: String(item.sourceUsed).toLowerCase(),
@@ -124,18 +166,21 @@ export async function GET(req: Request) {
     queryDataMode: modeResolution.queryDataMode,
     preferenceDataMode: modeResolution.preferenceDataMode,
     fallbackDataMode: modeResolution.fallbackDataMode,
-    providerMode,
     status: {
       db: process.env.DATABASE_URL ? "configured" : "unconfigured",
       fixture: effectiveDataMode === "fixture" ? "enabled" : "disabled",
-      espn: anySuccess ? "ok" : timeoutSeen ? "timeout" : blockedSeen ? "blocked" : hasErrors ? "error" : "empty",
+      apiSports: providerStatus(apiSportsSnapshot),
+      espn: providerStatus(espnSnapshot),
     },
     cache: {
-      hit: Object.values(snapshot).some((item) => Boolean(item.cacheHit)),
+      hit: allSnapshotRows.some((item) => item.cacheHit === true),
+      miss: allSnapshotRows.some((item) => item.cacheHit === false),
       lastCacheAgeSeconds: persistedCacheAge,
-      miss: Object.values(snapshot).some((item) => item.cacheHit === false),
     },
-    endpoints: snapshot,
+    endpoints: {
+      apiSports: apiSportsSnapshot,
+      espn: espnSnapshot,
+    },
     lastFetchTimestamps: persistedEndpoints,
   });
 }

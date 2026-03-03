@@ -53,7 +53,10 @@ describe("players insights live derivation path", () => {
 
     expect(res.status).toBe(200);
     expect(body.meta.dataMode).toBe("live");
-    expect(body.meta.sourceUsed).toBe("espn");
+    expect(["apiSports", "espn", "cache"]).toContain(body.meta.sourceUsed);
+    if (body.meta.sourceUsed === "apiSports") {
+      expect(body.meta.hydrationUsed).toBe(true);
+    }
     expect(body.data).toEqual(expect.objectContaining({
       playerId: "1966",
       sport: "nba",

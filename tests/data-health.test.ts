@@ -11,8 +11,12 @@ describe("data health endpoint", () => {
     expect(res.status).toBe(200);
     expect(body.status).toBeDefined();
     expect(["configured", "unconfigured"]).toContain(body.status.db);
+    expect(["ok", "error", "timeout", "blocked", "empty"]).toContain(body.status.apiSports);
     expect(["ok", "error", "timeout", "blocked", "empty"]).toContain(body.status.espn);
     expect(["enabled", "disabled"]).toContain(body.status.fixture);
+    expect(body.endpoints).toBeDefined();
+    expect(body.endpoints.apiSports).toBeDefined();
+    expect(body.endpoints.espn).toBeDefined();
 
     if (typeof body.cache.lastCacheAgeSeconds === "number") {
       expect(body.cache.lastCacheAgeSeconds).toBeGreaterThanOrEqual(0);

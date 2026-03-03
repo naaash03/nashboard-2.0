@@ -1,7 +1,7 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
-import { getPlayerInsights } from "@/lib/providers/espn/playerInsights";
+import { resolvePlayerInsights } from "@/lib/providers";
 import { normalizeSportKey } from "@/lib/providers/espn/playerDirectory";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
@@ -9,7 +9,7 @@ import type { PlayerInsights } from "@/lib/types/playerInsights";
 
 function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
-    sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
+    sourceUsed: dataMode === "fixture" ? "fixture" : "apiSports",
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
     warning,
@@ -45,7 +45,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getPlayerInsights(sport, playerId, mode, resolvedDataMode, cacheBust);
+    const envelope = await resolvePlayerInsights(sport, playerId, mode, {
+      dataMode: resolvedDataMode,
+      cacheBust,
+      mode,
+    });
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }
@@ -63,4 +67,3 @@ export async function GET(req: Request) {
     return NextResponse.json(envelope, { status: 500 });
   }
 }
-

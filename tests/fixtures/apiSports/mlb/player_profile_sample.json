@@ -1,0 +1,26 @@
+{
+  "response": [
+    {
+      "player": {
+        "id": "40286",
+        "name": "Juan Soto",
+        "photo": "https://a.espncdn.com/i/headshots/mlb/players/full/40286.png",
+        "age": 27,
+        "height": "6'2\"",
+        "weight": "224 lbs"
+      },
+      "team": {
+        "name": "New York Mets",
+        "code": "NYM"
+      },
+      "statistics": [
+        {
+          "games": {
+            "position": "RF",
+            "number": "22"
+          }
+        }
+      ]
+    }
+  ]
+}

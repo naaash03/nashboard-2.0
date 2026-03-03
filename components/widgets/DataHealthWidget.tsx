@@ -15,6 +15,8 @@ type EndpointHealth = {
   lastUrl?: string;
 };
 
+type ProviderStatus = "ok" | "error" | "timeout" | "blocked" | "empty";
+
 type DataHealth = {
   resolvedDataMode?: string;
   resolutionSource?: string;
@@ -25,11 +27,18 @@ type DataHealth = {
   queryDataMode?: string | null;
   preferenceDataMode?: string | null;
   fallbackDataMode?: string;
-  providerMode?: string;
-  status?: { db?: string; espn?: string; fixture?: string };
+  status?: {
+    db?: string;
+    apiSports?: ProviderStatus;
+    espn?: ProviderStatus;
+    fixture?: string;
+  };
   cache?: { hit?: boolean; miss?: boolean; lastCacheAgeSeconds?: number | null };
-  endpoints?: Record<string, EndpointHealth>;
-  lastFetchTimestamps?: Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>;
+  endpoints?: {
+    apiSports?: Record<string, EndpointHealth>;
+    espn?: Record<string, EndpointHealth>;
+  };
+  lastFetchTimestamps?: Record<string, Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>>;
 };
 
 export default function DataHealthWidget(props: WidgetCommonProps) {
@@ -87,19 +96,18 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
         <>
           <p>Preference mode: {props.preferenceDataMode}</p>
           <p>Effective mode: {data.effectiveDataMode ?? data.resolvedDataMode ?? props.dataMode}</p>
-          <p>Effective source: {data.effectiveSource ?? data.resolutionSource ?? props.dataModeSource}</p>
+          <p>Effective source: {(data.effectiveSource ?? "unknown").toUpperCase()}</p>
           <p>Hydration used: {data.hydrationOccurred ? "yes" : "no"}</p>
           <p>Query mode: {data.queryDataMode ?? "-"}</p>
-          <p>Preference mode (resolver): {data.preferenceDataMode ?? "-"}</p>
-          <p>Fallback mode: {data.fallbackDataMode ?? "auto"}</p>
-          <p>Provider mode: {data.providerMode}</p>
+          <p>Resolver source: {data.resolutionSource ?? props.dataModeSource}</p>
           <p>DB status: {data.status?.db}</p>
-          <p>ESPN status: {data.status?.espn}</p>
+          <p>API-Sports status: {data.status?.apiSports ?? "empty"}</p>
+          <p>ESPN status: {data.status?.espn ?? "empty"}</p>
           <p>Fixture status: {data.status?.fixture}</p>
-          <p>Cache hit: {String(data.cache?.hit)} · miss: {String(data.cache?.miss)}</p>
+          <p>Cache hit: {String(data.cache?.hit)} | miss: {String(data.cache?.miss)}</p>
           <p>Last cache age: {Math.max(0, Number(data.cache?.lastCacheAgeSeconds ?? 0))}s</p>
 
-          <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Test ESPN now</button>
+          <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Probe providers now</button>
 
           {data.hydrationNotes && data.hydrationNotes.length > 0 ? (
             <details className="rounded border border-neutral-700 bg-black/20 p-2">
@@ -114,14 +122,19 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
 
           <details className="rounded border border-neutral-700 bg-black/20 p-2">
             <summary className="cursor-pointer text-[11px] text-neutral-300">Endpoint diagnostics</summary>
-            <pre className="overflow-auto text-[10px]">{JSON.stringify(data.endpoints ?? {}, null, 2)}</pre>
+            <div className="mt-2 space-y-2">
+              <p className="text-[11px] text-neutral-300">API-Sports</p>
+              <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(data.endpoints?.apiSports ?? {}, null, 2)}</pre>
+              <p className="text-[11px] text-neutral-300">ESPN</p>
+              <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(data.endpoints?.espn ?? {}, null, 2)}</pre>
+            </div>
           </details>
         </>
       ) : (
         <p>Unable to load data health.</p>
       )}
       {lastError ? <p className="text-amber-300">{lastError}</p> : null}
-      <button className="text-[10px] underline text-neutral-400" type="button" onClick={() => props.onReportBug({ widgetId: props.widgetId, data, lastError })}>Report a bug</button>
+      <button className="text-[10px] text-neutral-400 underline" type="button" onClick={() => props.onReportBug({ widgetId: props.widgetId, data, lastError })}>Report a bug</button>
     </div>
   );
 }

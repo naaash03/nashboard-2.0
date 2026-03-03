@@ -1,0 +1,23 @@
+{
+  "response": [
+    {
+      "team": {
+        "code": "NYM",
+        "name": "New York Mets"
+      },
+      "all": {
+        "win": 93,
+        "lose": 69,
+        "percentage": "0.574",
+        "streak": "W2"
+      },
+      "league": {
+        "standings": {
+          "position": "2",
+          "group": "NL East",
+          "conference": "NL"
+        }
+      }
+    }
+  ]
+}

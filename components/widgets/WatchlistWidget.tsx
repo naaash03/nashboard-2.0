@@ -1098,7 +1098,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                     >
                       {result.logo ? <img src={result.logo} alt={result.displayName} className="h-5 w-5 rounded object-contain" /> : null}
                       <span className="min-w-0 truncate">
-                        {result.displayName} ({result.teamKey})
+                        {result.displayName}
                       </span>
                     </button>
                   );
@@ -1126,7 +1126,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
               <div key={`${sportKey}-team-${normalizedKey}`} className="flex items-start justify-between rounded border border-neutral-700 bg-neutral-950 p-2">
                 <div className="min-w-0 flex-1 pr-2">
                   <p className="font-medium">
-                    {label} ({normalizedKey}) <span className="rounded bg-neutral-800 px-1 py-0.5 text-[10px] text-neutral-300">{sportLabel(sportKey)}</span>
+                    {label} <span className="rounded bg-neutral-800 px-1 py-0.5 text-[10px] text-neutral-300">{sportLabel(sportKey)}</span>
                   </p>
                   <p className="text-neutral-400">{teamStatusLabel(status)}</p>
                   {props.mode === "BEGINNER" ? (

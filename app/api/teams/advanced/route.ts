@@ -1,7 +1,7 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
-import { getTeamsAdvanced } from "@/lib/providers/espn/teamAdvanced";
+import { resolveTeamAdvanced } from "@/lib/providers";
 import { normalizeTeamStatusSport } from "@/lib/providers/espn/teamStatus";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
@@ -14,7 +14,7 @@ type TeamsAdvancedResponse = {
 
 function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
   return {
-    sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
+    sourceUsed: dataMode === "fixture" ? "fixture" : "apiSports",
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
     warning,
@@ -53,7 +53,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    const envelope = await getTeamsAdvanced(sport, teamKeys, mode, resolvedDataMode, cacheBust);
+    const envelope = await resolveTeamAdvanced(sport, teamKeys, mode, {
+      dataMode: resolvedDataMode,
+      cacheBust,
+      mode,
+    });
     if (envelope.error) {
       return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
     }
@@ -71,4 +75,3 @@ export async function GET(req: Request) {
     return NextResponse.json(envelope, { status: 500 });
   }
 }
-

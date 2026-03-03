@@ -1,12 +1,16 @@
 ﻿export type Sport = "NFL" | "NBA" | "MLB" | "UTILITIES";
 export type Mode = "beginner" | "advanced";
-export type DataSource = "espn" | "mlb" | "fixture" | "demo" | "cache";
+export type DataSource = "apiSports" | "espn" | "mlb" | "fixture" | "demo" | "cache";
 
 export type Meta = {
   sourceUsed: DataSource;
   updatedAt: string;
   warning?: string;
   notes?: string[];
+  warnings?: string[];
+  attemptedSources?: Array<"apiSports" | "espn" | "fixture">;
+  hydrationUsed?: boolean;
+  dataModeEffective?: "live" | "fixture";
   requestId: string;
   cacheHit?: boolean;
   cacheAgeSeconds?: number;
