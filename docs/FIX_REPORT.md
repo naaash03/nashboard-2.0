@@ -1,4 +1,33 @@
-# FIX REPORT
+﻿# FIX REPORT
+
+## Changelog (2026-03-03)
+- Advanced widgets restore pass (hybrid enrichment):
+  - Regression checklist from pre-hybrid rich Advanced state (`f1dac12` and earlier):
+    - Player Card Advanced must keep all 4 sections visible: Live Context, Season Highlights, Recent Games, Status/Injury.
+    - Player Card Advanced should render compact section-level notes instead of collapsing into a mostly empty card.
+    - Watchlist Players Advanced should expose more than one summary line when richer insights are available.
+    - Team Advanced should include game context + standings/record enrichment, not just bare record rows.
+  - Stable advanced data contract updates:
+    - Extended `lib/types/playerInsights.ts` with section-level optional notes (`season.notes`, `recent.notes`) while preserving compatibility.
+  - Field-level hybrid enrichment logic in `lib/providers/index.ts`:
+    - API-Sports remains primary in AUTO mode.
+    - Added section-aware completeness checks for profile, insights advanced, and team advanced.
+    - If API-Sports is incomplete, ESPN is called and merged per-section (richer season/recent/live selection).
+    - If API-Sports + ESPN still leave Advanced sections incomplete, AUTO uses fixture tertiary fallback (`sourceUsed: "fixture"`).
+  - UI restore/polish:
+    - Player Card Advanced now always renders section shells with compact “Not available from provider” notes for missing sections.
+    - Watchlist Players Advanced rows now include a lightweight Details accordion (season metrics + recent lines + notes).
+  - New deterministic hybrid fixtures:
+    - `tests/fixtures/hybrid/apiSports/player_insights_minimal.json`
+    - `tests/fixtures/hybrid/espn/player_insights_enriched.json`
+    - `tests/fixtures/hybrid/merged/player_insights_expected.json`
+    - `tests/fixtures/hybrid/apiSports/team_advanced_minimal.json`
+    - `tests/fixtures/hybrid/espn/team_advanced_enriched.json`
+    - `tests/fixtures/hybrid/merged/team_advanced_expected.json`
+  - Enrichment coverage tests:
+    - `tests/providers/hybrid-provider-router.test.ts` validates API-Sports-only, ESPN-enriched, and fixture fallback paths.
+    - `tests/player-card-widget.test.ts` validates Advanced section shells remain visible for partial payloads.
+
 
 ## Changelog (2026-03-03)
 - Hybrid provider architecture (AUTO mode):
@@ -285,7 +314,7 @@
 - Added persistence models and logic for watchlist (NFL teams only, max 5), favorites, glossary, cached responses.
 - Rebuilt dashboard UI around fixed 4-column responsive grid, lock toggle, reset, refresh-all + auto refresh and hidden-tab pause.
 - Added widget library modal by sport and utilities category.
-- Added per-widget Beginner/Advanced mode switch and metadata footer (`Updated ... � Source ...`).
+- Added per-widget Beginner/Advanced mode switch and metadata footer (`Updated ... · Source ...`).
 - Added report-bug modal with copyable diagnostic bundle.
 - Added MLB scaffolding widgets (`MLB Next 7 Games`, `Pitcher Arsenal`) and provider stubs with placeholder UI.
 
@@ -352,6 +381,8 @@
 - [x] Data health endpoint
 - [x] Vitest fixture-mode tests for required offseason/stability cases
 - [x] MLB scaffolding widget slots + provider stub
+
+
 
 
 

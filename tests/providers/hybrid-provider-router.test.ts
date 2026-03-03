@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
@@ -46,6 +47,10 @@ vi.mock("@/lib/providers/espn/teamDirectory", () => ({
 vi.mock("@/lib/providers/espn/teamAdvanced", () => ({
   getTeamsAdvanced: hoisted.espnGetTeamsAdvanced,
 }));
+
+function loadFixture<T>(fixturePath: string): T {
+  return JSON.parse(readFileSync(fixturePath, "utf8").replace(/^\uFEFF/, "")) as T;
+}
 
 describe("hybrid provider precedence", () => {
   beforeEach(() => {
@@ -248,5 +253,178 @@ describe("hybrid provider precedence", () => {
     expect(result.meta.sourceUsed).toBe("fixture");
     expect(result.meta.dataModeEffective).toBe("fixture");
     expect(result.meta.attemptedSources).toEqual(["apiSports", "espn", "fixture"]);
+  });
+
+  it("enriches API-Sports advanced insights with ESPN when sections are missing", async () => {
+    const apiMinimal = loadFixture("tests/fixtures/hybrid/apiSports/player_insights_minimal.json");
+    const espnEnriched = loadFixture("tests/fixtures/hybrid/espn/player_insights_enriched.json");
+    const expected = loadFixture<{ season: { metrics: unknown[] }; recent: { games: unknown[] } }>("tests/fixtures/hybrid/merged/player_insights_expected.json");
+
+    hoisted.apiGetPlayerInsights.mockResolvedValue({
+      data: apiMinimal,
+      meta: {
+        sourceUsed: "apiSports",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "api-insights-minimal",
+        dataMode: "live",
+      },
+    });
+
+    hoisted.espnGetPlayerInsights.mockResolvedValue({
+      data: espnEnriched,
+      meta: {
+        sourceUsed: "espn",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "espn-insights-enriched",
+        dataMode: "live",
+      },
+    });
+
+    const { resolvePlayerInsights } = await import("@/lib/providers");
+    const result = await resolvePlayerInsights("mlb", "40286", "advanced", { dataMode: "auto", cacheBust: "refresh-4" });
+
+    expect(result.error).toBeUndefined();
+    expect(result.meta.sourceUsed).toBe("apiSports");
+    expect(result.meta.hydrationUsed).toBe(true);
+    expect(result.meta.attemptedSources).toEqual(["apiSports", "espn"]);
+    expect(result.data?.season?.metrics.length).toBe(expected.season.metrics.length);
+    expect(result.data?.recent?.games.length).toBe(expected.recent.games.length);
+    expect(hoisted.espnGetPlayerInsights).toHaveBeenCalledWith("mlb", "40286", "advanced", "live", "refresh-4");
+    expect(hoisted.espnGetPlayerInsights).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to fixture insights when API-Sports and ESPN remain incomplete", async () => {
+    const apiMinimal = loadFixture("tests/fixtures/hybrid/apiSports/player_insights_minimal.json");
+    const fixtureExpected = loadFixture("tests/fixtures/hybrid/merged/player_insights_expected.json");
+
+    hoisted.apiGetPlayerInsights.mockResolvedValue({
+      data: apiMinimal,
+      meta: {
+        sourceUsed: "apiSports",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "api-insights-minimal",
+        dataMode: "live",
+      },
+    });
+
+    hoisted.espnGetPlayerInsights.mockImplementation(async (_sport: string, _playerId: string, _mode: string, dataMode: string) => {
+      if (dataMode === "fixture") {
+        return {
+          data: fixtureExpected,
+          meta: {
+            sourceUsed: "fixture",
+            updatedAt: "2026-03-03T00:00:00.000Z",
+            requestId: "fixture-insights",
+            dataMode: "fixture",
+          },
+        };
+      }
+      return {
+        data: apiMinimal,
+        meta: {
+          sourceUsed: "espn",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+          requestId: "espn-insights-still-minimal",
+          dataMode: "live",
+        },
+      };
+    });
+
+    const { resolvePlayerInsights } = await import("@/lib/providers");
+    const result = await resolvePlayerInsights("mlb", "40286", "advanced", { dataMode: "auto", cacheBust: "refresh-5" });
+
+    expect(result.error).toBeUndefined();
+    expect(result.meta.sourceUsed).toBe("fixture");
+    expect(result.meta.dataModeEffective).toBe("fixture");
+    expect(result.meta.attemptedSources).toEqual(["apiSports", "espn", "fixture"]);
+    expect(result.data?.recent?.games.length ?? 0).toBeGreaterThan(0);
+    expect(hoisted.espnGetPlayerInsights).toHaveBeenCalledTimes(2);
+    expect(hoisted.espnGetPlayerInsights).toHaveBeenNthCalledWith(2, "mlb", "40286", "advanced", "fixture", "refresh-5");
+  });
+
+  it("enriches API-Sports team advanced rows with ESPN game context/details", async () => {
+    const apiTeamMinimal = loadFixture("tests/fixtures/hybrid/apiSports/team_advanced_minimal.json");
+    const espnTeamEnriched = loadFixture("tests/fixtures/hybrid/espn/team_advanced_enriched.json");
+    const expected = loadFixture<{ teams: Array<{ status: { hasGameToday: boolean }; standings: unknown; lastGame: unknown }> }>("tests/fixtures/hybrid/merged/team_advanced_expected.json");
+
+    hoisted.apiGetTeamsAdvanced.mockResolvedValue({
+      data: apiTeamMinimal,
+      meta: {
+        sourceUsed: "apiSports",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "api-team-advanced",
+        dataMode: "live",
+      },
+    });
+
+    hoisted.espnGetTeamsAdvanced.mockResolvedValue({
+      data: espnTeamEnriched,
+      meta: {
+        sourceUsed: "espn",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "espn-team-advanced",
+        dataMode: "live",
+      },
+    });
+
+    const { resolveTeamAdvanced } = await import("@/lib/providers");
+    const result = await resolveTeamAdvanced("nba", ["LAL"], "advanced", { dataMode: "auto", cacheBust: "refresh-6" });
+
+    expect(result.error).toBeUndefined();
+    expect(result.meta.sourceUsed).toBe("apiSports");
+    expect(result.meta.hydrationUsed).toBe(true);
+    expect(result.meta.attemptedSources).toEqual(["apiSports", "espn"]);
+    expect(result.data?.teams[0]?.status.hasGameToday).toBe(expected.teams[0].status.hasGameToday);
+    expect(Boolean(result.data?.teams[0]?.standings)).toBe(Boolean(expected.teams[0].standings));
+    expect(Boolean(result.data?.teams[0]?.lastGame)).toBe(Boolean(expected.teams[0].lastGame));
+  });
+
+  it("uses fixture fallback for team advanced when API-Sports + ESPN remain incomplete", async () => {
+    const apiTeamMinimal = loadFixture("tests/fixtures/hybrid/apiSports/team_advanced_minimal.json");
+    const fixtureExpected = loadFixture("tests/fixtures/hybrid/merged/team_advanced_expected.json");
+
+    hoisted.apiGetTeamsAdvanced.mockResolvedValue({
+      data: apiTeamMinimal,
+      meta: {
+        sourceUsed: "apiSports",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "api-team-advanced-minimal",
+        dataMode: "live",
+      },
+    });
+
+    hoisted.espnGetTeamsAdvanced.mockImplementation(async (_sport: string, _teamKeys: string[], _mode: string, dataMode: string) => {
+      if (dataMode === "fixture") {
+        return {
+          data: fixtureExpected,
+          meta: {
+            sourceUsed: "fixture",
+            updatedAt: "2026-03-03T00:00:00.000Z",
+            requestId: "fixture-team-advanced",
+            dataMode: "fixture",
+          },
+        };
+      }
+      return {
+        data: apiTeamMinimal,
+        meta: {
+          sourceUsed: "espn",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+          requestId: "espn-team-advanced-minimal",
+          dataMode: "live",
+        },
+      };
+    });
+
+    const { resolveTeamAdvanced } = await import("@/lib/providers");
+    const result = await resolveTeamAdvanced("nba", ["LAL"], "advanced", { dataMode: "auto", cacheBust: "refresh-7" });
+
+    expect(result.error).toBeUndefined();
+    expect(result.meta.sourceUsed).toBe("fixture");
+    expect(result.meta.dataModeEffective).toBe("fixture");
+    expect(result.meta.attemptedSources).toEqual(["apiSports", "espn", "fixture"]);
+    expect(result.data?.teams[0]?.status.hasGameToday).toBe(true);
+    expect(hoisted.espnGetTeamsAdvanced).toHaveBeenCalledTimes(2);
+    expect(hoisted.espnGetTeamsAdvanced).toHaveBeenNthCalledWith(2, "nba", ["LAL"], "advanced", "fixture", "refresh-7");
   });
 });

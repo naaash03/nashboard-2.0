@@ -87,6 +87,214 @@ function safeArray<T>(value: T[] | null | undefined): T[] {
   return Array.isArray(value) ? value : [];
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function profileMissingSections(profile: PlayerProfile | null): string[] {
+  if (!profile) {
+    return ["payload"];
+  }
+
+  const missing: string[] = [];
+  if (!profile.fullName) {
+    missing.push("identity");
+  }
+  if (!profile.teamName && !profile.teamAbbrev && !profile.position) {
+    missing.push("team_or_position");
+  }
+  const hasBio =
+    typeof profile.age === "number"
+    || Boolean(profile.height)
+    || Boolean(profile.weight)
+    || Boolean(profile.jersey)
+    || Boolean(profile.bats)
+    || Boolean(profile.throws);
+  const hasHeadshot = Boolean(profile.headshot);
+  if (!hasHeadshot && !hasBio) {
+    missing.push("presentation");
+  }
+  return missing;
+}
+
+function seasonMetricCount(insights: PlayerInsights | null | undefined): number {
+  return insights?.season?.metrics?.length ?? 0;
+}
+
+function recentGameCount(insights: PlayerInsights | null | undefined): number {
+  return insights?.recent?.games?.length ?? 0;
+}
+
+function hasUsefulLiveContext(insights: PlayerInsights | null | undefined): boolean {
+  if (!insights?.live) {
+    return false;
+  }
+  if (insights.live.hasGameToday) {
+    return true;
+  }
+  return Boolean(insights.live.state || insights.live.displayClock || insights.live.opponent || insights.live.eventId);
+}
+
+function requiredSeasonMetricCount(sport: SportKey): number {
+  if (sport === "nba") {
+    return 3;
+  }
+  if (sport === "mlb") {
+    return 3;
+  }
+  return 2;
+}
+
+function insightsMissingSections(
+  insights: PlayerInsights | null,
+  sport: SportKey,
+  mode: "beginner" | "advanced",
+): string[] {
+  if (!insights) {
+    return ["payload"];
+  }
+
+  const missing: string[] = [];
+  if (!insights.fullName) {
+    missing.push("identity");
+  }
+  if (!insights.teamName && !insights.teamAbbrev) {
+    missing.push("team");
+  }
+
+  if (mode !== "advanced") {
+    return missing;
+  }
+
+  if (seasonMetricCount(insights) < requiredSeasonMetricCount(sport)) {
+    missing.push("season");
+  }
+  if (recentGameCount(insights) < 3) {
+    missing.push("recent");
+  }
+  if (!hasUsefulLiveContext(insights)) {
+    missing.push("live");
+  }
+  return missing;
+}
+
+function teamMissingSections(
+  team: TeamAdvanced | null | undefined,
+  mode: "beginner" | "advanced",
+): string[] {
+  if (!team) {
+    return ["payload"];
+  }
+
+  const missing: string[] = [];
+  if (!team.teamKey && !team.teamName) {
+    missing.push("identity");
+  }
+
+  const hasGameContext = Boolean(
+    team.status?.hasGameToday
+    || team.status?.state
+    || team.status?.displayClock
+    || team.status?.opponent
+    || team.nextGame
+    || team.lastGame,
+  );
+  if (!hasGameContext) {
+    missing.push("game_context");
+  }
+
+  if (mode === "advanced") {
+    if (!team.record) {
+      missing.push("record");
+    }
+    if (!team.standings) {
+      missing.push("standings");
+    }
+    if (!team.nextGame && !team.status?.hasGameToday) {
+      missing.push("next_game");
+    }
+  }
+
+  return missing;
+}
+
+function seasonScore(season: PlayerInsights["season"] | null | undefined): number {
+  if (!season) {
+    return 0;
+  }
+  let score = season.metrics.length * 2;
+  if (season.headline) {
+    score += 1;
+  }
+  if (season.source === "upstream") {
+    score += 1;
+  }
+  return score;
+}
+
+function recentScore(recent: PlayerInsights["recent"] | null | undefined): number {
+  if (!recent) {
+    return 0;
+  }
+  let score = recent.games.length * 2;
+  if (recent.headline) {
+    score += 1;
+  }
+  if (recent.source === "upstream") {
+    score += 1;
+  }
+  return score;
+}
+
+function selectRicherSeason(
+  primary: PlayerInsights["season"] | null | undefined,
+  secondary: PlayerInsights["season"] | null | undefined,
+): PlayerInsights["season"] | null | undefined {
+  if (!primary) {
+    return secondary;
+  }
+  if (!secondary) {
+    return primary;
+  }
+
+  if (seasonScore(secondary) > seasonScore(primary)) {
+    return secondary;
+  }
+
+  return {
+    ...primary,
+    headline: primary.headline || secondary.headline,
+    sampleSize: primary.sampleSize ?? secondary.sampleSize,
+    metrics: primary.metrics.length >= secondary.metrics.length
+      ? primary.metrics
+      : secondary.metrics,
+  };
+}
+
+function selectRicherRecent(
+  primary: PlayerInsights["recent"] | null | undefined,
+  secondary: PlayerInsights["recent"] | null | undefined,
+): PlayerInsights["recent"] | null | undefined {
+  if (!primary) {
+    return secondary;
+  }
+  if (!secondary) {
+    return primary;
+  }
+
+  if (recentScore(secondary) > recentScore(primary)) {
+    return secondary;
+  }
+
+  return {
+    ...primary,
+    headline: primary.headline || secondary.headline,
+    games: primary.games.length >= secondary.games.length
+      ? primary.games
+      : secondary.games,
+  };
+}
+
 function mergeProfile(primary: PlayerProfile | null, secondary: PlayerProfile | null): PlayerProfile | null {
   if (!primary && !secondary) {
     return null;
@@ -129,17 +337,43 @@ function mergeInsights(primary: PlayerInsights | null, secondary: PlayerInsights
     return primary;
   }
   const mergedMetaNotes = [...(primary.metaNotes ?? []), ...(secondary.metaNotes ?? [])];
+  const primaryLive = primary.live;
+  const secondaryLive = secondary.live;
+  const selectedLive = (() => {
+    if (!primaryLive) {
+      return secondaryLive ?? null;
+    }
+    if (!secondaryLive) {
+      return primaryLive;
+    }
+    const primaryHasSignal = primaryLive.hasGameToday || Boolean(primaryLive.state || primaryLive.displayClock || primaryLive.opponent);
+    const secondaryHasSignal = secondaryLive.hasGameToday || Boolean(secondaryLive.state || secondaryLive.displayClock || secondaryLive.opponent);
+    if (!primaryHasSignal && secondaryHasSignal) {
+      return secondaryLive;
+    }
+    return primaryLive;
+  })();
+
+  const selectedInjury = (() => {
+    const primaryHas = Boolean(primary.injury && (primary.injury.status || primary.injury.detail));
+    const secondaryHas = Boolean(secondary.injury && (secondary.injury.status || secondary.injury.detail));
+    if (!primaryHas && secondaryHas) {
+      return secondary.injury;
+    }
+    return primary.injury ?? secondary.injury ?? null;
+  })();
+
   return {
     ...secondary,
     ...primary,
     fullName: primary.fullName ?? secondary.fullName,
     teamAbbrev: primary.teamAbbrev ?? secondary.teamAbbrev,
     teamName: primary.teamName ?? secondary.teamName,
-    injury: primary.injury ?? secondary.injury ?? null,
-    live: primary.live ?? secondary.live ?? null,
-    season: primary.season ?? secondary.season,
-    recent: primary.recent ?? secondary.recent,
-    metaNotes: mergedMetaNotes.length > 0 ? mergedMetaNotes : undefined,
+    injury: selectedInjury,
+    live: selectedLive,
+    season: selectRicherSeason(primary.season, secondary.season),
+    recent: selectRicherRecent(primary.recent, secondary.recent),
+    metaNotes: mergedMetaNotes.length > 0 ? uniqueStrings(mergedMetaNotes) : undefined,
   };
 }
 
@@ -153,25 +387,32 @@ function mergeTeamAdvancedRow(primary: TeamAdvanced | undefined, secondary: Team
   if (!secondary) {
     return primary;
   }
+  const primaryStatusHasSignal = Boolean(
+    primary.status?.hasGameToday
+    || primary.status?.state
+    || primary.status?.displayClock
+    || primary.status?.opponent,
+  );
+  const secondaryStatusHasSignal = Boolean(
+    secondary.status?.hasGameToday
+    || secondary.status?.state
+    || secondary.status?.displayClock
+    || secondary.status?.opponent,
+  );
   return {
     teamKey: primary.teamKey || secondary.teamKey,
     teamName: primary.teamName ?? secondary.teamName,
-    status: primary.status?.hasGameToday || secondary.status?.hasGameToday ? (primary.status ?? secondary.status) : secondary.status,
+    status: primaryStatusHasSignal || !secondaryStatusHasSignal ? (primary.status ?? secondary.status) : secondary.status,
     nextGame: primary.nextGame ?? secondary.nextGame ?? null,
     record: primary.record ?? secondary.record ?? null,
     standings: primary.standings ?? secondary.standings ?? null,
     lastGame: primary.lastGame ?? secondary.lastGame ?? null,
-    metaNotes: [...(primary.metaNotes ?? []), ...(secondary.metaNotes ?? [])],
+    metaNotes: uniqueStrings([...(primary.metaNotes ?? []), ...(secondary.metaNotes ?? [])]),
   };
 }
 
 export function isPlayerProfileComplete(profile: PlayerProfile | null): boolean {
-  if (!profile?.fullName) {
-    return false;
-  }
-  const hasTeamOrPosition = Boolean(profile.teamName || profile.teamAbbrev || profile.position);
-  const hasBioField = Boolean(profile.headshot || typeof profile.age === "number" || profile.height || profile.weight);
-  return hasTeamOrPosition && hasBioField;
+  return profileMissingSections(profile).length === 0;
 }
 
 export function isPlayerInsightsComplete(
@@ -179,44 +420,21 @@ export function isPlayerInsightsComplete(
   sport: SportKey,
   mode: "beginner" | "advanced",
 ): boolean {
-  if (!insights) {
-    return false;
-  }
-  if (mode !== "advanced") {
-    return Boolean(insights.fullName || insights.teamName || insights.teamAbbrev);
-  }
-
-  const hasSeason = Boolean(insights.season?.metrics && insights.season.metrics.length > 0);
-  const hasRecent = Boolean(insights.recent?.games && insights.recent.games.length > 0);
-  if (sport === "mlb") {
-    return hasSeason || hasRecent;
-  }
-  if (sport === "nba") {
-    return hasSeason || hasRecent;
-  }
-  return hasSeason || hasRecent;
+  return insightsMissingSections(insights, sport, mode).length === 0;
 }
 
 export function isTeamAdvancedComplete(team: TeamAdvanced | null | undefined): boolean {
-  if (!team) {
-    return false;
-  }
-  const hasIdentity = Boolean(team.teamName || team.teamKey);
-  const hasDetail = Boolean(
-    team.status?.hasGameToday
-      || team.nextGame
-      || team.record
-      || team.standings
-      || team.lastGame,
-  );
-  return hasIdentity && hasDetail;
+  return teamMissingSections(team, "beginner").length === 0;
 }
 
-function isTeamsAdvancedComplete(result: TeamsAdvancedResult | null | undefined): boolean {
+function isTeamsAdvancedComplete(
+  result: TeamsAdvancedResult | null | undefined,
+  mode: "beginner" | "advanced",
+): boolean {
   if (!result || result.teams.length === 0) {
     return false;
   }
-  return result.teams.every((team) => isTeamAdvancedComplete(team));
+  return result.teams.every((team) => teamMissingSections(team, mode).length === 0);
 }
 
 async function fetchFixturePlayersSearch(
@@ -406,7 +624,8 @@ async function resolvePlayerProfileAuto(
   const warnings: string[] = [];
   const apiEnvelope = await apiSportsPlayers.getPlayerProfile(sport, playerId, "live", ctx.cacheBust);
   const apiData = apiEnvelope.data;
-  if (!apiEnvelope.error && isPlayerProfileComplete(apiData)) {
+  const apiMissing = profileMissingSections(apiData);
+  if (!apiEnvelope.error && apiMissing.length === 0) {
     return {
       ...apiEnvelope,
       meta: buildHybridMeta({
@@ -422,14 +641,19 @@ async function resolvePlayerProfileAuto(
   if (apiEnvelope.meta.warning) {
     warnings.push(apiEnvelope.meta.warning);
   }
+  if (apiMissing.length > 0) {
+    warnings.push(`API-Sports profile missing sections: ${apiMissing.join(", ")}.`);
+  }
 
   attempted.push("espn");
   const espnEnvelope = await espnPlayers.getPlayerProfile(sport, playerId, "live", ctx.cacheBust);
   const mergedLive = mergeProfile(apiData, espnEnvelope.data);
-  if (isPlayerProfileComplete(mergedLive)) {
-    const sourceUsed = apiData
-      ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
-      : resolveSourceWithCache("espn", espnEnvelope.meta);
+  const mergedMissing = profileMissingSections(mergedLive);
+  const sourceUsed = apiData
+    ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
+    : resolveSourceWithCache("espn", espnEnvelope.meta);
+
+  if (mergedMissing.length === 0 && mergedLive) {
     return {
       data: mergedLive,
       meta: buildHybridMeta({
@@ -445,24 +669,29 @@ async function resolvePlayerProfileAuto(
   if (espnEnvelope.meta.warning) {
     warnings.push(espnEnvelope.meta.warning);
   }
+  if (mergedMissing.length > 0) {
+    warnings.push(`Live profile still missing sections after ESPN enrichment: ${mergedMissing.join(", ")}.`);
+  }
 
   if (mode === "auto") {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixturePlayerProfile(sport, playerId, ctx.cacheBust);
-    const mergedFixture = mergeProfile(mergeProfile(apiData, espnEnvelope.data), fixtureEnvelope.data);
+    const mergedFixture = mergeProfile(mergedLive, fixtureEnvelope.data);
+    const mergedFixtureMissing = profileMissingSections(mergedFixture);
+    const hydrationImproved = mergedFixtureMissing.length < mergedMissing.length;
     if (mergedFixture) {
-      const sourceUsed = isPlayerProfileComplete(mergeProfile(apiData, espnEnvelope.data))
-        ? (apiData ? resolveSourceWithCache("apiSports", apiEnvelope.meta) : resolveSourceWithCache("espn", espnEnvelope.meta))
-        : fixtureEnvelope.data ? "fixture" : (apiData ? resolveSourceWithCache("apiSports", apiEnvelope.meta) : resolveSourceWithCache("espn", espnEnvelope.meta));
+      const hydrationNote = hydrationImproved
+        ? "Live profile remained incomplete after ESPN; using fixture fallback for missing sections."
+        : "Live profile remained incomplete after ESPN; returning fixture fallback.";
       return {
         data: mergedFixture,
         meta: buildHybridMeta({
-          baseMeta: sourceUsed === "fixture" ? fixtureEnvelope.meta : (apiData ? apiEnvelope.meta : espnEnvelope.meta),
-          sourceUsed,
+          baseMeta: fixtureEnvelope.meta,
+          sourceUsed: "fixture",
           attemptedSources: attempted,
-          warnings: [...warnings, "Hydrated profile gaps using fixture fallback."],
+          warnings: [...warnings, hydrationNote],
           hydrationUsed: Boolean(fixtureEnvelope.data && (apiData || espnEnvelope.data)),
-          dataModeEffective: sourceUsed === "fixture" ? "fixture" : "live",
+          dataModeEffective: "fixture",
         }),
       };
     }
@@ -483,8 +712,8 @@ async function resolvePlayerProfileAuto(
   return {
     data: mergedLive,
     meta: buildHybridMeta({
-      baseMeta: espnEnvelope.meta,
-      sourceUsed: resolveSourceWithCache("espn", espnEnvelope.meta),
+      baseMeta: sourceUsed === "apiSports" || sourceUsed === "cache" ? apiEnvelope.meta : espnEnvelope.meta,
+      sourceUsed,
       attemptedSources: attempted,
       warnings,
       hydrationUsed: Boolean(apiData && espnEnvelope.data),
@@ -520,7 +749,8 @@ async function resolvePlayerInsightsAuto(
   const warnings: string[] = [];
   const apiEnvelope = await apiSportsInsights.getPlayerInsights(sport, playerId, mode, "live", ctx.cacheBust);
   const apiData = apiEnvelope.data;
-  if (!apiEnvelope.error && isPlayerInsightsComplete(apiData, sport, mode)) {
+  const apiMissingSections = insightsMissingSections(apiData, sport, mode);
+  if (!apiEnvelope.error && apiMissingSections.length === 0) {
     return {
       ...apiEnvelope,
       meta: buildHybridMeta({
@@ -536,14 +766,19 @@ async function resolvePlayerInsightsAuto(
   if (apiEnvelope.meta.warning) {
     warnings.push(apiEnvelope.meta.warning);
   }
+  if (apiMissingSections.length > 0) {
+    warnings.push(`API-Sports insights missing sections: ${apiMissingSections.join(", ")}.`);
+  }
 
   attempted.push("espn");
   const espnEnvelope = await espnInsights.getPlayerInsights(sport, playerId, mode, "live", ctx.cacheBust);
   const mergedLive = mergeInsights(apiData, espnEnvelope.data);
-  if (isPlayerInsightsComplete(mergedLive, sport, mode)) {
-    const sourceUsed = apiData
-      ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
-      : resolveSourceWithCache("espn", espnEnvelope.meta);
+  const mergedMissingSections = insightsMissingSections(mergedLive, sport, mode);
+  const sourceUsed = apiData
+    ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
+    : resolveSourceWithCache("espn", espnEnvelope.meta);
+
+  if (mergedMissingSections.length === 0 && mergedLive) {
     return {
       data: mergedLive,
       meta: buildHybridMeta({
@@ -559,23 +794,29 @@ async function resolvePlayerInsightsAuto(
   if (espnEnvelope.meta.warning) {
     warnings.push(espnEnvelope.meta.warning);
   }
+  if (mergedMissingSections.length > 0) {
+    warnings.push(`Live insights still missing sections after ESPN enrichment: ${mergedMissingSections.join(", ")}.`);
+  }
 
   if (requestedMode === "auto") {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixturePlayerInsights(sport, playerId, mode, ctx.cacheBust);
-    const mergedFixture = mergeInsights(mergeInsights(apiData, espnEnvelope.data), fixtureEnvelope.data);
+    const mergedFixture = mergeInsights(mergedLive, fixtureEnvelope.data);
+    const mergedFixtureMissing = insightsMissingSections(mergedFixture, sport, mode);
+    const hydrationImproved = mergedFixtureMissing.length < mergedMissingSections.length;
     if (mergedFixture) {
+      const hydrationNote = hydrationImproved
+        ? "Live player insights remained incomplete after ESPN; using fixture fallback for missing sections."
+        : "Live player insights remained incomplete after ESPN; returning fixture fallback.";
       return {
         data: mergedFixture,
         meta: buildHybridMeta({
           baseMeta: fixtureEnvelope.meta,
-          sourceUsed: fixtureEnvelope.data
-            ? "fixture"
-            : (apiData ? resolveSourceWithCache("apiSports", apiEnvelope.meta) : resolveSourceWithCache("espn", espnEnvelope.meta)),
+          sourceUsed: "fixture",
           attemptedSources: attempted,
-          warnings: [...warnings, "Hydrated player insights gaps using fixture fallback."],
+          warnings: [...warnings, hydrationNote],
           hydrationUsed: Boolean(fixtureEnvelope.data && (apiData || espnEnvelope.data)),
-          dataModeEffective: fixtureEnvelope.data ? "fixture" : "live",
+          dataModeEffective: "fixture",
         }),
       };
     }
@@ -596,8 +837,8 @@ async function resolvePlayerInsightsAuto(
   return {
     data: mergedLive,
     meta: buildHybridMeta({
-      baseMeta: espnEnvelope.meta,
-      sourceUsed: resolveSourceWithCache("espn", espnEnvelope.meta),
+      baseMeta: sourceUsed === "apiSports" || sourceUsed === "cache" ? apiEnvelope.meta : espnEnvelope.meta,
+      sourceUsed,
       attemptedSources: attempted,
       warnings,
       hydrationUsed: Boolean(apiData && espnEnvelope.data),
@@ -727,7 +968,8 @@ async function resolveTeamsAdvancedAuto(
   const warnings: string[] = [];
   const apiEnvelope = await apiSportsAdvanced.getTeamsAdvanced(sport, teamKeys, mode, "live", ctx.cacheBust);
   const apiData = apiEnvelope.data;
-  if (!apiEnvelope.error && isTeamsAdvancedComplete(apiData)) {
+  const apiMissingSections = (apiData?.teams ?? []).flatMap((team) => teamMissingSections(team, mode));
+  if (!apiEnvelope.error && apiMissingSections.length === 0 && isTeamsAdvancedComplete(apiData, mode)) {
     return {
       ...apiEnvelope,
       meta: buildHybridMeta({
@@ -743,6 +985,9 @@ async function resolveTeamsAdvancedAuto(
   if (apiEnvelope.meta.warning) {
     warnings.push(apiEnvelope.meta.warning);
   }
+  if (apiMissingSections.length > 0) {
+    warnings.push(`API-Sports teams advanced missing sections: ${uniqueStrings(apiMissingSections).join(", ")}.`);
+  }
 
   attempted.push("espn");
   const espnEnvelope = await espnAdvanced.getTeamsAdvanced(sport, teamKeys, mode, "live", ctx.cacheBust);
@@ -752,10 +997,12 @@ async function resolveTeamsAdvancedAuto(
     .map((teamKey) => mergeTeamAdvancedRow(apiTeamsMap.get(teamKey), espnTeamsMap.get(teamKey)))
     .filter((team): team is TeamAdvanced => team !== null);
   const mergedLive: TeamsAdvancedResult | null = mergedTeams.length > 0 ? { sport, teams: mergedTeams } : espnEnvelope.data;
-  if (isTeamsAdvancedComplete(mergedLive)) {
-    const sourceUsed = apiData?.teams?.length
-      ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
-      : resolveSourceWithCache("espn", espnEnvelope.meta);
+  const mergedMissingSections = (mergedLive?.teams ?? []).flatMap((team) => teamMissingSections(team, mode));
+  const sourceUsed = apiData?.teams?.length
+    ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
+    : resolveSourceWithCache("espn", espnEnvelope.meta);
+
+  if (mergedMissingSections.length === 0 && isTeamsAdvancedComplete(mergedLive, mode)) {
     return {
       data: mergedLive,
       meta: buildHybridMeta({
@@ -771,6 +1018,9 @@ async function resolveTeamsAdvancedAuto(
   if (espnEnvelope.meta.warning) {
     warnings.push(espnEnvelope.meta.warning);
   }
+  if (mergedMissingSections.length > 0) {
+    warnings.push(`Live teams advanced still missing sections after ESPN enrichment: ${uniqueStrings(mergedMissingSections).join(", ")}.`);
+  }
 
   if (requestedMode === "auto") {
     attempted.push("fixture");
@@ -780,14 +1030,19 @@ async function resolveTeamsAdvancedAuto(
       .map((teamKey) => mergeTeamAdvancedRow(mergedLive?.teams.find((team) => team.teamKey.toUpperCase() === teamKey), fixtureMap.get(teamKey)))
       .filter((team): team is TeamAdvanced => team !== null);
     const hydratedResult: TeamsAdvancedResult | null = hydratedTeams.length > 0 ? { sport, teams: hydratedTeams } : fixtureEnvelope.data;
+    const hydratedMissingSections = (hydratedResult?.teams ?? []).flatMap((team) => teamMissingSections(team, mode));
+    const hydrationImproved = hydratedMissingSections.length < mergedMissingSections.length;
     if (hydratedResult) {
+      const hydrationNote = hydrationImproved
+        ? "Live team advanced data remained incomplete after ESPN; using fixture fallback for missing sections."
+        : "Live team advanced data remained incomplete after ESPN; returning fixture fallback.";
       return {
         data: hydratedResult,
         meta: buildHybridMeta({
           baseMeta: fixtureEnvelope.meta,
           sourceUsed: "fixture",
           attemptedSources: attempted,
-          warnings: [...warnings, "Hydrated team advanced gaps using fixture fallback."],
+          warnings: [...warnings, hydrationNote],
           hydrationUsed: Boolean(hydratedTeams.length && mergedLive?.teams?.length),
           dataModeEffective: "fixture",
         }),
@@ -810,8 +1065,8 @@ async function resolveTeamsAdvancedAuto(
   return {
     data: mergedLive,
     meta: buildHybridMeta({
-      baseMeta: espnEnvelope.meta,
-      sourceUsed: resolveSourceWithCache("espn", espnEnvelope.meta),
+      baseMeta: sourceUsed === "apiSports" || sourceUsed === "cache" ? apiEnvelope.meta : espnEnvelope.meta,
+      sourceUsed,
       attemptedSources: attempted,
       warnings,
       hydrationUsed: Boolean(apiData?.teams?.length && espnEnvelope.data?.teams?.length),

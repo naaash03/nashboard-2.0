@@ -16,11 +16,13 @@ export type PlayerInsights = {
     metrics: { key: string; label: string; value: string }[];
     source: "upstream" | "derived";
     sampleSize?: number;
+    notes?: string[];
   } | null;
   recent?: {
     headline: string;
     games: { date?: string; opponent?: string; result?: string; line: string }[];
     source: "upstream" | "derived";
+    notes?: string[];
   } | null;
   metaNotes?: string[];
 };

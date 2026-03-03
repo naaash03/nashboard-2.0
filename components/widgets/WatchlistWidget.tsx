@@ -1189,28 +1189,66 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
           {playersForSport.length > 0 ? (
             <div className="space-y-1 rounded border border-neutral-700 bg-neutral-950 p-2">
-              {playersForSport.map((player) => (
-                <div key={`${sportKey}-watch-${player.playerId}`} className="flex items-center justify-between gap-2 border-b border-neutral-800 py-1 last:border-b-0">
-                  <button type="button" className="min-w-0 text-left" onClick={() => void loadPlayerProfile(player.playerId)}>
-                    <div className="flex items-center gap-2">
-                      <img src={player.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{player.fullName}</p>
-                        <p className="truncate text-neutral-400">{compact([player.position, player.teamName, sportLabel(sportKey)])}</p>
-                        {props.mode === "ADVANCED" ? (
-                          <>
-                            <p className="truncate text-neutral-300">{playerInsightsSummary(playerInsightsById[player.playerId])}</p>
-                            <p className="truncate text-neutral-500">
-                              Last: {playerInsightsById[player.playerId]?.recent?.games?.[0]?.line ?? "Not available"} · {playerTeamLiveLabel(playerInsightsById[player.playerId])}
-                            </p>
-                          </>
-                        ) : null}
-                      </div>
+              {playersForSport.map((player) => {
+                const insight = playerInsightsById[player.playerId];
+                return (
+                  <div key={`${sportKey}-watch-${player.playerId}`} className="border-b border-neutral-800 py-1 last:border-b-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => void loadPlayerProfile(player.playerId)}>
+                        <div className="flex items-center gap-2">
+                          <img src={player.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{player.fullName}</p>
+                            <p className="truncate text-neutral-400">{compact([player.position, player.teamName, sportLabel(sportKey)])}</p>
+                            {props.mode === "ADVANCED" ? (
+                              <>
+                                <p className="truncate text-neutral-300">{playerInsightsSummary(insight)}</p>
+                                <p className="truncate text-neutral-500">
+                                  Last: {insight?.recent?.games?.[0]?.line ?? "Not available"} · {playerTeamLiveLabel(insight)}
+                                </p>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      </button>
+                      <button type="button" onClick={() => void removePlayer(player.playerId)} disabled={props.locked}>Remove</button>
                     </div>
-                  </button>
-                  <button type="button" onClick={() => void removePlayer(player.playerId)} disabled={props.locked}>Remove</button>
-                </div>
-              ))}
+
+                    {props.mode === "ADVANCED" ? (
+                      <details className="mt-1 rounded border border-neutral-800 bg-black/20 p-2">
+                        <summary className="cursor-pointer text-neutral-300">Details</summary>
+                        <div className="mt-1 space-y-1 text-neutral-400">
+                          {insight?.season?.metrics && insight.season.metrics.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                              {insight.season.metrics.slice(0, 4).map((metric) => (
+                                <p key={`${player.playerId}-${metric.key}`} className="truncate">
+                                  <span className="text-neutral-500">{metric.label}:</span> {metric.value}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p>Season highlights not available.</p>
+                          )}
+
+                          {insight?.recent?.games && insight.recent.games.length > 0 ? (
+                            <div className="space-y-1">
+                              {insight.recent.games.slice(0, 2).map((game, index) => (
+                                <p key={`${player.playerId}-recent-${index}`} className="truncate">
+                                  {game.date ?? "-"} · {game.opponent ?? "TBD"} · {game.line}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p>Recent game line not available.</p>
+                          )}
+
+                          {insight?.metaNotes?.[0] ? <p>Note: {insight.metaNotes[0]}</p> : null}
+                        </div>
+                      </details>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-neutral-500">No players added for this sport yet.</p>

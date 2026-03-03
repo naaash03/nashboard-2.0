@@ -45,4 +45,13 @@ describe("PlayerCardWidget search wiring", () => {
     expect(source.includes("core.api.espn.com")).toBe(false);
     expect(source.includes("site.api.espn.com")).toBe(false);
   });
+
+  it("keeps advanced section shells visible for partial provider payloads", () => {
+    const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
+    expect(source.includes("Live Context")).toBe(true);
+    expect(source.includes("Season Highlights")).toBe(true);
+    expect(source.includes("Recent Games")).toBe(true);
+    expect(source.includes("Status / Injury")).toBe(true);
+    expect(source.includes("Not available from provider.")).toBe(true);
+  });
 });
