@@ -19,6 +19,19 @@ function readString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 function fallbackMeta(mode: ModeArg, warning: string): Meta {
   return {
     sourceUsed: mode === "fixture" ? "fixture" : "apiSports",
@@ -57,15 +70,19 @@ function normalizeTeamKey(raw: string, displayName: string): string {
 
 function mapTeamRow(sport: SportKey, row: Record<string, unknown>): TeamSearchResult | null {
   const team = asObject(row.team) ?? row;
+  const teamId = readString(team.id) ?? readNumber(team.id)?.toString() ?? readString(team.team_id) ?? readNumber(team.team_id)?.toString();
   const displayName = readString(team.name) ?? readString(team.display_name) ?? readString(team.city);
   if (!displayName) {
     return null;
   }
-  const rawKey = readString(team.code) ?? readString(team.abbreviation) ?? readString(team.short_name) ?? displayName;
+  const abbreviation = readString(team.code) ?? readString(team.abbreviation) ?? readString(team.short_name);
+  const rawKey = abbreviation ?? displayName;
   return {
     teamKey: normalizeTeamKey(rawKey, displayName),
     displayName,
     league: sportLabel(sport),
+    abbreviation: abbreviation?.toUpperCase(),
+    apiSportsTeamId: teamId,
     logo: readString(team.logo),
   };
 }
@@ -122,4 +139,3 @@ export async function searchTeams(
     };
   }
 }
-

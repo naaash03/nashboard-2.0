@@ -16,7 +16,17 @@ export type TeamSearchResult = {
   teamKey: string;
   displayName: string;
   league: SportKey;
+  abbreviation?: string;
+  apiSportsTeamId?: string;
+  espnTeamId?: string;
   logo?: string;
+};
+
+export type TeamProviderRef = {
+  teamKey: string;
+  teamName?: string;
+  apiSportsTeamId?: string;
+  espnTeamId?: string;
 };
 
 export type PlayerProfile = {

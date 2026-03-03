@@ -9,7 +9,7 @@ import * as espnInsights from "@/lib/providers/espn/playerInsights";
 import * as espnTeams from "@/lib/providers/espn/teamDirectory";
 import * as espnAdvanced from "@/lib/providers/espn/teamAdvanced";
 import type { Meta } from "@/lib/providers/types";
-import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey, TeamSearchResult } from "@/lib/types/players";
+import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey, TeamProviderRef, TeamSearchResult } from "@/lib/types/players";
 import type { PlayerInsights, TeamAdvanced } from "@/lib/types/playerInsights";
 
 export type ProviderAttemptSource = "apiSports" | "espn" | "fixture";
@@ -19,6 +19,7 @@ export type ProviderContext = {
   dataMode: DataMode;
   cacheBust?: string | number | undefined;
   mode?: "beginner" | "advanced";
+  teamRefs?: TeamProviderRef[];
 };
 
 type TeamsAdvancedResult = { sport: SportKey; teams: TeamAdvanced[] };
@@ -89,6 +90,82 @@ function safeArray<T>(value: T[] | null | undefined): T[] {
 
 function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function normalizeKey(value: string | undefined): string {
+  return (value ?? "").trim().toUpperCase();
+}
+
+function normalizeName(value: string | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^\w\s]|_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTeamRefs(teamKeys: string[], provided?: TeamProviderRef[]): TeamProviderRef[] {
+  const byKey = new Map<string, TeamProviderRef>();
+
+  for (const key of teamKeys) {
+    const normalizedKey = normalizeKey(key);
+    if (!normalizedKey) {
+      continue;
+    }
+    byKey.set(normalizedKey, { teamKey: normalizedKey });
+  }
+
+  for (const row of provided ?? []) {
+    const normalizedKey = normalizeKey(row.teamKey);
+    if (!normalizedKey) {
+      continue;
+    }
+    const existing = byKey.get(normalizedKey) ?? { teamKey: normalizedKey };
+    byKey.set(normalizedKey, {
+      teamKey: normalizedKey,
+      teamName: row.teamName ?? existing.teamName,
+      apiSportsTeamId: row.apiSportsTeamId ?? existing.apiSportsTeamId,
+      espnTeamId: row.espnTeamId ?? existing.espnTeamId,
+    });
+  }
+
+  return Array.from(byKey.values());
+}
+
+function mergeTeamSearchRows(primary: TeamSearchResult[], secondary: TeamSearchResult[]): TeamSearchResult[] {
+  const secondaryByKey = new Map<string, TeamSearchResult>();
+  const secondaryByName = new Map<string, TeamSearchResult>();
+
+  for (const row of secondary) {
+    const key = normalizeKey(row.teamKey);
+    if (key) {
+      secondaryByKey.set(key, row);
+    }
+    const name = normalizeName(row.displayName);
+    if (name) {
+      secondaryByName.set(name, row);
+    }
+  }
+
+  return primary.map((row) => {
+    const byKey = secondaryByKey.get(normalizeKey(row.teamKey));
+    const byName = secondaryByName.get(normalizeName(row.displayName));
+    const secondaryRow = byKey ?? byName;
+    if (!secondaryRow) {
+      return row;
+    }
+    return {
+      ...secondaryRow,
+      ...row,
+      teamKey: row.teamKey || secondaryRow.teamKey,
+      displayName: row.displayName || secondaryRow.displayName,
+      league: row.league || secondaryRow.league,
+      abbreviation: row.abbreviation ?? secondaryRow.abbreviation,
+      logo: row.logo ?? secondaryRow.logo,
+      apiSportsTeamId: row.apiSportsTeamId ?? secondaryRow.apiSportsTeamId,
+      espnTeamId: row.espnTeamId ?? secondaryRow.espnTeamId,
+    };
+  });
 }
 
 function profileMissingSections(profile: PlayerProfile | null): string[] {
@@ -402,6 +479,8 @@ function mergeTeamAdvancedRow(primary: TeamAdvanced | undefined, secondary: Team
   return {
     teamKey: primary.teamKey || secondary.teamKey,
     teamName: primary.teamName ?? secondary.teamName,
+    apiSportsTeamId: primary.apiSportsTeamId ?? secondary.apiSportsTeamId,
+    espnTeamId: primary.espnTeamId ?? secondary.espnTeamId,
     status: primaryStatusHasSignal || !secondaryStatusHasSignal ? (primary.status ?? secondary.status) : secondary.status,
     nextGame: primary.nextGame ?? secondary.nextGame ?? null,
     record: primary.record ?? secondary.record ?? null,
@@ -409,6 +488,25 @@ function mergeTeamAdvancedRow(primary: TeamAdvanced | undefined, secondary: Team
     lastGame: primary.lastGame ?? secondary.lastGame ?? null,
     metaNotes: uniqueStrings([...(primary.metaNotes ?? []), ...(secondary.metaNotes ?? [])]),
   };
+}
+
+function applyTeamRefs(teams: TeamAdvanced[] | undefined, refs: TeamProviderRef[]): TeamAdvanced[] {
+  if (!teams || teams.length === 0) {
+    return [];
+  }
+  const refMap = new Map(refs.map((row) => [normalizeKey(row.teamKey), row]));
+  return teams.map((team) => {
+    const ref = refMap.get(normalizeKey(team.teamKey));
+    if (!ref) {
+      return team;
+    }
+    return {
+      ...team,
+      teamName: team.teamName ?? ref.teamName,
+      apiSportsTeamId: team.apiSportsTeamId ?? ref.apiSportsTeamId,
+      espnTeamId: team.espnTeamId ?? ref.espnTeamId,
+    };
+  });
 }
 
 export function isPlayerProfileComplete(profile: PlayerProfile | null): boolean {
@@ -873,15 +971,33 @@ async function resolveTeamsSearchAuto(
   const attempted: ProviderAttemptSource[] = ["apiSports"];
   const warnings: string[] = [];
   const apiEnvelope = await apiSportsTeams.searchTeams(sport, q, limit, "live", ctx.cacheBust);
-  if (!apiEnvelope.error && safeArray(apiEnvelope.data).length > 0) {
+  const apiRows = safeArray(apiEnvelope.data);
+  if (!apiEnvelope.error && apiRows.length > 0) {
+    let rows = apiRows;
+    let hydrationUsed = false;
+
+    const needsEspnIds = rows.some((row) => !row.espnTeamId);
+    if (needsEspnIds) {
+      attempted.push("espn");
+      const espnHydrateEnvelope = await espnTeams.searchTeams(sport, q, "live", limit, ctx.cacheBust);
+      const espnRows = safeArray(espnHydrateEnvelope.data);
+      if (!espnHydrateEnvelope.error && espnRows.length > 0) {
+        const mergedRows = mergeTeamSearchRows(rows, espnRows);
+        hydrationUsed = mergedRows.some((row, idx) => row.espnTeamId && !rows[idx]?.espnTeamId);
+        rows = mergedRows;
+      } else if (espnHydrateEnvelope.meta.warning) {
+        warnings.push(espnHydrateEnvelope.meta.warning);
+      }
+    }
+
     return {
-      ...apiEnvelope,
+      data: rows,
       meta: buildHybridMeta({
         baseMeta: apiEnvelope.meta,
         sourceUsed: resolveSourceWithCache("apiSports", apiEnvelope.meta),
         attemptedSources: attempted,
         warnings,
-        hydrationUsed: false,
+        hydrationUsed,
         dataModeEffective: "live",
       }),
     };
@@ -892,15 +1008,32 @@ async function resolveTeamsSearchAuto(
 
   attempted.push("espn");
   const espnEnvelope = await espnTeams.searchTeams(sport, q, "live", limit, ctx.cacheBust);
-  if (!espnEnvelope.error && safeArray(espnEnvelope.data).length > 0) {
+  const espnRows = safeArray(espnEnvelope.data);
+  if (!espnEnvelope.error && espnRows.length > 0) {
+    let rows = espnRows;
+    let hydrationUsed = false;
+
+    const needsApiIds = rows.some((row) => !row.apiSportsTeamId);
+    if (needsApiIds) {
+      const apiHydrateEnvelope = await apiSportsTeams.searchTeams(sport, q, limit, "live", ctx.cacheBust);
+      const apiHydrateRows = safeArray(apiHydrateEnvelope.data);
+      if (!apiHydrateEnvelope.error && apiHydrateRows.length > 0) {
+        const mergedRows = mergeTeamSearchRows(rows, apiHydrateRows);
+        hydrationUsed = mergedRows.some((row, idx) => row.apiSportsTeamId && !rows[idx]?.apiSportsTeamId);
+        rows = mergedRows;
+      } else if (apiHydrateEnvelope.meta.warning) {
+        warnings.push(apiHydrateEnvelope.meta.warning);
+      }
+    }
+
     return {
-      ...espnEnvelope,
+      data: rows,
       meta: buildHybridMeta({
         baseMeta: espnEnvelope.meta,
         sourceUsed: resolveSourceWithCache("espn", espnEnvelope.meta),
         attemptedSources: attempted,
         warnings,
-        hydrationUsed: false,
+        hydrationUsed,
         dataModeEffective: "live",
       }),
     };
@@ -948,11 +1081,16 @@ async function resolveTeamsAdvancedAuto(
   mode: "beginner" | "advanced",
   ctx: ProviderContext,
 ): Promise<Envelope<TeamsAdvancedResult>> {
+  const normalizedRefs = normalizeTeamRefs(teamKeys, ctx.teamRefs);
+  const normalizedTeamKeys = normalizedRefs.map((row) => row.teamKey);
   const requestedMode = normalizeContextMode(ctx.dataMode);
   if (requestedMode === "fixture") {
-    const fixtureEnvelope = await fetchFixtureTeamsAdvanced(sport, teamKeys, mode, ctx.cacheBust);
+    const fixtureEnvelope = await fetchFixtureTeamsAdvanced(sport, normalizedTeamKeys, mode, ctx.cacheBust);
     return {
       ...fixtureEnvelope,
+      data: fixtureEnvelope.data
+        ? { ...fixtureEnvelope.data, teams: applyTeamRefs(fixtureEnvelope.data.teams, normalizedRefs) }
+        : fixtureEnvelope.data,
       meta: buildHybridMeta({
         baseMeta: fixtureEnvelope.meta,
         sourceUsed: "fixture",
@@ -966,8 +1104,10 @@ async function resolveTeamsAdvancedAuto(
 
   const attempted: ProviderAttemptSource[] = ["apiSports"];
   const warnings: string[] = [];
-  const apiEnvelope = await apiSportsAdvanced.getTeamsAdvanced(sport, teamKeys, mode, "live", ctx.cacheBust);
-  const apiData = apiEnvelope.data;
+  const apiEnvelope = await apiSportsAdvanced.getTeamsAdvanced(sport, normalizedRefs, mode, "live", ctx.cacheBust);
+  const apiData = apiEnvelope.data
+    ? { ...apiEnvelope.data, teams: applyTeamRefs(apiEnvelope.data.teams, normalizedRefs) }
+    : apiEnvelope.data;
   const apiMissingSections = (apiData?.teams ?? []).flatMap((team) => teamMissingSections(team, mode));
   if (!apiEnvelope.error && apiMissingSections.length === 0 && isTeamsAdvancedComplete(apiData, mode)) {
     return {
@@ -990,13 +1130,16 @@ async function resolveTeamsAdvancedAuto(
   }
 
   attempted.push("espn");
-  const espnEnvelope = await espnAdvanced.getTeamsAdvanced(sport, teamKeys, mode, "live", ctx.cacheBust);
+  const espnEnvelope = await espnAdvanced.getTeamsAdvanced(sport, normalizedTeamKeys, mode, "live", ctx.cacheBust);
+  const espnData = espnEnvelope.data
+    ? { ...espnEnvelope.data, teams: applyTeamRefs(espnEnvelope.data.teams, normalizedRefs) }
+    : espnEnvelope.data;
   const apiTeamsMap = new Map((apiData?.teams ?? []).map((team) => [team.teamKey.toUpperCase(), team]));
-  const espnTeamsMap = new Map((espnEnvelope.data?.teams ?? []).map((team) => [team.teamKey.toUpperCase(), team]));
-  const mergedTeams = Array.from(new Set(teamKeys.map((teamKey) => teamKey.trim().toUpperCase()).filter(Boolean)))
+  const espnTeamsMap = new Map((espnData?.teams ?? []).map((team) => [team.teamKey.toUpperCase(), team]));
+  const mergedTeams = Array.from(new Set(normalizedTeamKeys.map((teamKey) => teamKey.trim().toUpperCase()).filter(Boolean)))
     .map((teamKey) => mergeTeamAdvancedRow(apiTeamsMap.get(teamKey), espnTeamsMap.get(teamKey)))
     .filter((team): team is TeamAdvanced => team !== null);
-  const mergedLive: TeamsAdvancedResult | null = mergedTeams.length > 0 ? { sport, teams: mergedTeams } : espnEnvelope.data;
+  const mergedLive: TeamsAdvancedResult | null = mergedTeams.length > 0 ? { sport, teams: mergedTeams } : espnData;
   const mergedMissingSections = (mergedLive?.teams ?? []).flatMap((team) => teamMissingSections(team, mode));
   const sourceUsed = apiData?.teams?.length
     ? resolveSourceWithCache("apiSports", apiEnvelope.meta)
@@ -1010,7 +1153,7 @@ async function resolveTeamsAdvancedAuto(
         sourceUsed,
         attemptedSources: attempted,
         warnings,
-        hydrationUsed: Boolean(apiData?.teams?.length && espnEnvelope.data?.teams?.length),
+        hydrationUsed: Boolean(apiData?.teams?.length && espnData?.teams?.length),
         dataModeEffective: "live",
       }),
     };
@@ -1024,12 +1167,15 @@ async function resolveTeamsAdvancedAuto(
 
   if (requestedMode === "auto") {
     attempted.push("fixture");
-    const fixtureEnvelope = await fetchFixtureTeamsAdvanced(sport, teamKeys, mode, ctx.cacheBust);
-    const fixtureMap = new Map((fixtureEnvelope.data?.teams ?? []).map((team) => [team.teamKey.toUpperCase(), team]));
-    const hydratedTeams = Array.from(new Set(teamKeys.map((teamKey) => teamKey.trim().toUpperCase()).filter(Boolean)))
+    const fixtureEnvelope = await fetchFixtureTeamsAdvanced(sport, normalizedTeamKeys, mode, ctx.cacheBust);
+    const fixtureData = fixtureEnvelope.data
+      ? { ...fixtureEnvelope.data, teams: applyTeamRefs(fixtureEnvelope.data.teams, normalizedRefs) }
+      : fixtureEnvelope.data;
+    const fixtureMap = new Map((fixtureData?.teams ?? []).map((team) => [team.teamKey.toUpperCase(), team]));
+    const hydratedTeams = Array.from(new Set(normalizedTeamKeys.map((teamKey) => teamKey.trim().toUpperCase()).filter(Boolean)))
       .map((teamKey) => mergeTeamAdvancedRow(mergedLive?.teams.find((team) => team.teamKey.toUpperCase() === teamKey), fixtureMap.get(teamKey)))
       .filter((team): team is TeamAdvanced => team !== null);
-    const hydratedResult: TeamsAdvancedResult | null = hydratedTeams.length > 0 ? { sport, teams: hydratedTeams } : fixtureEnvelope.data;
+    const hydratedResult: TeamsAdvancedResult | null = hydratedTeams.length > 0 ? { sport, teams: hydratedTeams } : fixtureData;
     const hydratedMissingSections = (hydratedResult?.teams ?? []).flatMap((team) => teamMissingSections(team, mode));
     const hydrationImproved = hydratedMissingSections.length < mergedMissingSections.length;
     if (hydratedResult) {
@@ -1069,7 +1215,7 @@ async function resolveTeamsAdvancedAuto(
       sourceUsed,
       attemptedSources: attempted,
       warnings,
-      hydrationUsed: Boolean(apiData?.teams?.length && espnEnvelope.data?.teams?.length),
+      hydrationUsed: Boolean(apiData?.teams?.length && espnData?.teams?.length),
       dataModeEffective: "live",
     }),
     error: espnEnvelope.error ?? apiEnvelope.error,

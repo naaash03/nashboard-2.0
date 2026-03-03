@@ -120,3 +120,7 @@ http://192.168.220.1:3000
 - Data mode resolution: query `dataMode` -> persisted preference (`/api/preferences/data-mode`) -> `auto`.
 - Cookies are hostname-scoped: `localhost` cookies are not sent to `192.168.x.x`, and vice versa.
 - `next.config.ts` uses `allowedDevOrigins` for localhost, loopback, and `NASHBOARD_DEV_HOST`.
+- API-Sports sport hosts must be set per league:
+  - `SPORTS_API_NBA_BASE_URL=https://v1.basketball.api-sports.io`
+  - `SPORTS_API_MLB_BASE_URL=https://v1.baseball.api-sports.io`
+  - `SPORTS_API_NFL_BASE_URL=https://v1.american-football.api-sports.io`

@@ -8,7 +8,11 @@ beforeEach(() => {
 describe("teams advanced api route", () => {
   it("returns fixture envelope with status for each requested team", async () => {
     const mod = await import("@/app/api/teams/advanced/route");
-    const res = await mod.GET(new Request("http://localhost/api/teams/advanced?sport=nba&teamKeys=LAL,BOS&mode=advanced&dataMode=fixture"));
+    const teamRefs = encodeURIComponent(JSON.stringify([
+      { teamKey: "LAL", apiSportsTeamId: "40", espnTeamId: "13" },
+      { teamKey: "BOS", apiSportsTeamId: "2", espnTeamId: "2" },
+    ]));
+    const res = await mod.GET(new Request(`http://localhost/api/teams/advanced?sport=nba&teamKeys=LAL,BOS&teamRefs=${teamRefs}&mode=advanced&dataMode=fixture`));
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -18,6 +22,8 @@ describe("teams advanced api route", () => {
     for (const team of body.data.teams) {
       expect(team.teamKey).toEqual(expect.any(String));
       expect(team.status?.hasGameToday).toEqual(expect.any(Boolean));
+      expect(team.apiSportsTeamId).toEqual(expect.any(String));
+      expect(team.espnTeamId).toEqual(expect.any(String));
       if (team.record !== null && team.record !== undefined) {
         expect(team.record.wins).toEqual(expect.any(Number));
         expect(team.record.losses).toEqual(expect.any(Number));

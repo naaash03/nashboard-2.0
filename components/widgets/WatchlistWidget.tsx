@@ -30,6 +30,11 @@ type PlayerWatchlistBySport = Record<SportKey, PlayerSearchResultMin[]>;
 type TeamWatchlistBySport = Record<SportKey, string[]>;
 
 type TeamWatchlistNamesBySport = Record<SportKey, Record<string, string>>;
+type TeamProviderIds = {
+  apiSportsTeamId?: string;
+  espnTeamId?: string;
+};
+type TeamProviderIdsBySport = Record<SportKey, Record<string, TeamProviderIds>>;
 
 type ViewMode = "teams" | "players";
 type TeamsAdvancedEnvelope = Envelope<{ sport: SportKey; teams: TeamAdvanced[] }>;
@@ -68,6 +73,30 @@ export function addTeamToSportWatchlist(
   return {
     ...current,
     [sport]: [...sportTeams, normalized],
+  };
+}
+
+export function upsertTeamProviderIds(
+  current: Record<SportKey, Record<string, { apiSportsTeamId?: string; espnTeamId?: string }>>,
+  sport: SportKey,
+  teamKey: string,
+  nextIds: { apiSportsTeamId?: string; espnTeamId?: string },
+): Record<SportKey, Record<string, { apiSportsTeamId?: string; espnTeamId?: string }>> {
+  const normalizedKey = teamKey.trim().toUpperCase();
+  if (!normalizedKey) {
+    return current;
+  }
+  const existing = current[sport]?.[normalizedKey] ?? {};
+  const merged = {
+    apiSportsTeamId: nextIds.apiSportsTeamId ?? existing.apiSportsTeamId,
+    espnTeamId: nextIds.espnTeamId ?? existing.espnTeamId,
+  };
+  return {
+    ...current,
+    [sport]: {
+      ...current[sport],
+      [normalizedKey]: merged,
+    },
   };
 }
 
@@ -123,6 +152,48 @@ function normalizeTeamWatchlistNames(input: unknown): TeamWatchlistNamesBySport 
       if (typeof value === "string" && key.trim()) {
         out[sport][key.trim().toUpperCase()] = value.trim();
       }
+    }
+  }
+
+  return out;
+}
+
+function normalizeProviderId(input: unknown): string | undefined {
+  if (typeof input !== "string") {
+    return undefined;
+  }
+  const trimmed = input.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeTeamProviderIds(input: unknown): TeamProviderIdsBySport {
+  const source = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const out: TeamProviderIdsBySport = {
+    nfl: {},
+    mlb: {},
+    nba: {},
+  };
+
+  for (const sport of ["nfl", "mlb", "nba"] as const) {
+    const byTeam = source[sport];
+    if (!byTeam || typeof byTeam !== "object") {
+      continue;
+    }
+
+    for (const [teamKey, rawIds] of Object.entries(byTeam as Record<string, unknown>)) {
+      if (!teamKey || !rawIds || typeof rawIds !== "object") {
+        continue;
+      }
+      const typed = rawIds as Record<string, unknown>;
+      const apiSportsTeamId = normalizeProviderId(typed.apiSportsTeamId);
+      const espnTeamId = normalizeProviderId(typed.espnTeamId);
+      if (!apiSportsTeamId && !espnTeamId) {
+        continue;
+      }
+      out[sport][teamKey.trim().toUpperCase()] = {
+        apiSportsTeamId,
+        espnTeamId,
+      };
     }
   }
 
@@ -307,6 +378,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
   const [playerWatchlist, setPlayerWatchlist] = useState<PlayerWatchlistBySport>(normalizePlayerWatchlist(props.config.playerWatchlist));
   const [teamWatchlist, setTeamWatchlist] = useState<TeamWatchlistBySport>(normalizeTeamWatchlist(props.config.teamWatchlist));
   const [teamWatchlistNames, setTeamWatchlistNames] = useState<TeamWatchlistNamesBySport>(normalizeTeamWatchlistNames(props.config.teamWatchlistNames));
+  const [teamProviderIds, setTeamProviderIds] = useState<TeamProviderIdsBySport>(normalizeTeamProviderIds(props.config.teamProviderIds));
 
   const [teamQuery, setTeamQuery] = useState("");
   const [teamResults, setTeamResults] = useState<TeamSearchResult[]>([]);
@@ -335,6 +407,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
   const lastStatusReqKeyRef = useRef("");
   const lastStatusFetchAtRef = useRef(0);
   const statusAbortRef = useRef<AbortController | null>(null);
+  const teamProviderBackfillReqKeyRef = useRef("");
   const lastQuickProfileKeyRef = useRef("");
   const lastPlayerInsightsReqKeyRef = useRef("");
   const lastPlayerInsightsFetchAtRef = useRef(0);
@@ -346,6 +419,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setPlayerWatchlist(normalizePlayerWatchlist(props.config.playerWatchlist));
     setTeamWatchlist(normalizeTeamWatchlist(props.config.teamWatchlist));
     setTeamWatchlistNames(normalizeTeamWatchlistNames(props.config.teamWatchlistNames));
+    setTeamProviderIds(normalizeTeamProviderIds(props.config.teamProviderIds));
   }, [props.config]);
 
   const loadLegacy = useCallback(async (): Promise<WatchItem[]> => {
@@ -421,9 +495,15 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       mlb: {},
       nba: {},
     };
+    const nextProviderIds: TeamProviderIdsBySport = {
+      nfl: {},
+      mlb: {},
+      nba: {},
+    };
 
     setTeamWatchlist(nextTeams);
     setTeamWatchlistNames(nextNames);
+    setTeamProviderIds(nextProviderIds);
     migratedRef.current = true;
 
     void props.onPersist({
@@ -432,6 +512,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         watchlistSportKey: "nfl",
         teamWatchlist: nextTeams,
         teamWatchlistNames: nextNames,
+        teamProviderIds: nextProviderIds,
       },
     });
   }, [legacyItems, legacyLoaded, props]);
@@ -442,6 +523,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     playerWatchlist?: PlayerWatchlistBySport;
     teamWatchlist?: TeamWatchlistBySport;
     teamWatchlistNames?: TeamWatchlistNamesBySport;
+    teamProviderIds?: TeamProviderIdsBySport;
   }) => {
     const nextConfig = {
       ...props.config,
@@ -450,10 +532,11 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       playerWatchlist: next.playerWatchlist ?? playerWatchlist,
       teamWatchlist: next.teamWatchlist ?? teamWatchlist,
       teamWatchlistNames: next.teamWatchlistNames ?? teamWatchlistNames,
+      teamProviderIds: next.teamProviderIds ?? teamProviderIds,
     };
 
     await props.onPersist({ config: nextConfig });
-  }, [playerWatchlist, props, sportKey, teamWatchlist, teamWatchlistNames, viewMode]);
+  }, [playerWatchlist, props, sportKey, teamProviderIds, teamWatchlist, teamWatchlistNames, viewMode]);
 
   const teamsForSport = useMemo(() => teamWatchlist[sportKey] ?? [], [sportKey, teamWatchlist]);
   const playersForSport = useMemo(() => playerWatchlist[sportKey] ?? [], [playerWatchlist, sportKey]);
@@ -469,15 +552,24 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     () => Array.from(new Set(teamsForSport.map((key) => key.trim().toUpperCase()).filter(Boolean))).sort(),
     [teamsForSport],
   );
+  const currentTeamRefs = useMemo(
+    () => currentTeamKeys.map((teamKey) => ({
+      teamKey,
+      teamName: teamWatchlistNames[sportKey][teamKey],
+      apiSportsTeamId: teamProviderIds[sportKey][teamKey]?.apiSportsTeamId,
+      espnTeamId: teamProviderIds[sportKey][teamKey]?.espnTeamId,
+    })),
+    [currentTeamKeys, sportKey, teamProviderIds, teamWatchlistNames],
+  );
   const statusReqKey = useMemo(
     () => stableKey({
       sportKey,
-      teamKeys: currentTeamKeys,
+      teamRefs: currentTeamRefs,
       mode: props.mode,
       dataMode: props.dataMode,
       refreshTick: props.refreshTick,
     }),
-    [currentTeamKeys, props.dataMode, props.mode, props.refreshTick, sportKey],
+    [currentTeamRefs, props.dataMode, props.mode, props.refreshTick, sportKey],
   );
   const teamsModeActive = viewMode === "teams";
   const playersModeActive = viewMode === "players";
@@ -528,7 +620,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
     try {
       const modeParam = props.mode.toLowerCase();
-      const endpoint = `/api/teams/advanced?sport=${sportKey}&teamKeys=${encodeURIComponent(currentTeamKeys.join(","))}&mode=${modeParam}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
+      const teamRefsParam = encodeURIComponent(JSON.stringify(currentTeamRefs));
+      const endpoint = `/api/teams/advanced?sport=${sportKey}&teamKeys=${encodeURIComponent(currentTeamKeys.join(","))}&teamRefs=${teamRefsParam}&mode=${modeParam}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
       setLastEndpoint(endpoint);
 
       const res = await fetch(endpoint, { cache: "no-store", signal: controller.signal });
@@ -563,7 +656,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         setTeamAdvancedByKey({});
       }
     }
-  }, [currentTeamKeys, props.dataMode, props.mode, props.refreshTick, sportKey, statusReqKey, teamsModeActive]);
+  }, [currentTeamKeys, currentTeamRefs, props.dataMode, props.mode, props.refreshTick, sportKey, statusReqKey, teamsModeActive]);
 
   useEffect(() => {
     if (!teamsModeActive) {
@@ -812,6 +905,93 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     };
   }, [debouncedTeamQuery, runTeamSearch, teamSearchReqKey, teamsModeActive]);
 
+  useEffect(() => {
+    const missingTeamKeys = currentTeamKeys.filter((teamKey) => {
+      const ids = teamProviderIds[sportKey][teamKey];
+      return !ids?.apiSportsTeamId && !ids?.espnTeamId;
+    });
+
+    if (missingTeamKeys.length === 0) {
+      teamProviderBackfillReqKeyRef.current = "";
+      return;
+    }
+
+    const reqKey = stableKey({
+      sportKey,
+      missingTeamKeys,
+      labels: missingTeamKeys.map((teamKey) => teamWatchlistNames[sportKey][teamKey] ?? teamKey),
+      dataMode: props.dataMode,
+      refreshTick: props.refreshTick,
+    });
+    if (reqKey === teamProviderBackfillReqKeyRef.current) {
+      return;
+    }
+    teamProviderBackfillReqKeyRef.current = reqKey;
+
+    let cancelled = false;
+
+    void (async () => {
+      const nextBySport: TeamProviderIdsBySport = {
+        ...teamProviderIds,
+        [sportKey]: {
+          ...teamProviderIds[sportKey],
+        },
+      };
+      let changed = false;
+
+      for (const teamKey of missingTeamKeys) {
+        const query = (teamWatchlistNames[sportKey][teamKey] ?? teamKey).trim();
+        if (query.length < 2) {
+          continue;
+        }
+        try {
+          const endpointUrl = `/api/teams/search?sport=${sportKey}&q=${encodeURIComponent(query)}&limit=8&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
+          const response = await fetch(endpointUrl, { cache: "no-store" });
+          const json = (await response.json()) as TeamSearchEnvelope;
+          if (!response.ok || json.error) {
+            continue;
+          }
+          const rows = json.data ?? [];
+          const selected = rows.find((row) => row.teamKey.trim().toUpperCase() === teamKey)
+            ?? selectExactTeamResult(query, rows);
+          if (!selected) {
+            continue;
+          }
+          const existing = nextBySport[sportKey][teamKey] ?? {};
+          const apiSportsTeamId = selected.apiSportsTeamId ?? existing.apiSportsTeamId;
+          const espnTeamId = selected.espnTeamId ?? existing.espnTeamId;
+          if (apiSportsTeamId === existing.apiSportsTeamId && espnTeamId === existing.espnTeamId) {
+            continue;
+          }
+          nextBySport[sportKey][teamKey] = {
+            apiSportsTeamId,
+            espnTeamId,
+          };
+          changed = true;
+        } catch {
+          // best-effort backfill; keep existing values
+        }
+      }
+
+      if (!cancelled && changed) {
+        setTeamProviderIds(nextBySport);
+        await persistConfig({ teamProviderIds: nextBySport });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentTeamKeys,
+    persistConfig,
+    props.dataMode,
+    props.refreshTick,
+    sportKey,
+    teamProviderIds,
+    teamWatchlistNames,
+  ]);
+
   const addTeamFromResult = useCallback(async (result: TeamSearchResult) => {
     setTeamError(null);
     setTeamSearchHint(null);
@@ -840,16 +1020,25 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         [key]: result.displayName || teamWatchlistNames[sportKey][key] || key,
       },
     };
+    const nextProviderIds = upsertTeamProviderIds(teamProviderIds, sportKey, key, {
+      apiSportsTeamId: result.apiSportsTeamId,
+      espnTeamId: result.espnTeamId,
+    });
 
     setTeamWatchlist(nextTeams);
     setTeamWatchlistNames(nextNames);
+    setTeamProviderIds(nextProviderIds);
     setTeamQuery("");
     setTeamResults([]);
     setTeamActiveIndex(-1);
     setIsTeamSearching(false);
 
-    await persistConfig({ teamWatchlist: nextTeams, teamWatchlistNames: nextNames });
-  }, [currentTeamKeys, persistConfig, sportKey, teamWatchlist, teamWatchlistNames]);
+    await persistConfig({
+      teamWatchlist: nextTeams,
+      teamWatchlistNames: nextNames,
+      teamProviderIds: nextProviderIds,
+    });
+  }, [currentTeamKeys, persistConfig, sportKey, teamProviderIds, teamWatchlist, teamWatchlistNames]);
 
   const removeTeam = async (teamKey: string) => {
     const key = teamKey.trim().toUpperCase();
@@ -862,11 +1051,21 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       ...teamWatchlistNames,
       [sportKey]: { ...teamWatchlistNames[sportKey] },
     };
+    const nextProviderIds: TeamProviderIdsBySport = {
+      ...teamProviderIds,
+      [sportKey]: { ...teamProviderIds[sportKey] },
+    };
     delete nextNames[sportKey][key];
+    delete nextProviderIds[sportKey][key];
 
     setTeamWatchlist(nextTeams);
     setTeamWatchlistNames(nextNames);
-    await persistConfig({ teamWatchlist: nextTeams, teamWatchlistNames: nextNames });
+    setTeamProviderIds(nextProviderIds);
+    await persistConfig({
+      teamWatchlist: nextTeams,
+      teamWatchlistNames: nextNames,
+      teamProviderIds: nextProviderIds,
+    });
   };
 
   const onTeamSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1024,6 +1223,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setTeamAdvancedByKey({});
     lastPlayerInsightsReqKeyRef.current = "";
     lastStatusReqKeyRef.current = "";
+    teamProviderBackfillReqKeyRef.current = "";
     await persistConfig({ sportKey: nextSportKey });
   };
 
@@ -1139,6 +1339,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                         {recordLabel ? <p>Record: {recordLabel}</p> : null}
                         {standingsLabel ? <p>Standings: {standingsLabel}</p> : null}
                         {status?.hasGameToday ? <p>Live detail: {teamLiveDetail(status)}</p> : null}
+                        {advanced?.metaNotes?.[0] ? <p>Note: {advanced.metaNotes[0]}</p> : null}
                         {!hasAdvancedDetails ? <p>No additional details available.</p> : null}
                       </div>
                     </details>
@@ -1282,6 +1483,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         <pre className="overflow-auto text-[10px]">{JSON.stringify({
           teamWatchlist,
           teamWatchlistNames,
+          teamProviderIds,
           playerWatchlist,
           teamAdvancedByKey,
           playerInsightsById,
@@ -1303,6 +1505,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
           lastEndpoint,
           headerMeta,
           teamWatchlist,
+          teamProviderIds,
           playerWatchlist,
         })}
       >

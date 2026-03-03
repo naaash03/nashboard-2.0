@@ -1,6 +1,29 @@
 ﻿# FIX REPORT
 
 ## Changelog (2026-03-03)
+- API-Sports hosts + provider IDs + schedule window/timezone:
+  - API-Sports host routing now uses sport-correct bases:
+    - NBA: https://v1.basketball.api-sports.io
+    - MLB: https://v1.baseball.api-sports.io
+    - NFL: https://v1.american-football.api-sports.io
+  - Added host normalization in lib/providers/apiSports/config.ts so legacy NBA host values are auto-upgraded to the basketball host.
+  - Team search rows now include provider IDs when available:
+    - apiSportsTeamId
+    - espnTeamId
+  - Watchlist now persists provider IDs in widget config (teamProviderIds) and performs best-effort backfill for old entries.
+  - /api/teams/advanced now accepts teamRefs and prefers provider IDs over abbreviation-only lookups.
+  - API-Sports team advanced now uses a buffered ET schedule window (today-3 to today+7) to compute:
+    - recent final game
+    - next scheduled game
+    - today/live context
+  - Data Health now reports timezone and schedule window diagnostics and explicitly notes the switch away from today-only logic.
+
+- Validation checklist:
+  - Knicks/NBA and similar short keys resolve through provider IDs when available.
+  - Teams Advanced surfaces last/next game from the buffered ET window.
+  - Data Health shows timezone and schedule window values.
+  - Hybrid precedence remains unchanged: API-Sports -> ESPN -> Fixture.
+## Changelog (2026-03-03)
 - Advanced widgets restore pass (hybrid enrichment):
   - Regression checklist from pre-hybrid rich Advanced state (`f1dac12` and earlier):
     - Player Card Advanced must keep all 4 sections visible: Live Context, Season Highlights, Recent Games, Status/Injury.
@@ -381,6 +404,8 @@
 - [x] Data health endpoint
 - [x] Vitest fixture-mode tests for required offseason/stability cases
 - [x] MLB scaffolding widget slots + provider stub
+
+
 
 
 

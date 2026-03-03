@@ -17,6 +17,10 @@ describe("data health endpoint", () => {
     expect(body.endpoints).toBeDefined();
     expect(body.endpoints.apiSports).toBeDefined();
     expect(body.endpoints.espn).toBeDefined();
+    expect(body.schedule?.timezone).toBe("America/New_York");
+    expect(body.schedule?.windowStart).toEqual(expect.any(String));
+    expect(body.schedule?.windowEnd).toEqual(expect.any(String));
+    expect(body.schedule?.strategy).toBe("windowed-range");
 
     if (typeof body.cache.lastCacheAgeSeconds === "number") {
       expect(body.cache.lastCacheAgeSeconds).toBeGreaterThanOrEqual(0);

@@ -34,6 +34,16 @@ type DataHealth = {
     fixture?: string;
   };
   cache?: { hit?: boolean; miss?: boolean; lastCacheAgeSeconds?: number | null };
+  schedule?: {
+    timezone?: string;
+    today?: string;
+    windowStart?: string;
+    windowEnd?: string;
+    lookbackDays?: number;
+    lookaheadDays?: number;
+    strategy?: string;
+    note?: string;
+  };
   endpoints?: {
     apiSports?: Record<string, EndpointHealth>;
     espn?: Record<string, EndpointHealth>;
@@ -106,6 +116,10 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
           <p>Fixture status: {data.status?.fixture}</p>
           <p>Cache hit: {String(data.cache?.hit)} | miss: {String(data.cache?.miss)}</p>
           <p>Last cache age: {Math.max(0, Number(data.cache?.lastCacheAgeSeconds ?? 0))}s</p>
+          <p>Schedule timezone: {data.schedule?.timezone ?? "-"}</p>
+          <p>Schedule window: {data.schedule?.windowStart ?? "-"} to {data.schedule?.windowEnd ?? "-"}</p>
+          <p>Schedule strategy: {data.schedule?.strategy ?? "-"}</p>
+          {data.schedule?.note ? <p className="text-neutral-400">{data.schedule.note}</p> : null}
 
           <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Probe providers now</button>
 

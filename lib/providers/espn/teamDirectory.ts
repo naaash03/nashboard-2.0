@@ -89,6 +89,7 @@ function normalizeTeamItem(row: unknown): TeamSearchResult | null {
   }
 
   const teamKey = readString(item.abbreviation) ?? readString(item.shortDisplayName) ?? readString(item.teamKey);
+  const espnTeamId = readString(item.id);
   const displayName = readString(item.displayName) ?? readString(item.name) ?? readString(item.location);
   const league = readString(item.league)?.toLowerCase();
 
@@ -100,6 +101,8 @@ function normalizeTeamItem(row: unknown): TeamSearchResult | null {
     teamKey: teamKey.toUpperCase(),
     displayName,
     league,
+    abbreviation: readString(item.abbreviation)?.toUpperCase(),
+    espnTeamId,
     logo: pickLogo(item),
   };
 }

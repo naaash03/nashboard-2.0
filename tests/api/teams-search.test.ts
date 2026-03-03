@@ -19,6 +19,7 @@ describe("teams search api route", () => {
       teamKey: expect.any(String),
       displayName: expect.any(String),
       league: "nfl",
+      espnTeamId: expect.any(String),
     }));
   });
 
@@ -33,6 +34,7 @@ describe("teams search api route", () => {
       teamKey: expect.any(String),
       displayName: expect.any(String),
       league: "mlb",
+      espnTeamId: expect.any(String),
     }));
   });
 
@@ -47,6 +49,7 @@ describe("teams search api route", () => {
       teamKey: expect.any(String),
       displayName: expect.any(String),
       league: "nba",
+      espnTeamId: expect.any(String),
     }));
   });
 

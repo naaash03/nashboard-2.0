@@ -35,7 +35,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sign in to save watchlist teams" }, { status: 401 });
   }
 
-  const body = (await req.json()) as { teamKey?: string; teamName?: string; sport?: string };
+  const body = (await req.json()) as {
+    teamKey?: string;
+    teamName?: string;
+    sport?: string;
+    apiSportsTeamId?: string;
+    espnTeamId?: string;
+  };
   if (!body.teamKey || !body.teamName) {
     return NextResponse.json({ error: "teamKey and teamName are required" }, { status: 400 });
   }
@@ -58,6 +64,8 @@ export async function POST(req: Request) {
       sport: "NFL",
       teamKey: body.teamKey,
       teamName: body.teamName,
+      apiSportsTeamId: typeof body.apiSportsTeamId === "string" ? body.apiSportsTeamId : null,
+      espnTeamId: typeof body.espnTeamId === "string" ? body.espnTeamId : null,
     },
   });
 

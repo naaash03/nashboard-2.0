@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { resolvePlayersSearch } from "@/lib/providers";
 import { fetchApiSportsJson, getApiSportsHealthSnapshot } from "@/lib/providers/apiSports/client";
+import { buildDateRange } from "@/lib/providers/scheduleWindow";
 import { fetchEspnJson, getDataMode, getEspnHealthSnapshot } from "@/lib/providers/espn/client";
 import type { DataSource } from "@/lib/providers/types";
 
@@ -119,6 +120,7 @@ export async function GET(req: Request) {
   const espnSnapshot = getEspnHealthSnapshot();
   const apiSportsSnapshot = getApiSportsHealthSnapshot();
   const allSnapshotRows = [...Object.values(espnSnapshot), ...Object.values(apiSportsSnapshot)];
+  const scheduleWindow = buildDateRange();
 
   let persistedCacheAge: number | null = null;
   let persistedEndpoints: Record<string, Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>> = {};
@@ -176,6 +178,16 @@ export async function GET(req: Request) {
       hit: allSnapshotRows.some((item) => item.cacheHit === true),
       miss: allSnapshotRows.some((item) => item.cacheHit === false),
       lastCacheAgeSeconds: persistedCacheAge,
+    },
+    schedule: {
+      timezone: scheduleWindow.timeZone,
+      today: scheduleWindow.today,
+      windowStart: scheduleWindow.startDate,
+      windowEnd: scheduleWindow.endDate,
+      lookbackDays: scheduleWindow.lookbackDays,
+      lookaheadDays: scheduleWindow.lookaheadDays,
+      strategy: "windowed-range",
+      note: "Today-only schedule probing was replaced with a buffered yesterday/today/next window.",
     },
     endpoints: {
       apiSports: apiSportsSnapshot,

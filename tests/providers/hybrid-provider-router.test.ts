@@ -379,6 +379,56 @@ describe("hybrid provider precedence", () => {
     expect(Boolean(result.data?.teams[0]?.lastGame)).toBe(Boolean(expected.teams[0].lastGame));
   });
 
+  it("passes provider team refs to API-Sports team advanced provider when IDs are available", async () => {
+    hoisted.apiGetTeamsAdvanced.mockResolvedValue({
+      data: {
+        sport: "nba",
+        teams: [
+          {
+            teamKey: "LAL",
+            teamName: "Los Angeles Lakers",
+            status: { sport: "nba", teamKey: "LAL", hasGameToday: false },
+            nextGame: null,
+            record: null,
+            standings: null,
+            lastGame: null,
+          },
+        ],
+      },
+      meta: {
+        sourceUsed: "apiSports",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "api-team-refs",
+        dataMode: "live",
+      },
+    });
+
+    hoisted.espnGetTeamsAdvanced.mockResolvedValue({
+      data: { sport: "nba", teams: [] },
+      meta: {
+        sourceUsed: "espn",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+        requestId: "espn-team-refs",
+        dataMode: "live",
+      },
+    });
+
+    const { resolveTeamAdvanced } = await import("@/lib/providers");
+    await resolveTeamAdvanced("nba", ["LAL"], "advanced", {
+      dataMode: "live",
+      cacheBust: "refresh-team-ids",
+      teamRefs: [{ teamKey: "LAL", teamName: "Los Angeles Lakers", apiSportsTeamId: "40", espnTeamId: "13" }],
+    });
+
+    expect(hoisted.apiGetTeamsAdvanced).toHaveBeenCalledWith(
+      "nba",
+      [{ teamKey: "LAL", teamName: "Los Angeles Lakers", apiSportsTeamId: "40", espnTeamId: "13" }],
+      "advanced",
+      "live",
+      "refresh-team-ids",
+    );
+  });
+
   it("uses fixture fallback for team advanced when API-Sports + ESPN remain incomplete", async () => {
     const apiTeamMinimal = loadFixture("tests/fixtures/hybrid/apiSports/team_advanced_minimal.json");
     const fixtureExpected = loadFixture("tests/fixtures/hybrid/merged/team_advanced_expected.json");
