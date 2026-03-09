@@ -123,7 +123,21 @@ export async function GET(req: Request) {
   const scheduleWindow = buildDateRange();
 
   let persistedCacheAge: number | null = null;
-  let persistedEndpoints: Record<string, Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>> = {};
+  type PersistedEndpointSnapshot = {
+    fetchedAt: string;
+    ageSeconds: number;
+    sourceUsed: string;
+    warning?: string;
+  };
+  type PersistedEndpointByProvider = Record<string, Record<string, PersistedEndpointSnapshot>>;
+  type CachedResponseRow = {
+    provider: string;
+    endpoint: string;
+    fetchedAt: Date;
+    sourceUsed: unknown;
+    warning: string | null;
+  };
+  let persistedEndpoints: PersistedEndpointByProvider = {};
 
   if (process.env.DATABASE_URL) {
     const { prisma } = await import("@/lib/db/prisma");
@@ -140,7 +154,7 @@ export async function GET(req: Request) {
     const now = Date.now();
     persistedCacheAge = latest[0] ? Math.max(0, Math.floor((now - latest[0].fetchedAt.getTime()) / 1000)) : null;
 
-    persistedEndpoints = latest.reduce<Record<string, Record<string, { fetchedAt: string; ageSeconds: number; sourceUsed: string; warning?: string }>>>((acc, item) => {
+    persistedEndpoints = (latest as CachedResponseRow[]).reduce((acc: PersistedEndpointByProvider, item: CachedResponseRow) => {
       if (!acc[item.provider]) {
         acc[item.provider] = {};
       }
@@ -154,7 +168,7 @@ export async function GET(req: Request) {
         };
       }
       return acc;
-    }, {});
+    }, {} as PersistedEndpointByProvider);
   }
 
   return NextResponse.json({
