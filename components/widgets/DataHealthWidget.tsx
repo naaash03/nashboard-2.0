@@ -100,6 +100,7 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
   const effectiveSource = (data?.effectiveSource ?? "unknown").toUpperCase();
   const cacheState = data?.cache?.hit ? "hit" : (data?.cache?.miss ? "miss" : "n/a");
   const fallbackState = data?.hydrationOccurred ? "Fallback/enrichment used" : "Primary source response";
+  const diagnosticsEnabled = props.mode === "ADVANCED";
   const scheduleWindowLabel = data?.schedule
     ? `${data.schedule.windowStart ?? "-"} to ${data.schedule.windowEnd ?? "-"}`
     : "-";
@@ -122,43 +123,49 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
             <p>Schedule window: {scheduleWindowLabel}</p>
           </div>
 
-          <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Probe providers now</button>
+          {!diagnosticsEnabled ? <p className="text-neutral-400">Switch to Advanced mode for diagnostics and provider probes.</p> : null}
 
-          <details className="rounded border border-neutral-700 bg-black/20 p-2">
-            <summary className="cursor-pointer text-[11px] text-neutral-300">Provider status</summary>
-            <div className="mt-1 space-y-1 text-neutral-400">
-              <p>Preference mode: {props.preferenceDataMode}</p>
-              <p>Query mode: {data.queryDataMode ?? "-"}</p>
-              <p>Resolver source: {data.resolutionSource ?? props.dataModeSource}</p>
-              <p>DB status: {data.status?.db}</p>
-              <p>API-Sports status: {data.status?.apiSports ?? "empty"}</p>
-              <p>ESPN status: {data.status?.espn ?? "empty"}</p>
-              <p>Fixture status: {data.status?.fixture}</p>
-              <p>Schedule strategy: {data.schedule?.strategy ?? "-"}</p>
-              {data.schedule?.note ? <p>{data.schedule.note}</p> : null}
-            </div>
-          </details>
+          {diagnosticsEnabled ? (
+            <>
+              <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Probe providers now</button>
 
-          {data.hydrationNotes && data.hydrationNotes.length > 0 ? (
-            <details className="rounded border border-neutral-700 bg-black/20 p-2">
-              <summary className="cursor-pointer text-[11px] text-neutral-300">Hydration notes</summary>
-              <ul className="mt-1 space-y-1 text-neutral-400">
-                {data.hydrationNotes.map((note, index) => (
-                  <li key={`${index}-${note}`}>- {note}</li>
-                ))}
-              </ul>
-            </details>
+              <details className="rounded border border-neutral-700 bg-black/20 p-2">
+                <summary className="cursor-pointer text-[11px] text-neutral-300">Provider status</summary>
+                <div className="mt-1 space-y-1 text-neutral-400">
+                  <p>Preference mode: {props.preferenceDataMode}</p>
+                  <p>Query mode: {data.queryDataMode ?? "-"}</p>
+                  <p>Resolver source: {data.resolutionSource ?? props.dataModeSource}</p>
+                  <p>DB status: {data.status?.db}</p>
+                  <p>API-Sports status: {data.status?.apiSports ?? "empty"}</p>
+                  <p>ESPN status: {data.status?.espn ?? "empty"}</p>
+                  <p>Fixture status: {data.status?.fixture}</p>
+                  <p>Schedule strategy: {data.schedule?.strategy ?? "-"}</p>
+                  {data.schedule?.note ? <p>{data.schedule.note}</p> : null}
+                </div>
+              </details>
+
+              {data.hydrationNotes && data.hydrationNotes.length > 0 ? (
+                <details className="rounded border border-neutral-700 bg-black/20 p-2">
+                  <summary className="cursor-pointer text-[11px] text-neutral-300">Hydration notes</summary>
+                  <ul className="mt-1 space-y-1 text-neutral-400">
+                    {data.hydrationNotes.map((note, index) => (
+                      <li key={`${index}-${note}`}>- {note}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+
+              <details className="rounded border border-neutral-700 bg-black/20 p-2">
+                <summary className="cursor-pointer text-[11px] text-neutral-300">Endpoint diagnostics</summary>
+                <div className="mt-2 space-y-2">
+                  <p className="text-[11px] text-neutral-300">API-Sports</p>
+                  <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(data.endpoints?.apiSports ?? {}, null, 2)}</pre>
+                  <p className="text-[11px] text-neutral-300">ESPN</p>
+                  <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(data.endpoints?.espn ?? {}, null, 2)}</pre>
+                </div>
+              </details>
+            </>
           ) : null}
-
-          <details className="rounded border border-neutral-700 bg-black/20 p-2">
-            <summary className="cursor-pointer text-[11px] text-neutral-300">Endpoint diagnostics</summary>
-            <div className="mt-2 space-y-2">
-              <p className="text-[11px] text-neutral-300">API-Sports</p>
-              <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(data.endpoints?.apiSports ?? {}, null, 2)}</pre>
-              <p className="text-[11px] text-neutral-300">ESPN</p>
-              <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(data.endpoints?.espn ?? {}, null, 2)}</pre>
-            </div>
-          </details>
         </>
       ) : (
         <p>Unable to load data health.</p>

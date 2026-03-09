@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildPlayerSearchUrl, normalizePlayerName, sanitizePlayerCardWarning, selectExactPlayerResult } from "@/components/widgets/PlayerCardWidget";
+import { buildPlayerSearchSubtitle, buildPlayerSearchUrl, normalizePlayerName, sanitizePlayerCardWarning, selectExactPlayerResult } from "@/components/widgets/PlayerCardWidget";
 
 describe("PlayerCardWidget search wiring", () => {
   it("builds local API search URL with encoded q parameter", () => {
@@ -39,6 +39,18 @@ describe("PlayerCardWidget search wiring", () => {
     expect(selected?.fullName).toBe("LeBron James");
   });
 
+  it("builds stable search subtitle with identity context", () => {
+    const subtitle = buildPlayerSearchSubtitle({
+      playerId: "1966",
+      fullName: "LeBron James",
+      teamName: "Los Angeles Lakers",
+      position: "F",
+    });
+    expect(subtitle).toContain("Los Angeles Lakers");
+    expect(subtitle).toContain("F");
+    expect(subtitle).toContain("ID 1966");
+  });
+
   it("contains no direct ESPN client URL calls", () => {
     const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
     expect(source.includes("site.web.api.espn.com")).toBe(false);
@@ -52,9 +64,8 @@ describe("PlayerCardWidget search wiring", () => {
     expect(source.includes("Season Highlights")).toBe(true);
     expect(source.includes("Recent Games")).toBe(true);
     expect(source.includes("Status / Injury")).toBe(true);
-    expect(source.includes("Live context unavailable.")).toBe(true);
-    expect(source.includes("Season insights unavailable.")).toBe(true);
-    expect(source.includes("No recent games available.")).toBe(true);
+    expect(source.includes("Advanced insights unavailable right now.")).toBe(true);
+    expect(source.includes("No players found.")).toBe(true);
   });
 
   it("sanitizes provider diagnostics from user-facing warnings", () => {

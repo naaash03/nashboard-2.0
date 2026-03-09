@@ -40,6 +40,17 @@ export default function WidgetLibrary({
     { key: "Utilities", label: "Misc", items: categories.Utilities },
   ];
 
+  const stabilityLabel: Record<NonNullable<WidgetDefinition["stability"]>, string> = {
+    stable: "Stable",
+    experimental: "Experimental",
+    admin: "Admin",
+  };
+  const audienceLabel: Record<NonNullable<WidgetDefinition["audience"]>, string> = {
+    beginner: "Beginner",
+    advanced: "Advanced",
+    mixed: "Beginner+Advanced",
+  };
+
   return (
     <div className="fixed inset-0 z-40 bg-black/60 p-4">
       <div className="mx-auto max-w-3xl rounded-xl border border-neutral-700 bg-neutral-900 p-4">
@@ -54,7 +65,21 @@ export default function WidgetLibrary({
               {section.items.length === 0 ? <p className="text-xs text-neutral-500">No widgets.</p> : null}
               {section.items.map((widget) => (
                 <div key={widget.key} className="rounded border border-neutral-700 bg-neutral-950 p-2 text-xs">
-                  <p className="font-medium">{widget.name}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">{widget.name}</p>
+                    <div className="flex gap-1 text-[10px]">
+                      {widget.stability ? (
+                        <span className="rounded border border-neutral-600 px-1 py-0.5 text-neutral-300">
+                          {stabilityLabel[widget.stability]}
+                        </span>
+                      ) : null}
+                      {widget.audience ? (
+                        <span className="rounded border border-neutral-700 px-1 py-0.5 text-neutral-400">
+                          {audienceLabel[widget.audience]}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                   <p className="text-neutral-400">{widget.description}</p>
                   <button type="button" className="mt-2 rounded border border-neutral-700 px-2 py-1" onClick={() => onAddWidget(widget.key)}>Add</button>
                 </div>

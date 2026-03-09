@@ -225,6 +225,32 @@ export function sanitizePlayerCardWarning(raw: string | null | undefined, fallba
   return text;
 }
 
+export function buildPlayerSearchSubtitle(result: PlayerSearchResult): string {
+  return compactLine([
+    result.teamName || "Team unavailable",
+    result.position || "Position unavailable",
+    `ID ${result.playerId}`,
+  ]);
+}
+
+function playerStatusLine(profile: PlayerProfile | null, insights: PlayerInsights | null): string | null {
+  if (insights?.live?.hasGameToday) {
+    return formatLiveLine(insights);
+  }
+
+  const recentLine = insights?.recent?.games?.[0]?.line?.trim();
+  if (recentLine) {
+    return `Recent: ${recentLine}`;
+  }
+
+  const injuryStatus = profile?.injury?.status?.trim();
+  if (injuryStatus) {
+    return `Status: ${injuryStatus}`;
+  }
+
+  return null;
+}
+
 export default function PlayerCardWidget(props: WidgetCommonProps) {
   const initialSport = normalizeSportKey(props.config.sportKey);
 
@@ -366,8 +392,14 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   );
 
   const insightsRequestKey = useMemo(
-    () => props.mode === "ADVANCED" && selectedPlayerId
-      ? stableKey({ sportKey, playerId: selectedPlayerId, dataMode: props.dataMode, mode: "advanced", refreshTick: props.refreshTick })
+    () => selectedPlayerId
+      ? stableKey({
+          sportKey,
+          playerId: selectedPlayerId,
+          dataMode: props.dataMode,
+          mode: props.mode === "ADVANCED" ? "advanced" : "beginner",
+          refreshTick: props.refreshTick,
+        })
       : "",
     [props.dataMode, props.mode, props.refreshTick, selectedPlayerId, sportKey],
   );
@@ -420,7 +452,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   }, [loadPlayer, profileRequestKey, selectedPlayerId]);
 
   useEffect(() => {
-    if (props.mode !== "ADVANCED" || !selectedPlayerId) {
+    if (!selectedPlayerId) {
       setInsights(null);
       setInsightsMeta(null);
       setIsInsightsLoading(false);
@@ -438,7 +470,8 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
     void (async () => {
       try {
-        const endpointUrl = `/api/players/insights?sport=${sportKey}&playerId=${encodeURIComponent(selectedPlayerId)}&mode=advanced&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
+        const modeParam = props.mode === "ADVANCED" ? "advanced" : "beginner";
+        const endpointUrl = `/api/players/insights?sport=${sportKey}&playerId=${encodeURIComponent(selectedPlayerId)}&mode=${modeParam}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
         setEndpoint(endpointUrl);
         const response = await fetch(endpointUrl, { cache: "no-store", signal: controller.signal });
         const json = (await response.json()) as PlayerInsightsResponse;
@@ -452,11 +485,14 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         setInsights(json.data ?? null);
         setInsightsMeta(json.meta ?? null);
         setWarning(null);
+        setLastError(null);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
         }
-        setWarning(sanitizePlayerCardWarning(String(error), "Season insights unavailable."));
+        setInsights(null);
+        setInsightsMeta(null);
+        setLastError(String(error));
       } finally {
         if (!controller.signal.aborted) {
           setIsInsightsLoading(false);
@@ -602,6 +638,8 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const hasSeasonMetrics = Boolean(insights?.season && insights.season.metrics.length > 0);
   const hasRecentGames = Boolean(insights?.recent?.games && insights.recent.games.length > 0);
   const hasInjuryStatus = Boolean(insights?.injury && (insights.injury.status || insights.injury.detail));
+  const hasAnyAdvancedInsights = hasLiveContext || hasSeasonMetrics || hasRecentGames || hasInjuryStatus;
+  const statusLine = playerStatusLine(data, insights);
 
   return (
     <div className="space-y-2 text-xs">
@@ -639,6 +677,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       {trimmed.length < 3 ? <p className="text-neutral-400">Type 3+ chars to search.</p> : null}
       {enterHint ? <p className="text-amber-300">{enterHint}</p> : null}
       {isSearching ? <p className="text-neutral-400">Searching...</p> : null}
+      {debouncedQuery.length >= 3 && !selectedPlayerId && !isSearching && results.length === 0 && !warning ? <p className="text-neutral-400">No players found.</p> : null}
 
       {results.length > 0 ? (
         <div className="max-h-44 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
@@ -650,8 +689,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
               className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-neutral-800"
             >
               <img src={result.headshot || "/globe.svg"} alt="player" className="h-8 w-8 rounded object-cover" />
-              <span>
-                {result.fullName} · {result.teamName ?? "-"} · {result.position ?? "-"}
+              <span className="min-w-0">
+                <span className="block truncate">{result.fullName}</span>
+                <span className="block truncate text-[11px] text-neutral-400">{buildPlayerSearchSubtitle(result)}</span>
               </span>
             </button>
           ))}
@@ -668,6 +708,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
               <p className="font-medium">{data.fullName}</p>
               <p>{compactLine([data.teamName, data.position])}</p>
               {physicalLine ? <p className="text-neutral-300">{physicalLine}</p> : null}
+              {statusLine ? <p className="text-neutral-400">{statusLine}</p> : null}
             </div>
           </div>
 
@@ -682,10 +723,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
             </div>
           ) : null}
 
-          {data.whyItMatters ? <p className="text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
-          {props.mode === "ADVANCED" && data.stats ? (
-            <pre className="overflow-auto rounded bg-black/40 p-1 text-[10px]">{JSON.stringify(data.stats, null, 2)}</pre>
-          ) : null}
+          {props.mode === "ADVANCED" && data.whyItMatters ? <p className="text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
           {props.mode === "ADVANCED" && data.learnMore ? (
             <a href={data.learnMore} target="_blank" rel="noreferrer" className="text-blue-300 underline">Learn more</a>
           ) : null}
@@ -702,19 +740,20 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       {props.mode === "ADVANCED" && selectedPlayerId ? (
         <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
           {isInsightsLoading ? <p className="text-neutral-400">Loading advanced insights...</p> : null}
+          {!isInsightsLoading && !hasAnyAdvancedInsights ? (
+            <p className="text-neutral-400">Advanced insights unavailable right now.</p>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Live Context</summary>
-            {hasLiveContext ? (
+          {hasLiveContext ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Live Context</summary>
               <p className="mt-1 text-neutral-300">{formatLiveLine(insights)}</p>
-            ) : (
-              <p className="mt-1 text-neutral-400">Live context unavailable.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Season Highlights</summary>
-            {hasSeasonMetrics ? (
+          {hasSeasonMetrics ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Season Highlights</summary>
               <div className="mt-2 space-y-2">
                 <p className="text-neutral-300">{insights?.season?.headline}</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -726,14 +765,12 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                   ))}
                 </div>
               </div>
-            ) : (
-              <p className="mt-1 text-neutral-400">Season insights unavailable.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Recent Games</summary>
-            {hasRecentGames ? (
+          {hasRecentGames ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Recent Games</summary>
               <div className="mt-2 max-h-52 space-y-1 overflow-auto">
                 <p className="text-neutral-300">{insights?.recent?.headline}</p>
                 {(insights?.recent?.games ?? []).map((game, index) => (
@@ -745,22 +782,18 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="mt-1 text-neutral-400">No recent games available.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
 
-          <details className="rounded border border-neutral-800 bg-black/20 p-2">
-            <summary className="cursor-pointer font-medium">Status / Injury</summary>
-            {hasInjuryStatus ? (
+          {hasInjuryStatus ? (
+            <details className="rounded border border-neutral-800 bg-black/20 p-2">
+              <summary className="cursor-pointer font-medium">Status / Injury</summary>
               <div className="mt-1">
                 <p className="text-neutral-300">{insights?.injury?.status ?? "Status unavailable"}</p>
                 {insights?.injury?.detail ? <p className="text-neutral-400">{insights.injury.detail}</p> : null}
               </div>
-            ) : (
-              <p className="mt-1 text-neutral-400">Live status unavailable.</p>
-            )}
-          </details>
+            </details>
+          ) : null}
         </div>
       ) : null}
 
@@ -779,6 +812,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         <p>Final upstream URL: {activeMeta?.endpointUrl ?? "-"}</p>
         <p>Profile warning: {meta?.warning ?? "-"}</p>
         <p>Insights warning: {insightsMeta?.warning ?? "-"}</p>
+        <p>Profile stats available: {data?.stats ? "yes" : "no"}</p>
         <p>Last error: {lastError ?? "none"}</p>
         {isDev ? (
           <label className="mt-1 flex items-center gap-2 text-[11px]">
@@ -793,7 +827,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         {isDev && showRawSearch ? (
           <pre className="overflow-auto text-[10px]">{JSON.stringify(lastSearchRaw, null, 2)}</pre>
         ) : null}
-        <pre className="overflow-auto text-[10px]">{JSON.stringify({ profileMeta: meta, insightsMeta, insights }, null, 2)}</pre>
+        <pre className="overflow-auto text-[10px]">{JSON.stringify({ profileMeta: meta, insightsMeta, insights, profileStats: data?.stats ?? null }, null, 2)}</pre>
       </details>
 
       <button

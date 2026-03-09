@@ -347,10 +347,31 @@ export function teamCardStatusLabel(status: TeamStatus | undefined, team: TeamAd
   if (status?.hasGameToday) {
     return teamStatusLabel(status);
   }
-  if (team?.lastGame || team?.nextGame) {
-    return "No game today";
+  if (team?.lastGame) {
+    return `Last: ${lastGameLabel(team)}`;
+  }
+  if (team?.nextGame) {
+    return `Next: ${nextGameLabel(team)}`;
   }
   return "No scheduled games available right now";
+}
+
+export function teamCardSecondaryLabel(status: TeamStatus | undefined, team: TeamAdvanced | undefined): string | null {
+  if (status?.hasGameToday) {
+    if (team?.lastGame) {
+      return `Last: ${lastGameLabel(team)}`;
+    }
+    if (team?.nextGame) {
+      return `Next: ${nextGameLabel(team)}`;
+    }
+    return null;
+  }
+
+  if (team?.lastGame && team?.nextGame) {
+    return `Next: ${nextGameLabel(team)}`;
+  }
+
+  return null;
 }
 
 function teamLiveDetail(status: TeamStatus | undefined): string {
@@ -383,9 +404,23 @@ function nextGameLabel(team: TeamAdvanced | undefined): string {
 
 export function playerInsightsSummary(insight: PlayerInsights | undefined): string {
   if (!insight) {
-    return "Insights not available";
+    return "Live context unavailable";
   }
-  return insight.season?.headline ?? insight.recent?.headline ?? "Insights not available";
+  return insight.season?.headline ?? insight.recent?.headline ?? "Live context unavailable";
+}
+
+export function playerSearchSubtitleLine(player: PlayerSearchResultMin, sportKey: SportKey): string {
+  return compact([
+    player.position ?? "Position unavailable",
+    player.teamName ?? "Team unavailable",
+    sportLabel(sportKey),
+    `ID ${player.playerId}`,
+  ]);
+}
+
+export function playerWatchlistRecentLine(insight: PlayerInsights | undefined): string {
+  const line = insight?.recent?.games?.[0]?.line?.trim();
+  return line ? `Last: ${line}` : "No recent games available";
 }
 
 function playerTeamLiveLabel(insight: PlayerInsights | undefined): string {
@@ -426,6 +461,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
   const [playerQuery, setPlayerQuery] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerSearchResultMin[]>([]);
+  const [isPlayerSearching, setIsPlayerSearching] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
 
   const [lastProfile, setLastProfile] = useState<PlayerProfile | null>(null);
@@ -857,15 +893,18 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
   useEffect(() => {
     if (!playersModeActive) {
       setPlayerResults([]);
+      setIsPlayerSearching(false);
       return;
     }
 
     if (debouncedPlayerQuery.length < 3) {
       setPlayerResults([]);
+      setIsPlayerSearching(false);
       return;
     }
 
     const controller = new AbortController();
+    setIsPlayerSearching(true);
     void (async () => {
       try {
         const results = await runPlayerSearch(debouncedPlayerQuery, controller.signal);
@@ -877,6 +916,10 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         if (!controller.signal.aborted) {
           setPlayerError(sanitizeRuntimeMessage(String(error), "Player search is temporarily unavailable."));
           setPlayerResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsPlayerSearching(false);
         }
       }
     })();
@@ -1227,10 +1270,12 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setTeamError(null);
     setPlayerError(null);
     if (next === "teams") {
+      setIsPlayerSearching(false);
       setPlayerInsightsById({});
       setPlayerInsightsMeta(null);
       lastPlayerInsightsReqKeyRef.current = "";
     } else {
+      setIsPlayerSearching(false);
       setTeamResults([]);
       setTeamQuery("");
       setTeamActiveIndex(-1);
@@ -1244,6 +1289,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
   const onSportChange = async (nextSportKey: SportKey) => {
     setSportKey(nextSportKey);
     setPlayerResults([]);
+    setIsPlayerSearching(false);
     setPlayerQuery("");
     setTeamError(null);
     setPlayerError(null);
@@ -1319,6 +1365,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             {trimmedTeamQuery.length < 2 ? <p className="text-neutral-400">Type 2+ chars to search teams.</p> : null}
             {isTeamSearching ? <p className="text-neutral-400">Searching teams...</p> : null}
             {teamSearchHint ? <p className="text-amber-300">{teamSearchHint}</p> : null}
+            {debouncedTeamQuery.length >= 2 && !isTeamSearching && teamResults.length === 0 && !teamError ? <p className="text-neutral-400">No teams found.</p> : null}
 
             {teamResults.length > 0 ? (
               <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
@@ -1334,8 +1381,9 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                       disabled={props.locked}
                     >
                       {result.logo ? <img src={result.logo} alt={result.displayName} className="h-5 w-5 rounded object-contain" /> : null}
-                      <span className="min-w-0 truncate">
-                        {result.displayName}
+                      <span className="min-w-0">
+                        <span className="block truncate">{result.displayName}</span>
+                        <span className="block truncate text-[10px] text-neutral-400">{result.teamKey}</span>
                       </span>
                     </button>
                   );
@@ -1359,6 +1407,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
               : null;
             const lastLabel = lastGameLabel(advanced);
             const nextLabel = nextGameLabel(advanced);
+            const secondaryLabel = teamCardSecondaryLabel(status, advanced);
             const hasScheduleData = Boolean(status?.hasGameToday || advanced?.lastGame || advanced?.nextGame);
             const hasAdvancedDetails = Boolean(recordLabel || standingsLabel || status?.hasGameToday || hasScheduleData);
             return (
@@ -1369,7 +1418,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                   </p>
                   <p className="text-neutral-400">{teamCardStatusLabel(status, advanced)}</p>
                   {props.mode === "BEGINNER" ? (
-                    <p className="text-neutral-500">Last: {lastLabel}</p>
+                    secondaryLabel ? <p className="text-neutral-500">{secondaryLabel}</p> : null
                   ) : (
                     <details className="mt-1 rounded border border-neutral-800 bg-black/20 p-2">
                       <summary className="cursor-pointer text-neutral-300">Details</summary>
@@ -1405,6 +1454,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
           />
 
           {trimmedPlayerQuery.length < 3 ? <p className="text-neutral-400">Type 3+ chars to search players.</p> : null}
+          {isPlayerSearching ? <p className="text-neutral-400">Searching players...</p> : null}
+          {debouncedPlayerQuery.length >= 3 && !isPlayerSearching && playerResults.length === 0 && !playerError ? <p className="text-neutral-400">No players found.</p> : null}
 
           {playerResults.length > 0 ? (
             <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
@@ -1414,7 +1465,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                     <img src={result.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
                     <div className="min-w-0">
                       <p className="truncate font-medium">{result.fullName}</p>
-                      <p className="truncate text-neutral-400">{compact([result.position, result.teamName, sportLabel(sportKey)])}</p>
+                      <p className="truncate text-neutral-400">{playerSearchSubtitleLine(result, sportKey)}</p>
                     </div>
                   </div>
                   <button type="button" className="rounded border border-neutral-700 px-2 py-0.5" onClick={() => void addPlayer(result)} disabled={props.locked}>Add</button>
@@ -1445,7 +1496,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                               <>
                                 <p className="truncate text-neutral-300">{playerInsightsSummary(insight)}</p>
                                 <p className="truncate text-neutral-500">
-                                  Last: {insight?.recent?.games?.[0]?.line ?? "Not available"} · {playerTeamLiveLabel(insight)}
+                                  {playerWatchlistRecentLine(insight)} · {playerTeamLiveLabel(insight)}
                                 </p>
                               </>
                             ) : null}
