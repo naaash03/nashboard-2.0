@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildPlayerSearchSubtitle, buildPlayerSearchUrl, normalizePlayerName, sanitizePlayerCardWarning, selectExactPlayerResult } from "@/components/widgets/PlayerCardWidget";
+import {
+  buildPlayerSearchSubtitle,
+  buildPlayerSearchUrl,
+  isLowConfidencePlayerResult,
+  normalizePlayerName,
+  rankPlayerSearchResults,
+  sanitizePlayerCardWarning,
+  selectExactPlayerResult,
+} from "@/components/widgets/PlayerCardWidget";
 
 describe("PlayerCardWidget search wiring", () => {
   it("builds local API search URL with encoded q parameter", () => {
@@ -46,9 +54,43 @@ describe("PlayerCardWidget search wiring", () => {
       teamName: "Los Angeles Lakers",
       position: "F",
     });
+    expect(subtitle).not.toContain("ID 1966");
     expect(subtitle).toContain("Los Angeles Lakers");
     expect(subtitle).toContain("F");
+  });
+
+  it("includes id in subtitle only when explicitly requested", () => {
+    const subtitle = buildPlayerSearchSubtitle({
+      playerId: "1966",
+      fullName: "LeBron James",
+    }, { includeId: true });
     expect(subtitle).toContain("ID 1966");
+  });
+
+  it("ranks richer player identity matches above weaker rows", () => {
+    const ranked = rankPlayerSearchResults("lebron", [
+      { playerId: "1", fullName: "LeBron James" },
+      { playerId: "2", fullName: "LeBron James", teamName: "Los Angeles Lakers", position: "F" },
+    ]);
+    expect(ranked[0]?.playerId).toBe("2");
+    expect(isLowConfidencePlayerResult(ranked[0])).toBe(false);
+    expect(isLowConfidencePlayerResult(ranked[1])).toBe(true);
+  });
+
+  it("deduplicates repeated player search rows", () => {
+    const ranked = rankPlayerSearchResults("lebron", [
+      { playerId: "2", fullName: "LeBron James", teamName: "Los Angeles Lakers" },
+      { playerId: "2", fullName: "LeBron James", teamName: "Los Angeles Lakers" },
+    ]);
+    expect(ranked).toHaveLength(1);
+  });
+
+  it("returns null subtitle for weak rows in beginner contexts", () => {
+    const subtitle = buildPlayerSearchSubtitle({
+      playerId: "999",
+      fullName: "Unknown Player",
+    });
+    expect(subtitle).toBeNull();
   });
 
   it("contains no direct ESPN client URL calls", () => {
@@ -58,7 +100,7 @@ describe("PlayerCardWidget search wiring", () => {
     expect(source.includes("site.api.espn.com")).toBe(false);
   });
 
-  it("keeps advanced section shells visible for partial provider payloads", () => {
+  it("keeps advanced sections user-facing and compact when partial data is missing", () => {
     const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
     expect(source.includes("Live Context")).toBe(true);
     expect(source.includes("Season Highlights")).toBe(true);
@@ -73,9 +115,22 @@ describe("PlayerCardWidget search wiring", () => {
     expect(warning).toBe("Season insights unavailable.");
   });
 
-  it("keeps provider warning details in debug section only", () => {
+  it("keeps provider warning details in admin/debug section", () => {
     const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
+    expect(source.includes("Admin / Debug")).toBe(true);
     expect(source.includes("Profile warning:")).toBe(true);
     expect(source.includes("Insights warning:")).toBe(true);
+  });
+
+  it("does not fetch beginner-mode insights from advanced endpoint mode", () => {
+    const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
+    expect(source.includes("if (props.mode !== \"ADVANCED\" || !selectedPlayerId)")).toBe(true);
+  });
+
+  it("keeps lightweight in-memory caches for repeated search/profile/insights requests", () => {
+    const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
+    expect(source.includes("searchCacheRef")).toBe(true);
+    expect(source.includes("profileCacheRef")).toBe(true);
+    expect(source.includes("insightsCacheRef")).toBe(true);
   });
 });

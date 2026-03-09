@@ -286,6 +286,14 @@ export function normalizeTeamSearchText(value: string): string {
     .trim();
 }
 
+function normalizePlayerSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s]|_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function selectExactTeamResult(query: string, results: TeamSearchResult[]): TeamSearchResult | null {
   const normalizedQuery = normalizeTeamSearchText(query);
   if (!normalizedQuery) {
@@ -296,6 +304,85 @@ export function selectExactTeamResult(query: string, results: TeamSearchResult[]
     normalizeTeamSearchText(result.displayName) === normalizedQuery
     || result.teamKey.toLowerCase() === normalizedQuery,
   ) ?? null;
+}
+
+function teamSearchScore(query: string, result: TeamSearchResult): number {
+  const normalizedQuery = normalizeTeamSearchText(query);
+  const normalizedName = normalizeTeamSearchText(result.displayName);
+  const normalizedKey = result.teamKey.trim().toLowerCase();
+  let score = 0;
+
+  if (normalizedKey === normalizedQuery) {
+    score += 180;
+  } else if (normalizedName === normalizedQuery) {
+    score += 150;
+  } else if (normalizedName.startsWith(normalizedQuery)) {
+    score += 110;
+  } else if (normalizedName.includes(normalizedQuery)) {
+    score += 80;
+  }
+
+  if (result.apiSportsTeamId) score += 20;
+  if (result.espnTeamId) score += 20;
+  if (result.logo) score += 8;
+
+  return score;
+}
+
+export function rankTeamSearchResults(query: string, results: TeamSearchResult[]): TeamSearchResult[] {
+  const deduped = new Map<string, TeamSearchResult>();
+  for (const row of results) {
+    const dedupeKey = row.teamKey.trim().toUpperCase();
+    if (!deduped.has(dedupeKey)) {
+      deduped.set(dedupeKey, row);
+    }
+  }
+
+  return Array.from(deduped.values()).sort((left, right) => {
+    const scoreDiff = teamSearchScore(query, right) - teamSearchScore(query, left);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    return left.displayName.localeCompare(right.displayName);
+  });
+}
+
+function playerSearchScore(query: string, result: PlayerSearchResultMin): number {
+  const normalizedQuery = normalizePlayerSearchText(query);
+  const normalizedName = normalizePlayerSearchText(result.fullName);
+  let score = 0;
+
+  if (normalizedName === normalizedQuery) {
+    score += 160;
+  } else if (normalizedName.startsWith(normalizedQuery)) {
+    score += 120;
+  } else if (normalizedName.includes(normalizedQuery)) {
+    score += 90;
+  }
+
+  if (result.teamName) score += 18;
+  if (result.position) score += 14;
+  if (result.headshot) score += 6;
+
+  return score;
+}
+
+export function rankPlayerSearchResults(query: string, results: PlayerSearchResultMin[]): PlayerSearchResultMin[] {
+  const deduped = new Map<string, PlayerSearchResultMin>();
+  for (const row of results) {
+    const dedupeKey = row.playerId.trim() || `${normalizePlayerSearchText(row.fullName)}:${(row.teamName ?? "").trim().toLowerCase()}`;
+    if (!deduped.has(dedupeKey)) {
+      deduped.set(dedupeKey, row);
+    }
+  }
+
+  return Array.from(deduped.values()).sort((left, right) => {
+    const scoreDiff = playerSearchScore(query, right) - playerSearchScore(query, left);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    return left.fullName.localeCompare(right.fullName);
+  });
 }
 
 const DIAGNOSTIC_MESSAGE_PATTERNS = [
@@ -402,25 +489,46 @@ function nextGameLabel(team: TeamAdvanced | undefined): string {
   return compact([team.nextGame.when, `${prefix} ${team.nextGame.vs ?? "TBD"}`]);
 }
 
-export function playerInsightsSummary(insight: PlayerInsights | undefined): string {
+export function playerInsightsSummary(insight: PlayerInsights | undefined): string | null {
   if (!insight) {
-    return "Live context unavailable";
+    return null;
   }
-  return insight.season?.headline ?? insight.recent?.headline ?? "Live context unavailable";
+  return insight.season?.headline ?? insight.recent?.headline ?? null;
 }
 
-export function playerSearchSubtitleLine(player: PlayerSearchResultMin, sportKey: SportKey): string {
-  return compact([
-    player.position ?? "Position unavailable",
-    player.teamName ?? "Team unavailable",
-    sportLabel(sportKey),
-    `ID ${player.playerId}`,
-  ]);
+export function playerSearchSubtitleLine(
+  player: PlayerSearchResultMin,
+  sportKey: SportKey,
+  opts?: { includeId?: boolean },
+): string | null {
+  const parts = [player.position, player.teamName].filter(Boolean) as string[];
+  if (parts.length > 0) {
+    return compact(parts);
+  }
+  if (opts?.includeId) {
+    return compact([sportLabel(sportKey), `ID ${player.playerId}`]);
+  }
+  return null;
 }
 
 export function playerWatchlistRecentLine(insight: PlayerInsights | undefined): string {
   const line = insight?.recent?.games?.[0]?.line?.trim();
   return line ? `Last: ${line}` : "No recent games available";
+}
+
+export function playerWatchlistPrimaryContextLine(insight: PlayerInsights | undefined): string | null {
+  if (insight?.live?.hasGameToday) {
+    return playerTeamLiveLabel(insight);
+  }
+  const recent = insight?.recent?.games?.[0]?.line?.trim();
+  if (recent) {
+    return `Recent: ${recent}`;
+  }
+  const status = insight?.injury?.status?.trim();
+  if (status) {
+    return `Status: ${status}`;
+  }
+  return null;
 }
 
 function playerTeamLiveLabel(insight: PlayerInsights | undefined): string {
@@ -485,6 +593,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
   const lastPlayerInsightsReqKeyRef = useRef("");
   const lastPlayerInsightsFetchAtRef = useRef(0);
   const playerInsightsAbortRef = useRef<AbortController | null>(null);
+  const playerSearchCacheRef = useRef(new Map<string, PlayerSearchResultMin[]>());
+  const teamSearchCacheRef = useRef(new Map<string, TeamSearchResult[]>());
 
   useEffect(() => {
     setViewMode(normalizeViewMode(props.config.watchlistMode));
@@ -848,6 +958,17 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       return [];
     }
 
+    const cacheKey = stableKey({
+      sportKey,
+      q: value.trim().toLowerCase(),
+      dataMode: props.dataMode,
+      refreshTick: props.refreshTick,
+    });
+    const cached = playerSearchCacheRef.current.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const endpointUrl = `/api/players/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setLastEndpoint(endpointUrl);
 
@@ -861,18 +982,37 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     setLastCallMeta(json.meta);
     setPlayerError(null);
 
-    return (json.data ?? []).map((row) => ({
+    const ranked = rankPlayerSearchResults(value, (json.data ?? []).map((row) => ({
       playerId: row.playerId,
       fullName: row.fullName,
       teamName: row.teamName,
       position: row.position,
       headshot: row.headshot,
-    }));
+    })));
+    playerSearchCacheRef.current.set(cacheKey, ranked);
+    if (playerSearchCacheRef.current.size > 50) {
+      const firstKey = playerSearchCacheRef.current.keys().next().value;
+      if (firstKey) {
+        playerSearchCacheRef.current.delete(firstKey);
+      }
+    }
+    return ranked;
   }, [props.dataMode, props.refreshTick, sportKey]);
 
   const runTeamSearch = useCallback(async (value: string, signal: AbortSignal): Promise<TeamSearchResult[]> => {
     if (value.trim().length < 2) {
       return [];
+    }
+
+    const cacheKey = stableKey({
+      sportKey,
+      q: value.trim().toLowerCase(),
+      dataMode: props.dataMode,
+      refreshTick: props.refreshTick,
+    });
+    const cached = teamSearchCacheRef.current.get(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     const endpointUrl = `/api/teams/search?sport=${sportKey}&q=${encodeURIComponent(value.trim())}&limit=8&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
@@ -887,7 +1027,15 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
     setLastCallMeta(json.meta);
     setTeamError(null);
-    return json.data ?? [];
+    const ranked = rankTeamSearchResults(value, json.data ?? []);
+    teamSearchCacheRef.current.set(cacheKey, ranked);
+    if (teamSearchCacheRef.current.size > 50) {
+      const firstKey = teamSearchCacheRef.current.keys().next().value;
+      if (firstKey) {
+        teamSearchCacheRef.current.delete(firstKey);
+      }
+    }
+    return ranked;
   }, [props.dataMode, props.refreshTick, sportKey]);
 
   useEffect(() => {
@@ -1358,6 +1506,9 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
               onChange={(event) => {
                 setTeamQuery(event.target.value);
                 setTeamSearchHint(null);
+                setTeamResults([]);
+                setTeamActiveIndex(-1);
+                lastTeamSearchReqKeyRef.current = "";
               }}
               disabled={props.locked}
             />
@@ -1371,6 +1522,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
               <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
                 {teamResults.map((result, index) => {
                   const isActive = index === teamActiveIndex;
+                  const lowConfidence = !result.apiSportsTeamId && !result.espnTeamId && !result.logo;
                   return (
                     <button
                       key={`${sportKey}-team-search-${result.teamKey}-${result.displayName}`}
@@ -1382,7 +1534,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                     >
                       {result.logo ? <img src={result.logo} alt={result.displayName} className="h-5 w-5 rounded object-contain" /> : null}
                       <span className="min-w-0">
-                        <span className="block truncate">{result.displayName}</span>
+                        <span className={`block truncate ${lowConfidence ? "text-neutral-300" : ""}`}>{result.displayName}</span>
                         <span className="block truncate text-[10px] text-neutral-400">{result.teamKey}</span>
                       </span>
                     </button>
@@ -1448,7 +1600,10 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
           <input
             className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
             value={playerQuery}
-            onChange={(event) => setPlayerQuery(event.target.value)}
+            onChange={(event) => {
+              setPlayerQuery(event.target.value);
+              setPlayerResults([]);
+            }}
             placeholder={`Search ${sportLabel(sportKey)} players (3+ chars)`}
             disabled={props.locked}
           />
@@ -1459,18 +1614,22 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
 
           {playerResults.length > 0 ? (
             <div className="max-h-40 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
-              {playerResults.map((result) => (
-                <div key={`${sportKey}-search-${result.playerId}`} className="flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-neutral-800">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <img src={result.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{result.fullName}</p>
-                      <p className="truncate text-neutral-400">{playerSearchSubtitleLine(result, sportKey)}</p>
+              {playerResults.map((result) => {
+                const subtitle = playerSearchSubtitleLine(result, sportKey, { includeId: props.mode === "ADVANCED" });
+                const lowConfidence = !result.teamName && !result.position;
+                return (
+                  <div key={`${sportKey}-search-${result.playerId}`} className="flex items-center justify-between gap-2 rounded px-1 py-1 hover:bg-neutral-800">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <img src={result.headshot || "/globe.svg"} alt="player" className="h-7 w-7 rounded object-cover" />
+                      <div className="min-w-0">
+                        <p className={`truncate font-medium ${lowConfidence ? "text-neutral-300" : ""}`}>{result.fullName}</p>
+                        {subtitle ? <p className="truncate text-neutral-400">{subtitle}</p> : null}
+                      </div>
                     </div>
+                    <button type="button" className="rounded border border-neutral-700 px-2 py-0.5" onClick={() => void addPlayer(result)} disabled={props.locked}>Add</button>
                   </div>
-                  <button type="button" className="rounded border border-neutral-700 px-2 py-0.5" onClick={() => void addPlayer(result)} disabled={props.locked}>Add</button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
 
@@ -1483,6 +1642,11 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             <div className="space-y-1 rounded border border-neutral-700 bg-neutral-950 p-2">
               {playersForSport.map((player) => {
                 const insight = playerInsightsById[player.playerId];
+                const insightSummary = playerInsightsSummary(insight);
+                const primaryContext = playerWatchlistPrimaryContextLine(insight);
+                const hasSeasonMetrics = Boolean(insight?.season?.metrics && insight.season.metrics.length > 0);
+                const hasRecentGames = Boolean(insight?.recent?.games && insight.recent.games.length > 0);
+                const hasAdvancedPlayerDetails = hasSeasonMetrics || hasRecentGames;
                 return (
                   <div key={`${sportKey}-watch-${player.playerId}`} className="border-b border-neutral-800 py-1 last:border-b-0">
                     <div className="flex items-center justify-between gap-2">
@@ -1494,10 +1658,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                             <p className="truncate text-neutral-400">{compact([player.position, player.teamName, sportLabel(sportKey)])}</p>
                             {props.mode === "ADVANCED" ? (
                               <>
-                                <p className="truncate text-neutral-300">{playerInsightsSummary(insight)}</p>
-                                <p className="truncate text-neutral-500">
-                                  {playerWatchlistRecentLine(insight)} · {playerTeamLiveLabel(insight)}
-                                </p>
+                                {insightSummary ? <p className="truncate text-neutral-300">{insightSummary}</p> : null}
+                                {primaryContext ? <p className="truncate text-neutral-500">{primaryContext}</p> : null}
                               </>
                             ) : null}
                           </div>
@@ -1510,29 +1672,27 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                       <details className="mt-1 rounded border border-neutral-800 bg-black/20 p-2">
                         <summary className="cursor-pointer text-neutral-300">Details</summary>
                         <div className="mt-1 space-y-1 text-neutral-400">
-                          {insight?.season?.metrics && insight.season.metrics.length > 0 ? (
+                          {hasSeasonMetrics ? (
                             <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                              {insight.season.metrics.slice(0, 4).map((metric) => (
+                              {(insight?.season?.metrics ?? []).slice(0, 4).map((metric) => (
                                 <p key={`${player.playerId}-${metric.key}`} className="truncate">
                                   <span className="text-neutral-500">{metric.label}:</span> {metric.value}
                                 </p>
                               ))}
                             </div>
-                          ) : (
-                            <p>Season insights unavailable.</p>
-                          )}
+                          ) : null}
 
-                          {insight?.recent?.games && insight.recent.games.length > 0 ? (
+                          {hasRecentGames ? (
                             <div className="space-y-1">
-                              {insight.recent.games.slice(0, 2).map((game, index) => (
+                              {(insight?.recent?.games ?? []).slice(0, 2).map((game, index) => (
                                 <p key={`${player.playerId}-recent-${index}`} className="truncate">
                                   {game.date ?? "-"} · {game.opponent ?? "TBD"} · {game.line}
                                 </p>
                               ))}
                             </div>
-                          ) : (
-                            <p>No recent games available.</p>
-                          )}
+                          ) : null}
+
+                          {!hasAdvancedPlayerDetails && !primaryContext ? <p>No additional player detail available.</p> : null}
                         </div>
                       </details>
                     ) : null}
@@ -1564,21 +1724,24 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       </div>
 
       <details className="rounded border border-neutral-700 bg-black/20 p-2">
-        <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
+        <summary className="cursor-pointer text-[11px] text-neutral-300">Admin / Debug</summary>
         <p>View mode: {viewMode}</p>
         <p>Sport: {sportKey.toUpperCase()}</p>
         <p>Endpoint: {lastEndpoint || "-"}</p>
         <p>Request ID: {headerMeta?.requestId ?? "-"}</p>
-        <pre className="overflow-auto text-[10px]">{JSON.stringify({
-          teamWatchlist,
-          teamWatchlistNames,
-          teamProviderIds,
-          playerWatchlist,
-          teamAdvancedByKey,
-          playerInsightsById,
-          lastProfile,
-          headerMeta,
-        }, null, 2)}</pre>
+        {props.mode !== "ADVANCED" ? <p className="text-neutral-400">Switch to Advanced mode for full diagnostics.</p> : null}
+        {props.mode === "ADVANCED" ? (
+          <pre className="overflow-auto text-[10px]">{JSON.stringify({
+            teamWatchlist,
+            teamWatchlistNames,
+            teamProviderIds,
+            playerWatchlist,
+            teamAdvancedByKey,
+            playerInsightsById,
+            lastProfile,
+            headerMeta,
+          }, null, 2)}</pre>
+        ) : null}
       </details>
 
       <button

@@ -132,6 +132,45 @@ export function selectExactPlayerResult(query: string, results: PlayerSearchResu
   return results.find((result) => normalizePlayerName(result.fullName) === normalizedQuery) ?? null;
 }
 
+function searchScoreForPlayerResult(query: string, result: PlayerSearchResult): number {
+  const normalizedQuery = normalizePlayerName(query);
+  const normalizedName = normalizePlayerName(result.fullName);
+  let score = 0;
+
+  if (normalizedName === normalizedQuery) {
+    score += 150;
+  } else if (normalizedName.startsWith(normalizedQuery)) {
+    score += 110;
+  } else if (normalizedName.includes(normalizedQuery)) {
+    score += 80;
+  }
+
+  if (result.teamName) score += 20;
+  if (result.position) score += 15;
+  if (result.headshot) score += 8;
+  if (result.playerId) score += 4;
+
+  return score;
+}
+
+export function rankPlayerSearchResults(query: string, results: PlayerSearchResult[]): PlayerSearchResult[] {
+  const deduped = new Map<string, PlayerSearchResult>();
+  for (const row of results) {
+    const dedupeKey = row.playerId?.trim() || `${normalizePlayerName(row.fullName)}:${(row.teamName ?? "").trim().toLowerCase()}`;
+    if (!deduped.has(dedupeKey)) {
+      deduped.set(dedupeKey, row);
+    }
+  }
+
+  return Array.from(deduped.values()).sort((left, right) => {
+    const scoreDiff = searchScoreForPlayerResult(query, right) - searchScoreForPlayerResult(query, left);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    return left.fullName.localeCompare(right.fullName);
+  });
+}
+
 function to12h(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -225,12 +264,22 @@ export function sanitizePlayerCardWarning(raw: string | null | undefined, fallba
   return text;
 }
 
-export function buildPlayerSearchSubtitle(result: PlayerSearchResult): string {
-  return compactLine([
-    result.teamName || "Team unavailable",
-    result.position || "Position unavailable",
-    `ID ${result.playerId}`,
-  ]);
+export function buildPlayerSearchSubtitle(
+  result: PlayerSearchResult,
+  opts?: { includeId?: boolean },
+): string | null {
+  const parts = [result.teamName, result.position].filter(Boolean) as string[];
+  if (parts.length > 0) {
+    return compactLine(parts);
+  }
+  if (opts?.includeId) {
+    return `Player ID ${result.playerId}`;
+  }
+  return null;
+}
+
+export function isLowConfidencePlayerResult(result: PlayerSearchResult): boolean {
+  return !result.teamName && !result.position;
 }
 
 function playerStatusLine(profile: PlayerProfile | null, insights: PlayerInsights | null): string | null {
@@ -275,6 +324,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const lastExecutedSearchKeyRef = useRef("");
   const lastFetchedProfileKeyRef = useRef("");
   const lastFetchedInsightsKeyRef = useRef("");
+  const searchCacheRef = useRef(new Map<string, PlayerSearchResult[]>());
+  const profileCacheRef = useRef(new Map<string, { data: PlayerProfile | null; meta: WidgetMeta | null }>());
+  const insightsCacheRef = useRef(new Map<string, { data: PlayerInsights | null; meta: WidgetMeta | null }>());
 
   const configSportKey = normalizeSportKey(props.config.sportKey);
   const configPlayerId = selectedPlayerIdFromConfig(props.config, configSportKey);
@@ -319,6 +371,16 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     if (searchRequestKey === lastExecutedSearchKeyRef.current) {
       return;
     }
+
+    const cached = searchCacheRef.current.get(searchRequestKey);
+    if (cached) {
+      lastExecutedSearchKeyRef.current = searchRequestKey;
+      setResults(cached);
+      setIsSearching(false);
+      setWarning(null);
+      return;
+    }
+
     lastExecutedSearchKeyRef.current = searchRequestKey;
 
     const controller = new AbortController();
@@ -342,9 +404,17 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
           return;
         }
 
+        const ranked = rankPlayerSearchResults(debouncedQuery, json.data ?? []);
+        searchCacheRef.current.set(searchRequestKey, ranked);
+        if (searchCacheRef.current.size > 40) {
+          const firstKey = searchCacheRef.current.keys().next().value;
+          if (firstKey) {
+            searchCacheRef.current.delete(firstKey);
+          }
+        }
         setWarning(null);
         setEnterHint(null);
-        setResults(json.data ?? []);
+        setResults(ranked);
         setLastError(null);
       } catch (error) {
         if (controller.signal.aborted) {
@@ -416,6 +486,18 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     if (profileRequestKey === lastFetchedProfileKeyRef.current) {
       return;
     }
+
+    const cached = profileCacheRef.current.get(profileRequestKey);
+    if (cached) {
+      lastFetchedProfileKeyRef.current = profileRequestKey;
+      setData(cached.data);
+      setMeta(cached.meta);
+      setWarning(null);
+      setLastError(null);
+      setIsProfileLoading(false);
+      return;
+    }
+
     lastFetchedProfileKeyRef.current = profileRequestKey;
 
     const controller = new AbortController();
@@ -426,6 +508,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         const result = await loadPlayer(selectedPlayerId, controller.signal);
         if (controller.signal.aborted) {
           return;
+        }
+        profileCacheRef.current.set(profileRequestKey, result);
+        if (profileCacheRef.current.size > 40) {
+          const firstKey = profileCacheRef.current.keys().next().value;
+          if (firstKey) {
+            profileCacheRef.current.delete(firstKey);
+          }
         }
         setData(result.data);
         setMeta(result.meta);
@@ -452,7 +541,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   }, [loadPlayer, profileRequestKey, selectedPlayerId]);
 
   useEffect(() => {
-    if (!selectedPlayerId) {
+    if (props.mode !== "ADVANCED" || !selectedPlayerId) {
       setInsights(null);
       setInsightsMeta(null);
       setIsInsightsLoading(false);
@@ -463,6 +552,16 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
     if (insightsRequestKey === lastFetchedInsightsKeyRef.current) {
       return;
     }
+
+    const cached = insightsCacheRef.current.get(insightsRequestKey);
+    if (cached) {
+      lastFetchedInsightsKeyRef.current = insightsRequestKey;
+      setInsights(cached.data);
+      setInsightsMeta(cached.meta);
+      setIsInsightsLoading(false);
+      return;
+    }
+
     lastFetchedInsightsKeyRef.current = insightsRequestKey;
 
     const controller = new AbortController();
@@ -482,8 +581,19 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
           throw new Error(json.error?.message ?? "Failed to load player insights");
         }
 
-        setInsights(json.data ?? null);
-        setInsightsMeta(json.meta ?? null);
+        const cachedPayload = {
+          data: json.data ?? null,
+          meta: json.meta ?? null,
+        };
+        insightsCacheRef.current.set(insightsRequestKey, cachedPayload);
+        if (insightsCacheRef.current.size > 40) {
+          const firstKey = insightsCacheRef.current.keys().next().value;
+          if (firstKey) {
+            insightsCacheRef.current.delete(firstKey);
+          }
+        }
+        setInsights(cachedPayload.data);
+        setInsightsMeta(cachedPayload.meta);
         setWarning(null);
         setLastError(null);
       } catch (error) {
@@ -580,6 +690,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const onQueryChange = (value: string) => {
     setQuery(value);
     setEnterHint(null);
+    setResults([]);
+    setLastSearchRaw(null);
+    lastExecutedSearchKeyRef.current = "";
 
     if (!selectedPlayerId) {
       return;
@@ -681,20 +794,24 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
       {results.length > 0 ? (
         <div className="max-h-44 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
-          {results.map((result) => (
-            <button
-              key={`${sportKey}-${result.playerId}`}
-              type="button"
-              onClick={() => void onSelect(result)}
-              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-neutral-800"
-            >
-              <img src={result.headshot || "/globe.svg"} alt="player" className="h-8 w-8 rounded object-cover" />
-              <span className="min-w-0">
-                <span className="block truncate">{result.fullName}</span>
-                <span className="block truncate text-[11px] text-neutral-400">{buildPlayerSearchSubtitle(result)}</span>
-              </span>
-            </button>
-          ))}
+          {results.map((result) => {
+            const subtitle = buildPlayerSearchSubtitle(result, { includeId: props.mode === "ADVANCED" });
+            const lowConfidence = isLowConfidencePlayerResult(result);
+            return (
+              <button
+                key={`${sportKey}-${result.playerId}`}
+                type="button"
+                onClick={() => void onSelect(result)}
+                className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-neutral-800"
+              >
+                <img src={result.headshot || "/globe.svg"} alt="player" className="h-8 w-8 rounded object-cover" />
+                <span className="min-w-0">
+                  <span className={`block truncate ${lowConfidence ? "text-neutral-300" : ""}`}>{result.fullName}</span>
+                  {subtitle ? <span className="block truncate text-[11px] text-neutral-400">{subtitle}</span> : null}
+                </span>
+              </button>
+            );
+          })}
         </div>
       ) : null}
 
@@ -805,7 +922,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
       ) : null}
 
       <details className="rounded border border-neutral-700 bg-black/20 p-2">
-        <summary className="cursor-pointer text-[11px] text-neutral-300">Debug</summary>
+        <summary className="cursor-pointer text-[11px] text-neutral-300">Admin / Debug</summary>
         <p>Local API URL: {endpoint}</p>
         <p>Sport: {sportKey.toUpperCase()}</p>
         <p>Request ID: {activeMeta?.requestId ?? "-"}</p>
@@ -814,6 +931,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         <p>Insights warning: {insightsMeta?.warning ?? "-"}</p>
         <p>Profile stats available: {data?.stats ? "yes" : "no"}</p>
         <p>Last error: {lastError ?? "none"}</p>
+        {props.mode !== "ADVANCED" ? <p className="text-neutral-400">Switch to Advanced mode for deeper diagnostics.</p> : null}
         {isDev ? (
           <label className="mt-1 flex items-center gap-2 text-[11px]">
             <input
@@ -827,7 +945,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         {isDev && showRawSearch ? (
           <pre className="overflow-auto text-[10px]">{JSON.stringify(lastSearchRaw, null, 2)}</pre>
         ) : null}
-        <pre className="overflow-auto text-[10px]">{JSON.stringify({ profileMeta: meta, insightsMeta, insights, profileStats: data?.stats ?? null }, null, 2)}</pre>
+        {props.mode === "ADVANCED" ? (
+          <pre className="overflow-auto text-[10px]">{JSON.stringify({ profileMeta: meta, insightsMeta, insights, profileStats: data?.stats ?? null }, null, 2)}</pre>
+        ) : null}
       </details>
 
       <button

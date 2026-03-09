@@ -21,6 +21,9 @@ describe("watchlist advanced players pipeline", () => {
       },
       recent: null,
     });
+    if (!summary) {
+      throw new Error("Expected summary to be populated");
+    }
     expect(summary).toContain("PPG");
   });
 
@@ -38,5 +41,16 @@ describe("watchlist advanced players pipeline", () => {
     const source = readFileSync("components/widgets/WatchlistWidget.tsx", "utf8");
     expect(source.includes("Note: {advanced.metaNotes[0]}")).toBe(false);
     expect(source.includes("Note: {insight.metaNotes[0]}")).toBe(false);
+  });
+
+  it("uses admin/debug label instead of plain debug label", () => {
+    const source = readFileSync("components/widgets/WatchlistWidget.tsx", "utf8");
+    expect(source.includes("Admin / Debug")).toBe(true);
+  });
+
+  it("includes lightweight search caches for repeated queries", () => {
+    const source = readFileSync("components/widgets/WatchlistWidget.tsx", "utf8");
+    expect(source.includes("playerSearchCacheRef")).toBe(true);
+    expect(source.includes("teamSearchCacheRef")).toBe(true);
   });
 });
