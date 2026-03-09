@@ -3,6 +3,8 @@ import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { resolvePlayersSearch } from "@/lib/providers";
 import { fetchApiSportsJson, getApiSportsHealthSnapshot } from "@/lib/providers/apiSports/client";
 import { buildDateRange } from "@/lib/providers/scheduleWindow";
+import { CACHE_TTL_SECONDS } from "@/lib/sports/cachePolicy";
+import { canAutoUseFixtureFallback } from "@/lib/sports/utils/fixturePolicy";
 import { fetchEspnJson, getDataMode, getEspnHealthSnapshot } from "@/lib/providers/espn/client";
 import type { DataSource } from "@/lib/providers/types";
 
@@ -208,5 +210,14 @@ export async function GET(req: Request) {
       espn: espnSnapshot,
     },
     lastFetchTimestamps: persistedEndpoints,
+    architecture: {
+      canonicalContracts: "enabled",
+      fixturePolicy: {
+        explicitModeRequired: true,
+        autoFallbackAllowedInRuntime: canAutoUseFixtureFallback(),
+      },
+      cacheTtlSeconds: CACHE_TTL_SECONDS,
+      providerPriority: ["apiSports", "espn", "fixture"],
+    },
   });
 }

@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { getTeamStatus, normalizeTeamStatusSport } from "@/lib/providers/espn/teamStatus";
+import { toCanonicalTeamStatus } from "@/lib/sports/resolvers";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope } from "@/lib/types/players";
 import type { TeamStatus } from "@/lib/types/teamStatus";
@@ -31,34 +33,54 @@ export async function GET(req: Request) {
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!teamKey) {
+    const meta = fallbackMeta(resolvedDataMode, "teamKey is required");
     const envelope: Envelope<TeamStatus> = {
       data: null,
-      meta: fallbackMeta(resolvedDataMode, "teamKey is required"),
+      meta,
       error: {
         message: "teamKey is required",
         code: "MISSING_TEAM_KEY",
       },
     };
-    return NextResponse.json(envelope, { status: 400 });
+    const contract = toWidgetPayload({
+      data: null,
+      error: "teamKey is required",
+      meta,
+      primaryProvider: "apiSports",
+    });
+    return NextResponse.json({ ...envelope, contract }, { status: 400 });
   }
 
   try {
     const envelope = await getTeamStatus(sport, teamKey, resolvedDataMode, cacheBust);
+    const contract = toWidgetPayload({
+      data: envelope.data ? toCanonicalTeamStatus(envelope.data, "espn") : null,
+      error: envelope.error?.message ?? null,
+      meta: envelope.meta,
+      primaryProvider: "apiSports",
+    });
     if (envelope.error) {
-      return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
+      return NextResponse.json({ ...envelope, contract }, { status: errorStatus(envelope.error.code) });
     }
-    return NextResponse.json(envelope);
+    return NextResponse.json({ ...envelope, contract });
   } catch (error) {
     const message = `Unexpected error in teams status route: ${String(error)}`;
+    const meta = fallbackMeta(resolvedDataMode, message);
     const envelope: Envelope<TeamStatus> = {
       data: null,
-      meta: fallbackMeta(resolvedDataMode, message),
+      meta,
       error: {
         message,
         code: "ROUTE_UNHANDLED",
       },
     };
-    return NextResponse.json(envelope, { status: 500 });
+    const contract = toWidgetPayload({
+      data: null,
+      error: message,
+      meta,
+      primaryProvider: "apiSports",
+    });
+    return NextResponse.json({ ...envelope, contract }, { status: 500 });
   }
 }
 

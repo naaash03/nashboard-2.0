@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { playerInsightsSummary } from "@/components/widgets/WatchlistWidget";
+import { playerInsightsSummary, sanitizeRuntimeMessage, teamCardStatusLabel } from "@/components/widgets/WatchlistWidget";
 
 describe("watchlist advanced players pipeline", () => {
   it("uses batch insights endpoint for advanced player rows", () => {
@@ -22,5 +22,21 @@ describe("watchlist advanced players pipeline", () => {
       recent: null,
     });
     expect(summary).toContain("PPG");
+  });
+
+  it("uses clean team fallback status when no schedule context exists", () => {
+    const label = teamCardStatusLabel(undefined, undefined);
+    expect(label).toBe("No scheduled games available right now");
+  });
+
+  it("sanitizes noisy runtime diagnostics for user-facing errors", () => {
+    const message = sanitizeRuntimeMessage("No schedule rows found for NYM in 2026-03-01..2026-03-10", "Team data unavailable.");
+    expect(message).toBe("Team data unavailable.");
+  });
+
+  it("does not render provider meta note text in team/player details", () => {
+    const source = readFileSync("components/widgets/WatchlistWidget.tsx", "utf8");
+    expect(source.includes("Note: {advanced.metaNotes[0]}")).toBe(false);
+    expect(source.includes("Note: {insight.metaNotes[0]}")).toBe(false);
   });
 });

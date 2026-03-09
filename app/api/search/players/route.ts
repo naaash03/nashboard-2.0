@@ -1,7 +1,10 @@
+﻿import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { searchPlayers } from "@/lib/providers/espn/nfl";
+import { normalizePlayerFromEspn } from "@/lib/sports/adapters";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
+import type { Meta } from "@/lib/providers/types";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -13,9 +16,22 @@ export async function GET(req: Request) {
   const requestId = randomUUID();
 
   if (sport !== "NFL") {
+    const meta: Meta = {
+      sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
+      updatedAt: new Date().toISOString(),
+      requestId,
+      warning: "Only NFL search is enabled",
+      dataMode: resolvedDataMode,
+    };
     return NextResponse.json({
       results: [],
       warning: "Only NFL search is enabled",
+      contract: toWidgetPayload({
+        data: [],
+        error: null,
+        meta,
+        primaryProvider: "apiSports",
+      }),
       diagnostics: {
         provider: "espn-athlete-index",
         cacheHit: false,
@@ -30,15 +46,22 @@ export async function GET(req: Request) {
   }
 
   if (q.length < 3) {
+    const meta: Meta = {
+      sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
+      updatedAt: new Date().toISOString(),
+      requestId,
+      warning: "Type at least 3 characters to search.",
+      dataMode: resolvedDataMode,
+    };
     return NextResponse.json({
       results: [],
-      meta: {
-        sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
-        updatedAt: new Date().toISOString(),
-        requestId,
-        warning: "Type at least 3 characters to search.",
-        dataMode: resolvedDataMode,
-      },
+      meta,
+      contract: toWidgetPayload({
+        data: [],
+        error: null,
+        meta,
+        primaryProvider: "apiSports",
+      }),
       diagnostics: {
         provider: "espn-athlete-index",
         cacheHit: false,
@@ -54,26 +77,41 @@ export async function GET(req: Request) {
 
   try {
     const result = await searchPlayers(q, limit, providerMode);
+    const meta = {
+      ...result.meta,
+      warning: result.results.length === 0 ? result.meta.warning ?? "No results from ESPN NFL athletes index for this query." : result.meta.warning,
+    };
     return NextResponse.json({
       results: result.results,
       userFacingMessage: result.diagnostics.userFacingMessage ?? null,
-      meta: {
-        ...result.meta,
-        warning: result.results.length === 0 ? result.meta.warning ?? "No results from ESPN NFL athletes index for this query." : result.meta.warning,
-      },
+      meta,
+      contract: toWidgetPayload({
+        data: result.results.map((row) => normalizePlayerFromEspn(row, "NFL")),
+        error: null,
+        meta,
+        primaryProvider: "apiSports",
+      }),
       diagnostics: result.diagnostics,
     });
   } catch (error) {
+    const message = "Player index not available right now; try again in a minute.";
+    const meta: Meta = {
+      sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
+      updatedAt: new Date().toISOString(),
+      requestId,
+      warning: `Player search failed: ${String(error)}`,
+      dataMode: resolvedDataMode,
+    };
     return NextResponse.json({
       results: [],
-      userFacingMessage: "Player index not available right now; try again in a minute.",
-      meta: {
-        sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
-        updatedAt: new Date().toISOString(),
-        requestId,
-        warning: `Player search failed: ${String(error)}`,
-        dataMode: resolvedDataMode,
-      },
+      userFacingMessage: message,
+      meta,
+      contract: toWidgetPayload({
+        data: [],
+        error: message,
+        meta,
+        primaryProvider: "apiSports",
+      }),
       diagnostics: {
         provider: "espn-athlete-index",
         cacheHit: false,
@@ -83,7 +121,7 @@ export async function GET(req: Request) {
         finalUrl: null,
         attemptedUrls: [],
         endpointAttempts: [],
-        userFacingMessage: "Player index not available right now; try again in a minute.",
+        userFacingMessage: message,
       },
     });
   }

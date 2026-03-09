@@ -9,6 +9,7 @@ import * as espnInsights from "@/lib/providers/espn/playerInsights";
 import * as espnTeams from "@/lib/providers/espn/teamDirectory";
 import * as espnAdvanced from "@/lib/providers/espn/teamAdvanced";
 import type { Meta } from "@/lib/providers/types";
+import { canAutoUseFixtureFallback } from "@/lib/sports/utils/fixturePolicy";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey, TeamProviderRef, TeamSearchResult } from "@/lib/types/players";
 import type { PlayerInsights, TeamAdvanced } from "@/lib/types/playerInsights";
 
@@ -586,6 +587,10 @@ function normalizeContextMode(mode: DataMode): "live" | "fixture" | "auto" {
   return "auto";
 }
 
+function canAttemptFixtureFallback(mode: "live" | "fixture" | "auto"): boolean {
+  return mode === "auto" && canAutoUseFixtureFallback();
+}
+
 async function resolveSearchPlayers(
   sport: SportKey,
   q: string,
@@ -650,7 +655,7 @@ async function resolveSearchPlayers(
     warnings.push(espnEnvelope.meta.warning);
   }
 
-  if (mode === "auto") {
+  if (canAttemptFixtureFallback(mode)) {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixturePlayersSearch(sport, q, limit, ctx.cacheBust);
     if (!fixtureEnvelope.error && safeArray(fixtureEnvelope.data).length > 0) {
@@ -771,7 +776,7 @@ async function resolvePlayerProfileAuto(
     warnings.push(`Live profile still missing sections after ESPN enrichment: ${mergedMissing.join(", ")}.`);
   }
 
-  if (mode === "auto") {
+  if (canAttemptFixtureFallback(mode)) {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixturePlayerProfile(sport, playerId, ctx.cacheBust);
     const mergedFixture = mergeProfile(mergedLive, fixtureEnvelope.data);
@@ -896,7 +901,7 @@ async function resolvePlayerInsightsAuto(
     warnings.push(`Live insights still missing sections after ESPN enrichment: ${mergedMissingSections.join(", ")}.`);
   }
 
-  if (requestedMode === "auto") {
+  if (canAttemptFixtureFallback(requestedMode)) {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixturePlayerInsights(sport, playerId, mode, ctx.cacheBust);
     const mergedFixture = mergeInsights(mergedLive, fixtureEnvelope.data);
@@ -1042,7 +1047,7 @@ async function resolveTeamsSearchAuto(
     warnings.push(espnEnvelope.meta.warning);
   }
 
-  if (mode === "auto") {
+  if (canAttemptFixtureFallback(mode)) {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixtureTeamsSearch(sport, q, limit, ctx.cacheBust);
     return {
@@ -1165,7 +1170,7 @@ async function resolveTeamsAdvancedAuto(
     warnings.push(`Live teams advanced still missing sections after ESPN enrichment: ${uniqueStrings(mergedMissingSections).join(", ")}.`);
   }
 
-  if (requestedMode === "auto") {
+  if (canAttemptFixtureFallback(requestedMode)) {
     attempted.push("fixture");
     const fixtureEnvelope = await fetchFixtureTeamsAdvanced(sport, normalizedTeamKeys, mode, ctx.cacheBust);
     const fixtureData = fixtureEnvelope.data

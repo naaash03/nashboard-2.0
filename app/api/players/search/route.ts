@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { normalizeSportKey } from "@/lib/providers/espn/playerDirectory";
 import { resolvePlayersSearch } from "@/lib/providers";
+import { normalizePlayerFromApiSports, normalizePlayerFromEspn } from "@/lib/sports/adapters";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, PlayerSearchResult } from "@/lib/types/players";
 
@@ -42,7 +44,13 @@ export async function GET(req: Request) {
         code: "MISSING_QUERY",
       },
     };
-    return NextResponse.json(envelope, { status: 400 });
+    const contract = toWidgetPayload({
+      data: null,
+      error: "q is required",
+      meta,
+      primaryProvider: "apiSports",
+    });
+    return NextResponse.json({ ...envelope, contract }, { status: 400 });
   }
 
   try {
@@ -50,22 +58,42 @@ export async function GET(req: Request) {
       dataMode: resolvedDataMode,
       cacheBust,
     });
+    const league = sport.toUpperCase();
+    const provider = envelope.meta.sourceUsed === "apiSports" ? "apiSports" : "espn";
+    const canonicalRows = (envelope.data ?? []).map((row) => (
+      provider === "apiSports"
+        ? normalizePlayerFromApiSports(row, league)
+        : normalizePlayerFromEspn(row, league)
+    ));
+    const contract = toWidgetPayload({
+      data: canonicalRows,
+      error: envelope.error?.message ?? null,
+      meta: envelope.meta,
+      primaryProvider: "apiSports",
+    });
     if (envelope.error) {
-      return NextResponse.json(envelope, { status: errorStatus(envelope.error.code) });
+      return NextResponse.json({ ...envelope, contract }, { status: errorStatus(envelope.error.code) });
     }
 
-    return NextResponse.json(envelope);
+    return NextResponse.json({ ...envelope, contract });
   } catch (error) {
     const message = `Unexpected error in players search route: ${String(error)}`;
+    const meta = fallbackMeta(resolvedDataMode, message);
     const envelope: Envelope<PlayerSearchResult[]> = {
       data: null,
-      meta: fallbackMeta(resolvedDataMode, message),
+      meta,
       error: {
         message,
         code: "ROUTE_UNHANDLED",
       },
     };
+    const contract = toWidgetPayload({
+      data: null,
+      error: message,
+      meta,
+      primaryProvider: "apiSports",
+    });
 
-    return NextResponse.json(envelope, { status: 500 });
+    return NextResponse.json({ ...envelope, contract }, { status: 500 });
   }
 }

@@ -201,16 +201,28 @@ function formatLiveLine(insights: PlayerInsights | null): string {
   return ["Today", opponent, insights.live.displayClock].filter(Boolean).join(" · ");
 }
 
-function firstNoteForSection(notes: string[] | undefined, keywords: string[]): string | null {
-  if (!notes || notes.length === 0) {
-    return null;
+const DIAGNOSTIC_WARNING_PATTERNS = [
+  "api-sports",
+  "espn",
+  "endpoint",
+  "request",
+  "syntaxerror",
+  "failed to fetch",
+  "lookup failed",
+  "no schedule rows found",
+  "no games found",
+];
+
+export function sanitizePlayerCardWarning(raw: string | null | undefined, fallback: string): string {
+  const text = (raw ?? "").trim();
+  if (!text) {
+    return fallback;
   }
-  const normalizedKeywords = keywords.map((keyword) => keyword.toLowerCase());
-  const match = notes.find((note) => {
-    const lower = note.toLowerCase();
-    return normalizedKeywords.some((keyword) => lower.includes(keyword));
-  });
-  return match ?? null;
+  const lowered = text.toLowerCase();
+  if (DIAGNOSTIC_WARNING_PATTERNS.some((pattern) => lowered.includes(pattern))) {
+    return fallback;
+  }
+  return text;
 }
 
 export default function PlayerCardWidget(props: WidgetCommonProps) {
@@ -299,12 +311,12 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         setLastSearchRaw(json);
 
         if (!response.ok || json.error) {
-          setWarning(json.error?.message ?? "Search is temporarily unavailable.");
+          setWarning("Player search temporarily unavailable. Try again in a minute.");
           setResults([]);
           return;
         }
 
-        setWarning(json.meta.warning ?? null);
+        setWarning(null);
         setEnterHint(null);
         setResults(json.data ?? []);
         setLastError(null);
@@ -385,13 +397,13 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         }
         setData(result.data);
         setMeta(result.meta);
-        setWarning(result.meta?.warning ?? null);
+        setWarning(null);
         setLastError(null);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
         }
-        setWarning(String(error));
+        setWarning(sanitizePlayerCardWarning(String(error), "Unable to load player profile right now."));
         setLastError(String(error));
         setData(null);
         setMeta(null);
@@ -439,14 +451,12 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
         setInsights(json.data ?? null);
         setInsightsMeta(json.meta ?? null);
-        if (json.meta?.warning) {
-          setWarning(json.meta.warning);
-        }
+        setWarning(null);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
         }
-        setWarning(String(error));
+        setWarning(sanitizePlayerCardWarning(String(error), "Season insights unavailable."));
       } finally {
         if (!controller.signal.aborted) {
           setIsInsightsLoading(false);
@@ -592,10 +602,6 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
   const hasSeasonMetrics = Boolean(insights?.season && insights.season.metrics.length > 0);
   const hasRecentGames = Boolean(insights?.recent?.games && insights.recent.games.length > 0);
   const hasInjuryStatus = Boolean(insights?.injury && (insights.injury.status || insights.injury.detail));
-  const liveNote = firstNoteForSection(insights?.metaNotes, ["live", "team abbreviation", "context", "scoreboard"]);
-  const seasonNote = firstNoteForSection(insights?.metaNotes, ["season", "summary", "metrics", "derived"]);
-  const recentNote = firstNoteForSection(insights?.metaNotes, ["recent", "game log", "gamelog", "appearances"]);
-  const injuryNote = firstNoteForSection(insights?.metaNotes, ["injury", "status"]);
 
   return (
     <div className="space-y-2 text-xs">
@@ -702,10 +708,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
             {hasLiveContext ? (
               <p className="mt-1 text-neutral-300">{formatLiveLine(insights)}</p>
             ) : (
-              <p className="mt-1 text-neutral-400">
-                Not available from provider.
-                {liveNote ? ` ${liveNote}` : ""}
-              </p>
+              <p className="mt-1 text-neutral-400">Live context unavailable.</p>
             )}
           </details>
 
@@ -724,10 +727,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                 </div>
               </div>
             ) : (
-              <p className="mt-1 text-neutral-400">
-                Not available from provider.
-                {seasonNote ? ` ${seasonNote}` : ""}
-              </p>
+              <p className="mt-1 text-neutral-400">Season insights unavailable.</p>
             )}
           </details>
 
@@ -746,10 +746,7 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                 ))}
               </div>
             ) : (
-              <p className="mt-1 text-neutral-400">
-                Not available from provider.
-                {recentNote ? ` ${recentNote}` : ""}
-              </p>
+              <p className="mt-1 text-neutral-400">No recent games available.</p>
             )}
           </details>
 
@@ -761,23 +758,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                 {insights?.injury?.detail ? <p className="text-neutral-400">{insights.injury.detail}</p> : null}
               </div>
             ) : (
-              <p className="mt-1 text-neutral-400">
-                Not available from provider.
-                {injuryNote ? ` ${injuryNote}` : ""}
-              </p>
+              <p className="mt-1 text-neutral-400">Live status unavailable.</p>
             )}
           </details>
-
-          {insights?.metaNotes && insights.metaNotes.length > 0 ? (
-            <details className="rounded border border-neutral-800 bg-black/20 p-2">
-              <summary className="cursor-pointer font-medium">Notes</summary>
-              <ul className="mt-1 space-y-1 text-neutral-400">
-                {insights.metaNotes.map((note, index) => (
-                  <li key={`${index}-${note}`}>- {note}</li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
         </div>
       ) : null}
 
@@ -794,6 +777,8 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         <p>Sport: {sportKey.toUpperCase()}</p>
         <p>Request ID: {activeMeta?.requestId ?? "-"}</p>
         <p>Final upstream URL: {activeMeta?.endpointUrl ?? "-"}</p>
+        <p>Profile warning: {meta?.warning ?? "-"}</p>
+        <p>Insights warning: {insightsMeta?.warning ?? "-"}</p>
         <p>Last error: {lastError ?? "none"}</p>
         {isDev ? (
           <label className="mt-1 flex items-center gap-2 text-[11px]">

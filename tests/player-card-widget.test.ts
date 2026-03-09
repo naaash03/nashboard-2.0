@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildPlayerSearchUrl, normalizePlayerName, selectExactPlayerResult } from "@/components/widgets/PlayerCardWidget";
+import { buildPlayerSearchUrl, normalizePlayerName, sanitizePlayerCardWarning, selectExactPlayerResult } from "@/components/widgets/PlayerCardWidget";
 
 describe("PlayerCardWidget search wiring", () => {
   it("builds local API search URL with encoded q parameter", () => {
@@ -52,6 +52,19 @@ describe("PlayerCardWidget search wiring", () => {
     expect(source.includes("Season Highlights")).toBe(true);
     expect(source.includes("Recent Games")).toBe(true);
     expect(source.includes("Status / Injury")).toBe(true);
-    expect(source.includes("Not available from provider.")).toBe(true);
+    expect(source.includes("Live context unavailable.")).toBe(true);
+    expect(source.includes("Season insights unavailable.")).toBe(true);
+    expect(source.includes("No recent games available.")).toBe(true);
+  });
+
+  it("sanitizes provider diagnostics from user-facing warnings", () => {
+    const warning = sanitizePlayerCardWarning("No schedule rows found for MLB", "Season insights unavailable.");
+    expect(warning).toBe("Season insights unavailable.");
+  });
+
+  it("keeps provider warning details in debug section only", () => {
+    const source = readFileSync("components/widgets/PlayerCardWidget.tsx", "utf8");
+    expect(source.includes("Profile warning:")).toBe(true);
+    expect(source.includes("Insights warning:")).toBe(true);
   });
 });

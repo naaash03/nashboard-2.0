@@ -96,6 +96,14 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
     };
   }, [props.dataMode, props.preferenceDataMode, props.refreshTick]);
 
+  const effectiveMode = data?.effectiveDataMode ?? data?.resolvedDataMode ?? props.dataMode;
+  const effectiveSource = (data?.effectiveSource ?? "unknown").toUpperCase();
+  const cacheState = data?.cache?.hit ? "hit" : (data?.cache?.miss ? "miss" : "n/a");
+  const fallbackState = data?.hydrationOccurred ? "Fallback/enrichment used" : "Primary source response";
+  const scheduleWindowLabel = data?.schedule
+    ? `${data.schedule.windowStart ?? "-"} to ${data.schedule.windowEnd ?? "-"}`
+    : "-";
+
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
@@ -104,24 +112,32 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
 
       {data ? (
         <>
-          <p>Preference mode: {props.preferenceDataMode}</p>
-          <p>Effective mode: {data.effectiveDataMode ?? data.resolvedDataMode ?? props.dataMode}</p>
-          <p>Effective source: {(data.effectiveSource ?? "unknown").toUpperCase()}</p>
-          <p>Hydration used: {data.hydrationOccurred ? "yes" : "no"}</p>
-          <p>Query mode: {data.queryDataMode ?? "-"}</p>
-          <p>Resolver source: {data.resolutionSource ?? props.dataModeSource}</p>
-          <p>DB status: {data.status?.db}</p>
-          <p>API-Sports status: {data.status?.apiSports ?? "empty"}</p>
-          <p>ESPN status: {data.status?.espn ?? "empty"}</p>
-          <p>Fixture status: {data.status?.fixture}</p>
-          <p>Cache hit: {String(data.cache?.hit)} | miss: {String(data.cache?.miss)}</p>
-          <p>Last cache age: {Math.max(0, Number(data.cache?.lastCacheAgeSeconds ?? 0))}s</p>
-          <p>Schedule timezone: {data.schedule?.timezone ?? "-"}</p>
-          <p>Schedule window: {data.schedule?.windowStart ?? "-"} to {data.schedule?.windowEnd ?? "-"}</p>
-          <p>Schedule strategy: {data.schedule?.strategy ?? "-"}</p>
-          {data.schedule?.note ? <p className="text-neutral-400">{data.schedule.note}</p> : null}
+          <div className="space-y-1 rounded border border-neutral-700 bg-neutral-950 p-2">
+            <p>Effective mode: {effectiveMode}</p>
+            <p>Effective source: {effectiveSource}</p>
+            <p>Fallback state: {fallbackState}</p>
+            <p>Cache state: {cacheState}</p>
+            <p>Last cache age: {Math.max(0, Number(data.cache?.lastCacheAgeSeconds ?? 0))}s</p>
+            <p>Schedule timezone: {data.schedule?.timezone ?? "-"}</p>
+            <p>Schedule window: {scheduleWindowLabel}</p>
+          </div>
 
           <button className="rounded border border-neutral-700 px-2 py-1" type="button" onClick={() => void load(true)}>Probe providers now</button>
+
+          <details className="rounded border border-neutral-700 bg-black/20 p-2">
+            <summary className="cursor-pointer text-[11px] text-neutral-300">Provider status</summary>
+            <div className="mt-1 space-y-1 text-neutral-400">
+              <p>Preference mode: {props.preferenceDataMode}</p>
+              <p>Query mode: {data.queryDataMode ?? "-"}</p>
+              <p>Resolver source: {data.resolutionSource ?? props.dataModeSource}</p>
+              <p>DB status: {data.status?.db}</p>
+              <p>API-Sports status: {data.status?.apiSports ?? "empty"}</p>
+              <p>ESPN status: {data.status?.espn ?? "empty"}</p>
+              <p>Fixture status: {data.status?.fixture}</p>
+              <p>Schedule strategy: {data.schedule?.strategy ?? "-"}</p>
+              {data.schedule?.note ? <p>{data.schedule.note}</p> : null}
+            </div>
+          </details>
 
           {data.hydrationNotes && data.hydrationNotes.length > 0 ? (
             <details className="rounded border border-neutral-700 bg-black/20 p-2">

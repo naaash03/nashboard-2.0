@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getApiSportsConfig } from "@/lib/providers/apiSports/config";
 import { fetchApiSportsJson } from "@/lib/providers/apiSports/client";
-import { buildDateRange, formatDateInTimeZone } from "@/lib/providers/scheduleWindow";
+import { resolveScheduleQueryContext } from "@/lib/providers/scheduleContext";
+import { formatDateInTimeZone } from "@/lib/providers/scheduleWindow";
 import type { Meta } from "@/lib/providers/types";
 import type { Envelope, SportKey, TeamProviderRef } from "@/lib/types/players";
 import type { TeamAdvanced } from "@/lib/types/playerInsights";
@@ -427,7 +428,12 @@ export async function getTeamsAdvanced(
   }
 
   const config = getApiSportsConfig(sport);
-  const scheduleWindow = buildDateRange();
+  const scheduleContext = resolveScheduleQueryContext({
+    sport,
+    configuredSeason: config.season,
+  });
+  const scheduleWindow = scheduleContext.window;
+  const resolvedSeason = scheduleContext.season;
   const warnings: string[] = [];
   const baseMetas: Meta[] = [];
   const teams: TeamAdvanced[] = [];
@@ -435,6 +441,7 @@ export async function getTeamsAdvanced(
   for (const ref of normalizedRefs) {
     const identityResult = await resolveTeamIdentity(sport, ref, dataMode, cacheBust);
     const identity = identityResult.identity;
+    const teamUserNotes: string[] = [];
     const teamWarnings: string[] = [];
     if (identityResult.warning) {
       teamWarnings.push(identityResult.warning);
@@ -451,7 +458,7 @@ export async function getTeamsAdvanced(
         params: {
           team: identity.apiSportsTeamId ?? identity.teamKey,
           league: config.league,
-          season: config.season,
+          season: resolvedSeason,
         },
         dataMode,
         ttlSeconds: 240,
@@ -474,7 +481,7 @@ export async function getTeamsAdvanced(
         endpoint: "games",
         params: {
           league: config.league,
-          season: config.season,
+          season: resolvedSeason,
           timezone: scheduleWindow.timeZone,
           from: scheduleWindow.startDate,
           to: scheduleWindow.endDate,
@@ -488,11 +495,13 @@ export async function getTeamsAdvanced(
       baseMetas.push(gamesResponse.meta);
       games = parseGamesForTeam(gamesResponse.data, identity, scheduleWindow.timeZone);
       if (games.length === 0) {
+        teamUserNotes.push("No scheduled games available right now.");
         teamWarnings.push(
           `No schedule rows found for ${identity.teamKey} in ${scheduleWindow.startDate}..${scheduleWindow.endDate} (${scheduleWindow.timeZone}).`,
         );
       }
     } catch (error) {
+      teamUserNotes.push("No scheduled games available right now.");
       teamWarnings.push(`Schedule lookup failed for ${identity.teamKey}: ${String(error)}`);
     }
 
@@ -525,6 +534,7 @@ export async function getTeamsAdvanced(
         };
 
     if (!today && !recentFinal && !nextScheduled) {
+      teamUserNotes.push("No scheduled games available right now.");
       teamWarnings.push(`No games found in ${scheduleWindow.startDate}..${scheduleWindow.endDate} (${scheduleWindow.timeZone}).`);
     }
 
@@ -551,7 +561,7 @@ export async function getTeamsAdvanced(
             score: recentFinal.score ? `${recentFinal.score.team}-${recentFinal.score.opp}` : undefined,
           }
         : null,
-      metaNotes: teamWarnings.length > 0 ? teamWarnings : undefined,
+      metaNotes: teamUserNotes.length > 0 ? Array.from(new Set(teamUserNotes)) : undefined,
     });
 
     warnings.push(...teamWarnings);
@@ -561,6 +571,8 @@ export async function getTeamsAdvanced(
   const uniqueWarnings = Array.from(new Set(warnings));
   const notes = [
     `Schedule window uses ${scheduleWindow.timeZone} (${scheduleWindow.startDate}..${scheduleWindow.endDate}).`,
+    `Resolved season for ${sport.toUpperCase()} schedule queries: ${resolvedSeason ?? "unset"}.`,
+    ...scheduleContext.seasonResolution.notes,
     "Today-only schedule lookup was replaced with a buffered window (yesterday/today/next support).",
   ];
   return {

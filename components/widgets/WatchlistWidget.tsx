@@ -298,6 +298,30 @@ export function selectExactTeamResult(query: string, results: TeamSearchResult[]
   ) ?? null;
 }
 
+const DIAGNOSTIC_MESSAGE_PATTERNS = [
+  "no schedule rows found",
+  "no games found",
+  "lookup failed",
+  "api-sports",
+  "espn",
+  "endpoint",
+  "request",
+  "syntaxerror",
+  "failed to fetch",
+];
+
+export function sanitizeRuntimeMessage(raw: string | null | undefined, fallback: string): string {
+  const text = (raw ?? "").trim();
+  if (!text) {
+    return fallback;
+  }
+  const lowered = text.toLowerCase();
+  if (DIAGNOSTIC_MESSAGE_PATTERNS.some((pattern) => lowered.includes(pattern))) {
+    return fallback;
+  }
+  return text;
+}
+
 function teamStatusLabel(status: TeamStatus | undefined): string {
   if (!status || !status.hasGameToday) {
     return "No game today";
@@ -319,6 +343,16 @@ function teamStatusLabel(status: TeamStatus | undefined): string {
   return compact([`Final ${opponent}`, score]);
 }
 
+export function teamCardStatusLabel(status: TeamStatus | undefined, team: TeamAdvanced | undefined): string {
+  if (status?.hasGameToday) {
+    return teamStatusLabel(status);
+  }
+  if (team?.lastGame || team?.nextGame) {
+    return "No game today";
+  }
+  return "No scheduled games available right now";
+}
+
 function teamLiveDetail(status: TeamStatus | undefined): string {
   if (!status || !status.hasGameToday) {
     return "No live game state.";
@@ -329,7 +363,7 @@ function teamLiveDetail(status: TeamStatus | undefined): string {
 
 function lastGameLabel(team: TeamAdvanced | undefined): string {
   if (!team?.lastGame) {
-    return "Last game not available";
+    return "No recent games available";
   }
   return compact([
     team.lastGame.result,
@@ -341,7 +375,7 @@ function lastGameLabel(team: TeamAdvanced | undefined): string {
 
 function nextGameLabel(team: TeamAdvanced | undefined): string {
   if (!team?.nextGame) {
-    return "Next game not available";
+    return "Next scheduled game not available";
   }
   const prefix = team.nextGame.homeAway === "home" ? "vs" : "at";
   return compact([team.nextGame.when, `${prefix} ${team.nextGame.vs ?? "TBD"}`]);
@@ -355,7 +389,10 @@ export function playerInsightsSummary(insight: PlayerInsights | undefined): stri
 }
 
 function playerTeamLiveLabel(insight: PlayerInsights | undefined): string {
-  if (!insight?.live || !insight.live.hasGameToday) {
+  if (!insight?.live) {
+    return "Live context unavailable";
+  }
+  if (!insight.live.hasGameToday) {
     return "No game today";
   }
   const opponent = insight.live.opponent
@@ -648,10 +685,10 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       setTeamAdvancedByKey(advancedMap);
       setTeamStatusMeta(json.meta);
       setLastCallMeta(json.meta);
-      setTeamError(json.meta.warning ?? null);
+      setTeamError(null);
     } catch (error) {
       if (!controller.signal.aborted) {
-        setTeamError(String(error));
+        setTeamError(sanitizeRuntimeMessage(String(error), "Team status is temporarily unavailable."));
         setStatusByTeam({});
         setTeamAdvancedByKey({});
       }
@@ -735,7 +772,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
       setLastCallMeta(json.meta);
     } catch (error) {
       if (!controller.signal.aborted) {
-        setPlayerError(String(error));
+        setPlayerError(sanitizeRuntimeMessage(String(error), "Live context unavailable."));
       }
     }
   }, [currentPlayerIds, playerInsightsReqKey, playersModeActive, props.dataMode, props.mode, props.refreshTick, sportKey]);
@@ -786,7 +823,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     }
 
     setLastCallMeta(json.meta);
-    setPlayerError(json.meta.warning ?? null);
+    setPlayerError(null);
 
     return (json.data ?? []).map((row) => ({
       playerId: row.playerId,
@@ -813,7 +850,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     }
 
     setLastCallMeta(json.meta);
-    setTeamError(json.meta.warning ?? null);
+    setTeamError(null);
     return json.data ?? [];
   }, [props.dataMode, props.refreshTick, sportKey]);
 
@@ -838,7 +875,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         setPlayerResults(results);
       } catch (error) {
         if (!controller.signal.aborted) {
-          setPlayerError(String(error));
+          setPlayerError(sanitizeRuntimeMessage(String(error), "Player search is temporarily unavailable."));
           setPlayerResults([]);
         }
       }
@@ -889,7 +926,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
         setTeamActiveIndex(-1);
       } catch (error) {
         if (!controller.signal.aborted) {
-          setTeamError(String(error));
+          setTeamError(sanitizeRuntimeMessage(String(error), "Team search is temporarily unavailable."));
           setTeamResults([]);
           setTeamActiveIndex(-1);
         }
@@ -1176,12 +1213,12 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     const response = await fetch(endpointUrl, { cache: "no-store" });
     const json = (await response.json()) as Envelope<PlayerProfile>;
     if (!response.ok || json.error) {
-      setPlayerError(json.error?.message ?? "Failed to load player profile.");
+      setPlayerError("Player profile is temporarily unavailable.");
       return;
     }
 
     setLastCallMeta(json.meta);
-    setPlayerError(json.meta.warning ?? null);
+    setPlayerError(null);
     setLastProfile(json.data ?? null);
   };
 
@@ -1320,26 +1357,29 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
             const standingsLabel = advanced?.standings
               ? `${advanced.standings.conference ?? "Conference"} rank ${advanced.standings.rank ?? "-"}`
               : null;
-            const nextLabel = advanced?.nextGame ? nextGameLabel(advanced) : (!status?.hasGameToday ? "No game today" : null);
-            const hasAdvancedDetails = Boolean(nextLabel || recordLabel || standingsLabel || status?.hasGameToday);
+            const lastLabel = lastGameLabel(advanced);
+            const nextLabel = nextGameLabel(advanced);
+            const hasScheduleData = Boolean(status?.hasGameToday || advanced?.lastGame || advanced?.nextGame);
+            const hasAdvancedDetails = Boolean(recordLabel || standingsLabel || status?.hasGameToday || hasScheduleData);
             return (
               <div key={`${sportKey}-team-${normalizedKey}`} className="flex items-start justify-between rounded border border-neutral-700 bg-neutral-950 p-2">
                 <div className="min-w-0 flex-1 pr-2">
                   <p className="font-medium">
                     {label} <span className="rounded bg-neutral-800 px-1 py-0.5 text-[10px] text-neutral-300">{sportLabel(sportKey)}</span>
                   </p>
-                  <p className="text-neutral-400">{teamStatusLabel(status)}</p>
+                  <p className="text-neutral-400">{teamCardStatusLabel(status, advanced)}</p>
                   {props.mode === "BEGINNER" ? (
-                    <p className="text-neutral-500">Last: {lastGameLabel(advanced)}</p>
+                    <p className="text-neutral-500">Last: {lastLabel}</p>
                   ) : (
                     <details className="mt-1 rounded border border-neutral-800 bg-black/20 p-2">
                       <summary className="cursor-pointer text-neutral-300">Details</summary>
                       <div className="mt-1 space-y-1 text-neutral-400">
-                        {nextLabel ? <p>Next: {nextLabel}</p> : null}
+                        <p>Last: {lastLabel}</p>
+                        <p>Next: {nextLabel}</p>
                         {recordLabel ? <p>Record: {recordLabel}</p> : null}
                         {standingsLabel ? <p>Standings: {standingsLabel}</p> : null}
                         {status?.hasGameToday ? <p>Live detail: {teamLiveDetail(status)}</p> : null}
-                        {advanced?.metaNotes?.[0] ? <p>Note: {advanced.metaNotes[0]}</p> : null}
+                        {!hasScheduleData ? <p>No scheduled games available right now.</p> : null}
                         {!hasAdvancedDetails ? <p>No additional details available.</p> : null}
                       </div>
                     </details>
@@ -1428,7 +1468,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                               ))}
                             </div>
                           ) : (
-                            <p>Season highlights not available.</p>
+                            <p>Season insights unavailable.</p>
                           )}
 
                           {insight?.recent?.games && insight.recent.games.length > 0 ? (
@@ -1440,10 +1480,8 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                               ))}
                             </div>
                           ) : (
-                            <p>Recent game line not available.</p>
+                            <p>No recent games available.</p>
                           )}
-
-                          {insight?.metaNotes?.[0] ? <p>Note: {insight.metaNotes[0]}</p> : null}
                         </div>
                       </details>
                     ) : null}

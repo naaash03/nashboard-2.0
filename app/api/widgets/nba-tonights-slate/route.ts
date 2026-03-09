@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { getTodaysSlate } from "@/lib/providers/espn/nba";
+import { normalizeGameFromEspn } from "@/lib/sports/adapters";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { shapeNbaTonightsSlate } from "@/lib/templates/nbaTonightsSlate";
 import type { Meta } from "@/lib/providers/types";
 
@@ -23,6 +25,23 @@ export async function GET(req: Request) {
 
   try {
     const slate = await getTodaysSlate(mode, resolvedDataMode, cacheBust);
+    const canonicalGames = slate.games.map((game) => normalizeGameFromEspn({
+      id: game.id,
+      date: game.date,
+      status: { type: { description: game.status, state: game.status } },
+      competitions: [{
+        competitors: [
+          { homeAway: "home", team: { abbreviation: game.homeTeam.key, displayName: game.homeTeam.name } },
+          { homeAway: "away", team: { abbreviation: game.awayTeam.key, displayName: game.awayTeam.name } },
+        ],
+      }],
+    }, "NBA"));
+    const contract = toWidgetPayload({
+      data: canonicalGames,
+      meta: slate.meta,
+      primaryProvider: "espn",
+    });
+
     return NextResponse.json({
       data: {
         dateUsed: slate.dateUsed,
@@ -32,19 +51,28 @@ export async function GET(req: Request) {
           : "No NBA games scheduled today.",
       },
       meta: slate.meta,
+      contract,
       error: null,
     });
   } catch (error) {
     const message = `Failed to load NBA tonight's slate: ${String(error)}`;
+    const meta = fallbackMeta(resolvedDataMode, message);
+    const contract = toWidgetPayload({
+      data: [],
+      error: message,
+      meta,
+      primaryProvider: "espn",
+    });
+
     return NextResponse.json({
       data: {
         dateUsed: new Date().toISOString().slice(0, 10),
         games: [],
         userFacingMessage: message,
       },
-      meta: fallbackMeta(resolvedDataMode, message),
+      meta,
+      contract,
       error: message,
     }, { status: 502 });
   }
 }
-

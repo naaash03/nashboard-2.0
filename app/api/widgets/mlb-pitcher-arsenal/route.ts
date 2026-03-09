@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { mlbProvider } from "@/lib/providers/mlb";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { shapeMlbPitcherArsenal } from "@/lib/templates/mlbPitcherArsenal";
 import type { Meta } from "@/lib/providers/types";
 
@@ -24,9 +25,16 @@ export async function GET(req: Request) {
 
   if (!playerId) {
     const error = "playerId is required";
+    const meta = fallbackMeta(resolvedDataMode, error);
     return NextResponse.json({
       data: null,
-      meta: fallbackMeta(resolvedDataMode, error),
+      meta,
+      contract: toWidgetPayload({
+        data: null,
+        error,
+        meta,
+        primaryProvider: "mlb",
+      }),
       error,
     }, { status: 400 });
   }
@@ -38,15 +46,38 @@ export async function GET(req: Request) {
     return NextResponse.json({
       data: shaped,
       meta: providerResult.meta,
+      contract: toWidgetPayload({
+        data: providerResult.data
+          ? {
+            playerId: `mlb-${providerResult.data.playerId}`,
+            league: "MLB",
+            stats: { pitches: providerResult.data.pitches },
+            sourceMeta: {
+              provider: providerResult.meta.sourceUsed,
+              fetchedAt: providerResult.meta.updatedAt,
+              stale: providerResult.meta.sourceUsed === "cache",
+            },
+          }
+          : null,
+        error: null,
+        meta: providerResult.meta,
+        primaryProvider: "mlb",
+      }),
       error: null,
     });
   } catch (error) {
     const message = `Failed to load MLB pitcher arsenal: ${String(error)}`;
+    const meta = fallbackMeta(resolvedDataMode, message);
     return NextResponse.json({
       data: null,
-      meta: fallbackMeta(resolvedDataMode, message),
+      meta,
+      contract: toWidgetPayload({
+        data: null,
+        error: message,
+        meta,
+        primaryProvider: "mlb",
+      }),
       error: message,
     }, { status: 502 });
   }
 }
-
