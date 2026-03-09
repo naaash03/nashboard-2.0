@@ -6,17 +6,18 @@ import { WIDGET_DEFINITIONS } from "@/lib/widgets/registry";
 export async function GET(req: NextRequest) {
   const sportParam = (req.nextUrl.searchParams.get("sport") ?? "NFL").toUpperCase();
   const sport = ["NFL", "NBA", "MLB", "UTILITIES"].includes(sportParam) ? sportParam : "NFL";
+  const allWidgets = WIDGET_DEFINITIONS;
 
-  const widgets = WIDGET_DEFINITIONS.filter((definition) => {
+  const widgets = allWidgets.filter((definition) => {
     if (definition.sportCategory === "UTILITIES") return true;
     return definition.sportCategory === sport;
   });
 
   const categories = {
-    NFL: widgets.filter((w) => w.sportCategory === "NFL"),
-    MLB: widgets.filter((w) => w.sportCategory === "MLB"),
-    NBA: widgets.filter((w) => w.sportCategory === "NBA"),
-    Utilities: widgets.filter((w) => w.sportCategory === "UTILITIES"),
+    NFL: allWidgets.filter((w) => w.sportCategory === "NFL"),
+    MLB: allWidgets.filter((w) => w.sportCategory === "MLB"),
+    NBA: allWidgets.filter((w) => w.sportCategory === "NBA"),
+    Utilities: allWidgets.filter((w) => w.sportCategory === "UTILITIES"),
   };
 
   const meta: Meta = {

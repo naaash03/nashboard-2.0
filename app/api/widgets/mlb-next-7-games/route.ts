@@ -62,8 +62,8 @@ export async function GET(req: Request) {
       error: null,
     });
   } catch (error) {
-    const message = `Failed to load MLB next 7 games: ${String(error)}`;
-    const meta = fallbackMeta(resolvedDataMode, message);
+    const message = "Failed to load MLB next 7 games";
+    const meta = fallbackMeta(resolvedDataMode, `MLB next 7 games upstream failure: ${String(error)}`);
     return NextResponse.json({
       data: null,
       meta,

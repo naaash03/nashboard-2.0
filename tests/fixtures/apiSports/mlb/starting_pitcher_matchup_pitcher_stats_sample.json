@@ -1,0 +1,56 @@
+{
+  "response": [
+    {
+      "player": {
+        "id": "1001",
+        "name": "Spencer Strider",
+        "photo": "https://a.espncdn.com/i/headshots/mlb/players/full/1001.png",
+        "throws": "R"
+      },
+      "statistics": [
+        {
+          "games": {
+            "wins": 2,
+            "losses": 1
+          },
+          "pitching": {
+            "innings_pitched": 21.0,
+            "strike_outs": 32,
+            "base_on_balls": 8,
+            "home_runs": 3,
+            "hits": 15,
+            "era": 3.2,
+            "whip": 1.1,
+            "opponent_avg": 0.214
+          }
+        }
+      ]
+    },
+    {
+      "player": {
+        "id": "1002",
+        "name": "Kodai Senga",
+        "photo": "https://a.espncdn.com/i/headshots/mlb/players/full/1002.png",
+        "throws": "R"
+      },
+      "statistics": [
+        {
+          "games": {
+            "wins": 3,
+            "losses": 0
+          },
+          "pitching": {
+            "innings_pitched": 23.0,
+            "strike_outs": 29,
+            "base_on_balls": 6,
+            "home_runs": 2,
+            "hits": 14,
+            "era": 2.35,
+            "whip": 0.96,
+            "opponent_avg": 0.201
+          }
+        }
+      ]
+    }
+  ]
+}

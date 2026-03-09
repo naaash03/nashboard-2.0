@@ -12,6 +12,7 @@ export type MlbNextGame = {
   homeAway: "home" | "away";
   gamePk?: number;
   probablePitcherName?: string;
+  probablePitcherId?: string;
 };
 
 export type MlbNextGames = {
@@ -31,6 +32,28 @@ export type PitcherArsenal = {
   pitches: MlbArsenalPitch[];
 };
 
+export type MlbScheduledProbableStarter = {
+  playerId?: string;
+  fullName?: string;
+};
+
+export type MlbScheduledTeam = {
+  id?: number;
+  key: string;
+  name: string;
+  probableStarter?: MlbScheduledProbableStarter;
+};
+
+export type MlbScheduledGame = {
+  gamePk?: number;
+  gameDate: string;
+  status: "scheduled" | "live" | "final";
+  detailedState?: string;
+  venue?: string;
+  awayTeam: MlbScheduledTeam;
+  homeTeam: MlbScheduledTeam;
+};
+
 export interface MlbProvider {
   getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: MlbNextGames | null; meta: Meta }>;
   getPitcherArsenal(playerId: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: PitcherArsenal | null; meta: Meta }>;
@@ -43,14 +66,17 @@ type MlbScheduleGame = {
     abstractGameState?: string;
     detailedState?: string;
   };
+  venue?: {
+    name?: string;
+  };
   teams?: {
     away?: {
       team?: { id?: number; name?: string };
-      probablePitcher?: { fullName?: string };
+      probablePitcher?: { id?: number; fullName?: string };
     };
     home?: {
       team?: { id?: number; name?: string };
-      probablePitcher?: { fullName?: string };
+      probablePitcher?: { id?: number; fullName?: string };
     };
   };
 };
@@ -104,7 +130,33 @@ function isUpcoming(gameDate?: string, abstractState?: string): boolean {
   return true;
 }
 
-function normalizeUpcomingGames(teamId: number, payload: MlbScheduleResponse, mode: Mode): MlbNextGame[] {
+function statusFromScheduleState(state?: string): "scheduled" | "live" | "final" {
+  const normalized = (state ?? "").toLowerCase();
+  if (normalized === "final") {
+    return "final";
+  }
+  if (normalized === "live" || normalized === "inprogress") {
+    return "live";
+  }
+  return "scheduled";
+}
+
+function teamKeyFromRaw(team?: { id?: number; name?: string }): string {
+  if (team?.id && TEAM_KEY_BY_ID[team.id]) {
+    return TEAM_KEY_BY_ID[team.id];
+  }
+  const name = (team?.name ?? "").trim();
+  if (!name) {
+    return "TBD";
+  }
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 3).toUpperCase();
+  }
+  return parts.slice(-2).map((part) => (part[0] ?? "")).join("").toUpperCase();
+}
+
+function normalizeUpcomingScheduleGames(teamId: number, payload: MlbScheduleResponse): MlbScheduledGame[] {
   const rows: Array<{ gameDate: string; game: MlbScheduleGame }> = [];
 
   for (const dateBucket of payload.dates ?? []) {
@@ -128,29 +180,54 @@ function normalizeUpcomingGames(teamId: number, payload: MlbScheduleResponse, mo
 
   rows.sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime());
 
-  return rows.slice(0, 7).map(({ gameDate, game }) => {
-    const homeTeamId = game.teams?.home?.team?.id;
-    const homeAway: "home" | "away" = homeTeamId === teamId ? "home" : "away";
-    const opponentTeam = homeAway === "home" ? game.teams?.away?.team : game.teams?.home?.team;
-    const opponent = opponentTeam?.name ?? TEAM_KEY_BY_ID[opponentTeam?.id ?? -1] ?? "TBD";
-    const probablePitcherName = homeAway === "home"
-      ? game.teams?.home?.probablePitcher?.fullName
-      : game.teams?.away?.probablePitcher?.fullName;
+  return rows.map(({ gameDate, game }) => ({
+    gamePk: game.gamePk,
+    gameDate,
+    status: statusFromScheduleState(game.status?.abstractGameState),
+    detailedState: game.status?.detailedState,
+    venue: game.venue?.name,
+    awayTeam: {
+      id: game.teams?.away?.team?.id,
+      key: teamKeyFromRaw(game.teams?.away?.team),
+      name: game.teams?.away?.team?.name ?? "TBD",
+      probableStarter: {
+        playerId: game.teams?.away?.probablePitcher?.id ? String(game.teams?.away?.probablePitcher?.id) : undefined,
+        fullName: game.teams?.away?.probablePitcher?.fullName,
+      },
+    },
+    homeTeam: {
+      id: game.teams?.home?.team?.id,
+      key: teamKeyFromRaw(game.teams?.home?.team),
+      name: game.teams?.home?.team?.name ?? "TBD",
+      probableStarter: {
+        playerId: game.teams?.home?.probablePitcher?.id ? String(game.teams?.home?.probablePitcher?.id) : undefined,
+        fullName: game.teams?.home?.probablePitcher?.fullName,
+      },
+    },
+  }));
+}
 
+function mapScheduleToNextSevenGames(teamId: number, games: MlbScheduledGame[], mode: Mode): MlbNextGame[] {
+  return games.slice(0, 7).map((game) => {
+    const homeAway: "home" | "away" = game.homeTeam.id === teamId ? "home" : "away";
+    const opponentTeam = homeAway === "home" ? game.awayTeam : game.homeTeam;
+    const probableStarter = homeAway === "home" ? game.homeTeam.probableStarter : game.awayTeam.probableStarter;
     if (mode === "advanced") {
       return {
-        date: gameDate,
-        opponent,
+        date: game.gameDate,
+        opponent: opponentTeam.name ?? opponentTeam.key ?? "TBD",
         homeAway,
         gamePk: game.gamePk,
-        probablePitcherName,
+        probablePitcherName: probableStarter?.fullName,
+        probablePitcherId: probableStarter?.playerId,
       };
     }
-
     return {
-      date: gameDate,
-      opponent,
+      date: game.gameDate,
+      opponent: opponentTeam.name ?? opponentTeam.key ?? "TBD",
       homeAway,
+      probablePitcherName: probableStarter?.fullName,
+      probablePitcherId: probableStarter?.playerId,
     };
   });
 }
@@ -180,47 +257,64 @@ function fallbackMeta(sourceDataMode: ModeArg, warning: string): Meta {
   };
 }
 
+export async function getMlbUpcomingScheduleWithProbables(
+  teamKey: string,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+): Promise<{ data: { teamKey: string; teamId: number; games: MlbScheduledGame[] } | null; meta: Meta }> {
+  const resolved = getMlbDataMode(dataMode);
+  const team = resolveMlbTeam(teamKey);
+
+  if (!team) {
+    return {
+      data: null,
+      meta: fallbackMeta(resolved, `Unknown MLB team key: ${teamKey.toUpperCase()}`),
+    };
+  }
+
+  const today = new Date();
+  const startDate = isoDate(today);
+  const endDate = isoDate(addDays(today, 14));
+
+  const response = await fetchMlbJson<MlbScheduleResponse>({
+    endpoint: "/schedule",
+    params: {
+      teamId: team.id,
+      sportId: 1,
+      startDate,
+      endDate,
+      hydrate: "probablePitcher",
+    },
+    fixtureFile: "next7_nym.json",
+    ttlSeconds: 300,
+    dataMode: resolved,
+    cacheBust,
+  });
+
+  const games = normalizeUpcomingScheduleGames(team.id, response.data);
+  const warning = games.length === 0 ? `No upcoming games found in the selected ${resolved} data window.` : response.meta.warning;
+  return {
+    data: {
+      teamKey: team.key,
+      teamId: team.id,
+      games,
+    },
+    meta: {
+      ...response.meta,
+      warning,
+    },
+  };
+}
+
 export const mlbProvider: MlbProvider = {
   async getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg) {
-    const resolved = getMlbDataMode(dataMode);
-    const team = resolveMlbTeam(teamKey);
-
-    if (!team) {
-      return {
-        data: null,
-        meta: fallbackMeta(resolved, `Unknown MLB team key: ${teamKey.toUpperCase()}`),
-      };
-    }
-
-    const today = new Date();
-    const startDate = isoDate(today);
-    const endDate = isoDate(addDays(today, 14));
-
-    const response = await fetchMlbJson<MlbScheduleResponse>({
-      endpoint: "/schedule",
-      params: {
-        teamId: team.id,
-        sportId: 1,
-        startDate,
-        endDate,
-      },
-      fixtureFile: "next7_nym.json",
-      ttlSeconds: 300,
-      dataMode: resolved,
-      cacheBust,
-    });
-
-    const games = normalizeUpcomingGames(team.id, response.data, mode);
-    const warning = games.length === 0 ? `No upcoming games found in the selected ${resolved} data window.` : response.meta.warning;
+    const schedule = await getMlbUpcomingScheduleWithProbables(teamKey, dataMode, cacheBust);
+    const games = schedule.data ? mapScheduleToNextSevenGames(schedule.data.teamId, schedule.data.games, mode) : [];
 
     return {
-      data: {
-        teamKey: team.key,
-        games,
-      },
+      data: schedule.data ? { teamKey: schedule.data.teamKey, games } : null,
       meta: {
-        ...response.meta,
-        warning,
+        ...schedule.meta,
       },
     };
   },

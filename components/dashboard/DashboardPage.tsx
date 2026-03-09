@@ -10,6 +10,7 @@ import RbVsDlineWidget from "@/components/widgets/RbVsDlineWidget";
 import DataHealthWidget from "@/components/widgets/DataHealthWidget";
 import MlbNext7GamesWidget from "@/components/widgets/MlbNext7GamesWidget";
 import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidget";
+import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
 import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
 import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
 import TopBarAuth from "@/components/TopBarAuth";
@@ -69,6 +70,7 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   data_health: (props) => <DataHealthWidget {...props} />,
   mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
+  "mlb-starting-pitcher-matchup": (props) => <MlbStartingPitcherMatchupWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
 };

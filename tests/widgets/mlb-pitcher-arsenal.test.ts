@@ -36,4 +36,39 @@ describe("MLB pitcher arsenal route", () => {
       usagePct: expect.any(Number),
     }));
   });
+
+  it("resolves a pitcher name input to numeric playerId", async () => {
+    const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=Juan%20Soto&mode=advanced&dataMode=fixture"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeNull();
+    expect(body.data).toEqual(expect.objectContaining({
+      playerId: expect.any(String),
+      pitches: expect.any(Array),
+    }));
+  });
+
+  it("returns clean 400 when name cannot be resolved to numeric id", async () => {
+    vi.doMock("@/lib/providers", () => ({
+      resolvePlayersSearch: vi.fn(async () => ({
+        data: [],
+        meta: {
+          sourceUsed: "fixture",
+          updatedAt: new Date().toISOString(),
+          requestId: "mock-no-player",
+          dataMode: "fixture",
+        },
+      })),
+    }));
+
+    const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=No%20Such%20Pitcher&mode=advanced&dataMode=fixture"));
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe("Could not resolve a valid MLB pitcher id from the provided input.");
+    expect(body.data).toBeNull();
+  });
 });

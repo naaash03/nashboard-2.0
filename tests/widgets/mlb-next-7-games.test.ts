@@ -22,6 +22,7 @@ describe("MLB next 7 games route", () => {
       date: expect.any(String),
       opponent: expect.any(String),
       homeAway: expect.any(String),
+      probablePitcherName: expect.any(String),
     }));
   });
 });

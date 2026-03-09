@@ -8,6 +8,7 @@ export type MlbNextSevenUiGame = {
   matchup: string;
   gamePk?: number;
   probablePitcherName?: string;
+  probablePitcherId?: string;
 };
 
 export type MlbNextSevenUi = {
@@ -28,6 +29,7 @@ export function shapeMlbNext7Games(data: MlbNextGames, mode: Mode): MlbNextSeven
           matchup,
           gamePk: game.gamePk,
           probablePitcherName: game.probablePitcherName,
+          probablePitcherId: game.probablePitcherId,
         };
       }
 
@@ -36,6 +38,8 @@ export function shapeMlbNext7Games(data: MlbNextGames, mode: Mode): MlbNextSeven
         opponent: game.opponent,
         homeAway: game.homeAway,
         matchup,
+        probablePitcherName: game.probablePitcherName,
+        probablePitcherId: game.probablePitcherId,
       };
     }),
   };

@@ -11,6 +11,7 @@ type NextSevenGame = {
   matchup: string;
   gamePk?: number;
   probablePitcherName?: string;
+  probablePitcherId?: string;
 };
 
 type NextSevenResponse = {
@@ -32,6 +33,14 @@ function toShortDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function safeWarning(message?: string): string | null {
+  if (!message) return null;
+  const lowered = message.toLowerCase();
+  if (lowered.includes("no upcoming games")) return "No upcoming games in the current window.";
+  if (lowered.includes("unknown mlb team")) return "Unknown MLB team key.";
+  return "MLB data warning. Use Report a bug for diagnostics.";
 }
 
 export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
@@ -59,13 +68,13 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
       const response = await fetch(url, { cache: "no-store" });
       const json = (await response.json()) as NextSevenResponse;
       if (!response.ok) {
-        throw new Error(json.error ?? "Failed to load MLB next 7 games");
+        throw new Error("Failed to load MLB next 7 games");
       }
       setData(json.data ?? null);
       setMeta(json.meta ?? null);
       setError(json.error ?? null);
     } catch (loadError) {
-      setError(String(loadError));
+      setError("Failed to load MLB next 7 games");
       setData(null);
     } finally {
       setLoading(false);
@@ -121,16 +130,13 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
         <div key={`${game.date}-${game.matchup}-${game.gamePk ?? "na"}`} className="rounded border border-neutral-700 bg-neutral-950 p-2">
           <p className="font-medium">{game.matchup}</p>
           <p>{toShortDate(game.date)} - {game.homeAway === "home" ? "Home" : "Away"}</p>
-          {props.mode === "ADVANCED" ? (
-            <>
-              <p>GamePk: {game.gamePk ?? "-"}</p>
-              <p>Probable pitcher: {game.probablePitcherName ?? "TBD"}</p>
-            </>
-          ) : null}
+          <p>Probable pitcher: {game.probablePitcherName ?? "TBD"}</p>
+          {props.mode === "ADVANCED" ? <p>GamePk: {game.gamePk ?? "-"}</p> : null}
+          {props.mode === "ADVANCED" ? <p>Probable pitcherId: {game.probablePitcherId ?? "-"}</p> : null}
         </div>
       ))}
 
-      {meta?.warning ? <p className="text-amber-300">{meta.warning}</p> : null}
+      {safeWarning(meta?.warning) ? <p className="text-amber-300">{safeWarning(meta?.warning)}</p> : null}
       <div className="text-[10px] text-neutral-500">
         Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>

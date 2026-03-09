@@ -66,6 +66,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     audience: "advanced",
   },
   {
+    key: "mlb-starting-pitcher-matchup",
+    name: "MLB Starting Pitcher Matchup",
+    description: "Pregame pitching edge card for the next MLB matchup.",
+    sportCategory: "MLB",
+    defaultSize: { w: 1, h: 1 },
+    stability: "experimental",
+    audience: "mixed",
+  },
+  {
     key: "nba_tonights_slate",
     name: "NBA Tonight's Slate",
     description: "Today-first NBA slate using ESPN scoreboard data.",
