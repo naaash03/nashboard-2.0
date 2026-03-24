@@ -14,4 +14,10 @@ describe("widget metadata trust labels", () => {
     expect(widget?.description.includes("prioritized")).toBe(true);
     expect(widget?.stability).toBe("stable");
   });
+
+  it("registers mlb-series-tracker under MLB category", () => {
+    const widget = WIDGET_DEFINITIONS.find((entry) => entry.key === "mlb-series-tracker");
+    expect(widget?.sportCategory).toBe("MLB");
+    expect(widget?.audience).toBe("mixed");
+  });
 });

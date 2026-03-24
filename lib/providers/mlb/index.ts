@@ -1,4 +1,5 @@
-export { getMlbUpcomingScheduleWithProbables, mlbProvider } from "@/lib/providers/mlb/provider";
+export { getMlbTeamSeasonScheduleWithProbables, getMlbUpcomingScheduleWithProbables, mlbProvider } from "@/lib/providers/mlb/provider";
+export { resolveMlbPitcherComparisonStats } from "@/lib/providers/mlb/pitcherComparison";
 export type {
   MlbProvider,
   MlbNextGame,
@@ -9,3 +10,10 @@ export type {
   MlbArsenalPitch,
   PitcherArsenal,
 } from "@/lib/providers/mlb/provider";
+export type {
+  MlbPitcherComparisonCard,
+  MlbPitcherLastStart,
+  MlbPitcherStatBasis,
+  ResolveMlbPitcherComparisonStatsArgs,
+  ResolveMlbPitcherComparisonStatsResult,
+} from "@/lib/providers/mlb/pitcherComparison";

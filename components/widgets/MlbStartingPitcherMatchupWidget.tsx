@@ -18,6 +18,14 @@ type MatchupResponse = {
 
 type MatchupSide = "away" | "home";
 
+type PitcherMetricTile = {
+  key: string;
+  label: string;
+  value: unknown;
+  digits?: number;
+  colSpan2?: boolean;
+};
+
 function to12h(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -67,6 +75,95 @@ function metricLabel(value: unknown, digits = 2): string {
   return "-";
 }
 
+function hasMetric(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return Number.isFinite(Number(value));
+}
+
+export function buildPitcherMetricTiles(
+  pitcher: PitcherMatchupCard | null,
+  mode: "BEGINNER" | "ADVANCED",
+): PitcherMetricTile[] {
+  if (!pitcher) {
+    return [];
+  }
+
+  const base: PitcherMetricTile[] = [
+    { key: "era", label: "ERA", value: pitcher.era, digits: 2 },
+    { key: "record", label: "W-L", value: pitcher.record, digits: 0 },
+  ];
+
+  if (mode === "BEGINNER") {
+    return base;
+  }
+
+  return [
+    ...base,
+    { key: "whip", label: "WHIP", value: pitcher.whip, digits: 2 },
+    { key: "inningsPitched", label: "IP", value: pitcher.inningsPitched, digits: 1 },
+    { key: "strikeouts", label: "K", value: pitcher.strikeouts, digits: 0 },
+    { key: "kPer9", label: "K/9", value: pitcher.kPer9, digits: 1 },
+    { key: "bbPer9", label: "BB/9", value: pitcher.bbPer9, digits: 1 },
+    { key: "hrPer9", label: "HR/9", value: pitcher.hrPer9, digits: 1 },
+    { key: "opponentAvg", label: "Opp AVG", value: pitcher.opponentAvg, digits: 3, colSpan2: true },
+  ].filter((tile) => hasMetric(tile.value));
+}
+
+export function buildBeginnerStatLine(pitcher: PitcherMatchupCard | null): string[] {
+  if (!pitcher) return [];
+  const row: string[] = [];
+  if (hasMetric(pitcher.era)) {
+    row.push(`ERA ${metricLabel(pitcher.era, 2)}`);
+  }
+  if (hasMetric(pitcher.record)) {
+    row.push(`W-L ${metricLabel(pitcher.record, 0)}`);
+  }
+  return row;
+}
+
+function hasPostedStarter(pitcher: PitcherMatchupCard | null): boolean {
+  return Boolean(pitcher?.fullName);
+}
+
+export function buildMatchupSummary(data: MlbStartingPitcherMatchupData | null): string | null {
+  if (!data) return null;
+  const awayStarter = data.pitchers.away;
+  const homeStarter = data.pitchers.home;
+
+  if (hasPostedStarter(awayStarter) && hasPostedStarter(homeStarter)) {
+    return `${data.game.awayTeam.key} starter ${metricLabel(awayStarter?.era)} ERA vs ${data.game.homeTeam.key} starter ${metricLabel(homeStarter?.era)} ERA`;
+  }
+
+  if (hasPostedStarter(awayStarter) && !hasPostedStarter(homeStarter)) {
+    return `${awayStarter?.fullName ?? data.game.awayTeam.key} announced. ${data.game.homeTeam.key} starter TBD.`;
+  }
+
+  if (!hasPostedStarter(awayStarter) && hasPostedStarter(homeStarter)) {
+    return `${homeStarter?.fullName ?? data.game.homeTeam.key} announced. ${data.game.awayTeam.key} starter TBD.`;
+  }
+
+  return "Probable starters not posted yet.";
+}
+
+function shouldShowBeginnerBasisLabel(label?: string): boolean {
+  if (!label) return false;
+  const lowered = label.toLowerCase();
+  return lowered.includes("spring") || lowered.includes("limited") || lowered.includes("regular season");
+}
+
+function resolveBeginnerBasisLabel(data: MlbStartingPitcherMatchupData | null): string | null {
+  if (!data) return null;
+  const away = data.pitchers.away?.statsBasisLabel;
+  const home = data.pitchers.home?.statsBasisLabel;
+  if (away && home && away === home && shouldShowBeginnerBasisLabel(away)) {
+    return away;
+  }
+  if (shouldShowBeginnerBasisLabel(away)) return away ?? null;
+  if (shouldShowBeginnerBasisLabel(home)) return home ?? null;
+  return null;
+}
+
 function safeMatchupError(message?: string | null): string {
   if (!message) return "Failed to load pitching matchup";
   const lowered = message.toLowerCase();
@@ -78,6 +175,18 @@ function safeMatchupError(message?: string | null): string {
 function safeMatchupWarning(message?: string): string | null {
   if (!message) return null;
   const lowered = message.toLowerCase();
+  if (
+    lowered.includes("configured season")
+    || lowered.includes("inferred")
+    || lowered.includes("schedule window")
+    || lowered.includes("time zone")
+    || lowered.includes("timezone")
+    || lowered.includes("cache")
+    || lowered.includes("diagnostic")
+    || lowered.includes("endpoint")
+  ) {
+    return null;
+  }
   if (lowered.includes("no upcoming mlb game")) return "No upcoming MLB game found";
   if (lowered.includes("probable starter")) return "Probable starters are not fully posted yet.";
   if (lowered.includes("upstream")) return "MLB data warning. Use Report a bug for diagnostics.";
@@ -118,9 +227,10 @@ function PitcherCard({
 }) {
   if (!pitcher) {
     return (
-      <div className="rounded border border-neutral-700 bg-neutral-950 p-3">
+      <div className="flex h-full min-h-[126px] flex-col justify-center rounded border border-dashed border-neutral-700 bg-neutral-950 p-3">
         <p className="text-[11px] uppercase tracking-wide text-neutral-400">{side === "away" ? "Away Starter" : "Home Starter"}</p>
         <p className="mt-2 text-neutral-300">Probable starter not posted yet.</p>
+        <p className="text-[10px] text-neutral-500">We will update this side when the probable starter is listed.</p>
       </div>
     );
   }
@@ -131,9 +241,12 @@ function PitcherCard({
   const vsLeftRows = formatSplitsBlock(pitcher.handednessSplits?.vsLeft);
   const vsRightRows = formatSplitsBlock(pitcher.handednessSplits?.vsRight);
   const gameLogRows = pitcher.gameLogMiniSummary ?? [];
+  const metricTiles = buildPitcherMetricTiles(pitcher, mode);
+  const hasAdvancedMetrics = mode !== "ADVANCED" || metricTiles.length > 0;
+  const beginnerStatLine = buildBeginnerStatLine(pitcher);
 
   return (
-    <div className="rounded border border-neutral-700 bg-neutral-950 p-3">
+    <div className="h-full rounded border border-neutral-700 bg-neutral-950 p-3">
       <p className="text-[11px] uppercase tracking-wide text-neutral-400">{side === "away" ? "Away Starter" : "Home Starter"}</p>
       <div className="mt-2 flex items-center gap-2">
         {pitcher.headshotUrl ? (
@@ -148,25 +261,31 @@ function PitcherCard({
         <div>
           <p className="font-medium">{pitcher.fullName}</p>
           <p className="text-[11px] text-neutral-400">
-            {pitcher.handedness ? `Throws ${pitcher.handedness}` : "Handedness -"} | W-L {metricLabel(pitcher.record)}
+            {pitcher.handedness ? `Throws ${pitcher.handedness}` : "Handedness -"}
           </p>
+          {mode === "ADVANCED" && pitcher.statsBasisLabel ? <p className="text-[10px] text-neutral-400">{pitcher.statsBasisLabel}</p> : null}
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-        <div className="rounded border border-neutral-800 px-2 py-1">ERA: {metricLabel(pitcher.era)}</div>
-        <div className="rounded border border-neutral-800 px-2 py-1">W-L: {metricLabel(pitcher.record, 0)}</div>
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1">WHIP: {metricLabel(pitcher.whip)}</div> : null}
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1">IP: {metricLabel(pitcher.inningsPitched, 1)}</div> : null}
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1">K: {metricLabel(pitcher.strikeouts, 0)}</div> : null}
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1">K/9: {metricLabel(pitcher.kPer9, 1)}</div> : null}
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1">BB/9: {metricLabel(pitcher.bbPer9, 1)}</div> : null}
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1">HR/9: {metricLabel(pitcher.hrPer9, 1)}</div> : null}
-        {mode === "ADVANCED" ? <div className="rounded border border-neutral-800 px-2 py-1 col-span-2">Opp AVG: {metricLabel(pitcher.opponentAvg, 3)}</div> : null}
+      {mode === "BEGINNER" ? (
+        <p className="mt-2 text-[11px] text-neutral-300">
+          {beginnerStatLine.length > 0 ? beginnerStatLine.join(" | ") : "No posted stat line yet."}
+        </p>
+      ) : null}
+
+      {mode !== "ADVANCED" ? null : (
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+        {metricTiles.map((tile) => (
+          <div key={tile.key} className={`rounded border border-neutral-800 px-2 py-1 ${tile.colSpan2 ? "col-span-2" : ""}`}>
+            {tile.label}: {metricLabel(tile.value, tile.digits ?? 2)}
+          </div>
+        ))}
       </div>
+      )}
+      {mode === "ADVANCED" && !hasAdvancedMetrics ? <p className="mt-3 text-[11px] text-neutral-400">Advanced season stat splits are not posted yet.</p> : null}
 
       {mode === "ADVANCED" && last3.length > 0 ? (
-        <div className="mt-2 rounded border border-neutral-800 p-2">
+        <div className="mt-3 rounded border border-neutral-800 p-2">
           <p className="text-[11px] font-medium">Last 3 Starts</p>
           <div className="mt-1 space-y-1 text-[11px] text-neutral-300">
             {last3.map((start, index) => (
@@ -179,7 +298,7 @@ function PitcherCard({
       ) : null}
 
       {mode === "ADVANCED" && (homeSplitRows.length > 0 || awaySplitRows.length > 0) ? (
-        <div className="mt-2 rounded border border-neutral-800 p-2 text-[11px]">
+        <div className="mt-3 rounded border border-neutral-800 p-2 text-[11px]">
           <p className="font-medium">Home / Away Splits</p>
           {homeSplitRows.length > 0 ? <p className="mt-1 text-neutral-300">Home: {homeSplitRows.join(" | ")}</p> : null}
           {awaySplitRows.length > 0 ? <p className="mt-1 text-neutral-300">Away: {awaySplitRows.join(" | ")}</p> : null}
@@ -187,7 +306,7 @@ function PitcherCard({
       ) : null}
 
       {mode === "ADVANCED" && (vsLeftRows.length > 0 || vsRightRows.length > 0) ? (
-        <div className="mt-2 rounded border border-neutral-800 p-2 text-[11px]">
+        <div className="mt-3 rounded border border-neutral-800 p-2 text-[11px]">
           <p className="font-medium">Handedness Splits</p>
           {vsLeftRows.length > 0 ? <p className="mt-1 text-neutral-300">vs L: {vsLeftRows.join(" | ")}</p> : null}
           {vsRightRows.length > 0 ? <p className="mt-1 text-neutral-300">vs R: {vsRightRows.join(" | ")}</p> : null}
@@ -195,13 +314,13 @@ function PitcherCard({
       ) : null}
 
       {mode === "ADVANCED" && gameLogRows.length > 0 ? (
-        <div className="mt-2 rounded border border-neutral-800 p-2 text-[11px]">
+        <div className="mt-3 rounded border border-neutral-800 p-2 text-[11px]">
           <p className="font-medium">Season Game Log Summary</p>
           <p className="mt-1 text-neutral-300">{gameLogRows.join(" | ")}</p>
         </div>
       ) : null}
 
-      {pitcher.confidenceNote ? <p className="mt-2 text-[10px] text-amber-300">{pitcher.confidenceNote}</p> : null}
+      {mode === "ADVANCED" && pitcher.confidenceNote ? <p className="mt-2 text-[10px] text-amber-300">{pitcher.confidenceNote}</p> : null}
     </div>
   );
 }
@@ -321,9 +440,8 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
     return null;
   })();
 
-  const matchupSummary = data
-    ? `${data.game.awayTeam.key} starter ${metricLabel(data.pitchers.away?.era)} ERA vs ${data.game.homeTeam.key} starter ${metricLabel(data.pitchers.home?.era)} ERA`
-    : null;
+  const matchupSummary = buildMatchupSummary(data);
+  const beginnerBasisLabel = props.mode === "BEGINNER" ? resolveBeginnerBasisLabel(data) : null;
 
   return (
     <div className="space-y-2 text-xs">
@@ -392,7 +510,7 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
       ) : null}
 
       {data ? (
-        <div className="space-y-2 rounded border border-neutral-700 bg-neutral-900/40 p-2">
+        <div className="space-y-3 rounded border border-neutral-700 bg-neutral-900/40 p-2">
           <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -412,7 +530,7 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
             {matchupSummary ? <p className="mt-1 text-[11px] text-neutral-300">{matchupSummary}</p> : null}
           </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <div className="grid grid-cols-1 items-stretch gap-2 md:grid-cols-2">
             <PitcherCard side="away" pitcher={data.pitchers.away} mode={props.mode} />
             <PitcherCard side="home" pitcher={data.pitchers.home} mode={props.mode} />
           </div>
@@ -429,12 +547,13 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
               <p className="font-medium">{data.edge?.beginnerSummary ?? data.edge?.overall ?? "Edge: neutral"}</p>
             )}
           </div>
+          {beginnerBasisLabel ? <p className="text-[10px] text-neutral-400">{beginnerBasisLabel}</p> : null}
         </div>
       ) : null}
 
-      {(meta?.notes ?? data?.notes ?? []).length > 0 ? (
+      {props.mode === "ADVANCED" && (data?.notes ?? []).length > 0 ? (
         <div className="rounded border border-neutral-700 bg-neutral-950 p-2 text-[10px] text-neutral-400">
-          {(meta?.notes ?? data?.notes ?? []).slice(0, 3).map((note, index) => (
+          {(data?.notes ?? []).slice(0, 2).map((note, index) => (
             <p key={`${note}-${index}`}>{note}</p>
           ))}
         </div>
@@ -455,6 +574,8 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
           teamKey: activeTeamKey,
           gameId: selectedGameId || data?.game.gameId,
           state: data?.state ?? meta?.state,
+          notes: meta?.notes,
+          userNotes: data?.notes,
           warnings: meta?.warnings ?? meta?.warning,
         })}
       >

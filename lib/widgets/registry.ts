@@ -75,6 +75,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     audience: "mixed",
   },
   {
+    key: "mlb-series-tracker",
+    name: "MLB Series Tracker",
+    description: "Track active and upcoming MLB series with beginner summary and advanced timeline analytics.",
+    sportCategory: "MLB",
+    defaultSize: { w: 1, h: 1 },
+    stability: "experimental",
+    audience: "mixed",
+  },
+  {
     key: "nba_tonights_slate",
     name: "NBA Tonight's Slate",
     description: "Today-first NBA slate using ESPN scoreboard data.",

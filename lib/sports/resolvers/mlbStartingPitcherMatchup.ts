@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { getApiSportsConfig } from "@/lib/providers/apiSports/config";
-import { fetchApiSportsJson } from "@/lib/providers/apiSports/client";
 import { fetchEspnJson } from "@/lib/providers/espn/client";
 import { getMlbUpcomingScheduleWithProbables } from "@/lib/providers/mlb";
+import { resolveMlbPitcherComparisonStats } from "@/lib/providers/mlb";
 import { resolveMlbTeam } from "@/lib/providers/mlb/teamMap";
 import type { MlbScheduledGame } from "@/lib/providers/mlb";
 import type { Meta } from "@/lib/providers/types";
@@ -56,6 +55,7 @@ export type PitcherMatchupCard = {
     vsRight?: Record<string, string | number>;
   };
   gameLogMiniSummary?: string[];
+  statsBasisLabel?: string;
   confidenceNote?: string;
 };
 
@@ -158,6 +158,7 @@ type ResolveDeps = {
     pitcher: PitcherMatchupCard,
     providerMode: "live" | "fixture",
     cacheBust?: string | number,
+    selectedGameTime?: string,
   ) => Promise<{ pitcher: PitcherMatchupCard; meta: Meta; warning?: string }>;
   now: () => Date;
 };
@@ -213,6 +214,26 @@ function normalizeTeamKey(value: string): string {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+const TECHNICAL_NOTE_PATTERNS = [
+  "configured season",
+  "inferred",
+  "schedule window",
+  "timezone",
+  "time zone",
+  "pitcher stat diagnostic",
+  "identity lookup",
+  "endpoint",
+];
+
+export function isTechnicalMatchupNote(note: string): boolean {
+  const normalized = note.trim().toLowerCase();
+  return TECHNICAL_NOTE_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
+export function toUserFacingMatchupNotes(notes: string[]): string[] {
+  return unique(notes).filter((note) => !isTechnicalMatchupNote(note));
 }
 
 function statusFromText(value: string | undefined): "scheduled" | "live" | "final" {
@@ -562,104 +583,6 @@ function parseEspnGameRows(payload: unknown, timeZone: string): NormalizedGame[]
   return parsed.sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime());
 }
 
-function normalizeRecord(wins?: number | string, losses?: number | string): string | undefined {
-  if (wins === undefined || losses === undefined) {
-    return undefined;
-  }
-  const winsText = typeof wins === "number" ? String(Math.round(wins)) : String(wins);
-  const lossesText = typeof losses === "number" ? String(Math.round(losses)) : String(losses);
-  return `${winsText}-${lossesText}`;
-}
-
-function asDisplay(value: number | undefined, digits: number): number | undefined {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return undefined;
-  }
-  return Number(value.toFixed(digits));
-}
-
-function selectStatValue(stats: RecordMap, keys: string[]): number | undefined {
-  for (const key of keys) {
-    const parts = key.split(".");
-    let cursor: unknown = stats;
-    for (const part of parts) {
-      cursor = asObject(cursor)?.[part];
-      if (cursor === undefined) {
-        break;
-      }
-    }
-    const number = readNumber(cursor);
-    if (typeof number === "number") {
-      return number;
-    }
-  }
-  return undefined;
-}
-
-function parsePitcherStatsFromApiSports(payload: unknown, playerId?: string): PitcherMatchupCard | null {
-  const root = asObject(payload);
-  const rows = asArray(root?.response).map((row) => asObject(row)).filter((row): row is RecordMap => Boolean(row));
-  if (rows.length === 0) {
-    return null;
-  }
-
-  const matched = rows.find((row) => {
-    if (!playerId) {
-      return true;
-    }
-    const player = asObject(row.player);
-    const id = readString(player?.id) ?? readNumber(player?.id)?.toString();
-    return id === playerId;
-  }) ?? rows[0];
-
-  const player = asObject(matched.player);
-  const stats = asObject(asArray(matched.statistics)[0]);
-  const games = asObject(stats?.games);
-  const pitching = asObject(stats?.pitching);
-
-  const wins = selectStatValue({ games }, ["games.win", "games.wins"]);
-  const losses = selectStatValue({ games }, ["games.lose", "games.losses"]);
-  const inningsPitched = selectStatValue({ pitching }, ["pitching.innings_pitched", "pitching.ip"]);
-  const strikeouts = selectStatValue({ pitching }, ["pitching.strike_outs", "pitching.strikeouts", "pitching.k"]);
-  const walks = selectStatValue({ pitching }, ["pitching.base_on_balls", "pitching.walks", "pitching.bb"]);
-  const homeRuns = selectStatValue({ pitching }, ["pitching.home_runs", "pitching.home_runs_allowed", "pitching.hr"]);
-  const hits = selectStatValue({ pitching }, ["pitching.hits", "pitching.hits_allowed"]);
-  const era = selectStatValue({ pitching }, ["pitching.era"]);
-  const whip = selectStatValue({ pitching }, ["pitching.whip"]);
-  const opponentAvg = selectStatValue({ pitching }, ["pitching.opponent_avg", "pitching.avg"]);
-
-  const kPer9 = inningsPitched && inningsPitched > 0 && strikeouts !== undefined ? (strikeouts * 9) / inningsPitched : undefined;
-  const bbPer9 = inningsPitched && inningsPitched > 0 && walks !== undefined ? (walks * 9) / inningsPitched : undefined;
-  const hrPer9 = inningsPitched && inningsPitched > 0 && homeRuns !== undefined ? (homeRuns * 9) / inningsPitched : undefined;
-  const summaryRows = [
-    typeof inningsPitched === "number" ? `IP ${inningsPitched.toFixed(1)}` : "",
-    typeof strikeouts === "number" ? `K ${Math.round(strikeouts)}` : "",
-    typeof era === "number" ? `ERA ${era.toFixed(2)}` : "",
-  ].filter(Boolean);
-
-  const fullName = readString(player?.name)
-    ?? readString(player?.fullname)
-    ?? "Probable Starter";
-
-  return {
-    playerId: readString(player?.id) ?? readNumber(player?.id)?.toString(),
-    fullName,
-    headshotUrl: readString(player?.photo),
-    handedness: readString(player?.throws),
-    record: normalizeRecord(wins, losses),
-    era: asDisplay(era, 2),
-    whip: asDisplay(whip, 2),
-    inningsPitched: typeof inningsPitched === "number" ? Number(inningsPitched.toFixed(1)) : undefined,
-    strikeouts: typeof strikeouts === "number" ? Math.round(strikeouts) : undefined,
-    kPer9: asDisplay(kPer9, 1),
-    bbPer9: asDisplay(bbPer9, 1),
-    hrPer9: asDisplay(hrPer9, 1),
-    opponentAvg: asDisplay(opponentAvg, 3),
-    gameLogMiniSummary: summaryRows.length > 0 ? summaryRows : undefined,
-    confidenceNote: hits === undefined ? "Some pitching fields were unavailable from upstream." : undefined,
-  };
-}
-
 function dateLabel(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -979,6 +902,7 @@ function mergePitcher(base: PitcherMatchupCard | null, fallback: PitcherMatchupC
     homeAwaySplits: base.homeAwaySplits ?? fallback.homeAwaySplits,
     handednessSplits: base.handednessSplits ?? fallback.handednessSplits,
     gameLogMiniSummary: base.gameLogMiniSummary ?? fallback.gameLogMiniSummary,
+    statsBasisLabel: base.statsBasisLabel ?? fallback.statsBasisLabel,
     confidenceNote: base.confidenceNote ?? fallback.confidenceNote,
   };
 }
@@ -1029,6 +953,7 @@ function prunePitcherForMode(pitcher: PitcherMatchupCard | null, mode: MatchupMo
     handedness: pitcher.handedness,
     record: pitcher.record,
     era: pitcher.era,
+    statsBasisLabel: pitcher.statsBasisLabel,
     confidenceNote: pitcher.confidenceNote,
   };
 }
@@ -1051,6 +976,7 @@ function buildUiState(args: {
 }): MlbStartingPitcherMatchupData {
   const hasBothPitchers = Boolean(args.awayPitcher?.fullName && args.homePitcher?.fullName);
   const state: MatchupState = hasBothPitchers ? "success" : "partial";
+  const userNotes = toUserFacingMatchupNotes(args.notes);
 
   return {
     game: {
@@ -1069,7 +995,7 @@ function buildUiState(args: {
       ? args.edge
       : (args.edge ? { overall: args.edge.beginnerSummary, beginnerSummary: args.edge.beginnerSummary } : null),
     state,
-    notes: args.notes.length > 0 ? args.notes : undefined,
+    notes: userNotes.length > 0 ? userNotes : undefined,
     selectableGames: buildSelectableGames(args.mode, args.selectableGames),
   };
 }
@@ -1172,52 +1098,26 @@ function defaultDeps(): ResolveDeps {
         warning: match ? undefined : "ESPN fallback did not return a matching game for probable starters.",
       };
     },
-    fetchPitcherStats: async (pitcher, providerMode, cacheBust) => {
-      const playerId = pitcher.playerId?.trim();
-      if (!playerId) {
-        return {
-          pitcher,
-          meta: {
-            sourceUsed: providerMode === "fixture" ? "fixture" : "apiSports",
-            updatedAt: new Date().toISOString(),
-            requestId: randomUUID(),
-            dataMode: providerMode,
-            dataModeEffective: providerMode,
-          },
-          warning: "Probable starter id unavailable; advanced stats remain limited.",
-        };
-      }
-
-      const config = getApiSportsConfig("mlb");
-      const seasonContext = resolveScheduleQueryContext({
-        sport: "mlb",
-        configuredSeason: config.season,
-      });
-      const response = await fetchApiSportsJson<unknown>({
-        sport: "mlb",
-        endpoint: "players/statistics",
-        params: {
-          id: playerId,
-          player: playerId,
-          league: config.league,
-          season: seasonContext.season,
-        },
+    fetchPitcherStats: async (pitcher, providerMode, cacheBust, selectedGameTime) => {
+      const resolved = await resolveMlbPitcherComparisonStats({
+        playerId: pitcher.playerId,
+        fallbackName: pitcher.fullName,
+        selectedGameTime,
         dataMode: providerMode,
         cacheBust,
-        ttlSeconds: 240,
-        fixtureFile: "starting_pitcher_matchup_pitcher_stats_sample.json",
       });
-      const statsCard = parsePitcherStatsFromApiSports(response.data, playerId);
-      if (!statsCard) {
-        return {
-          pitcher,
-          meta: response.meta,
-          warning: `No pitcher statistics returned for ${pitcher.fullName}.`,
+
+      const card = resolved.card
+        ? ({ ...resolved.card } as PitcherMatchupCard)
+        : {
+          ...pitcher,
+          statsBasisLabel: "Limited posted data",
         };
-      }
+
       return {
-        pitcher: mergePitcher(pitcher, statsCard) ?? pitcher,
-        meta: response.meta,
+        pitcher: mergePitcher(pitcher, card) ?? card,
+        meta: resolved.meta,
+        warning: resolved.warning,
       };
     },
     now: () => new Date(),
@@ -1273,7 +1173,6 @@ export async function resolveMlbStartingPitcherMatchup(
 
   const scheduleContext = resolveScheduleQueryContext({
     sport: "mlb",
-    configuredSeason: getApiSportsConfig("mlb").season,
   });
   const selected = selectMatchupGame({
     games: gamesResult.games,
@@ -1334,10 +1233,13 @@ export async function resolveMlbStartingPitcherMatchup(
     if (pitcherStatsCache.has(cacheKey)) {
       return pitcherStatsCache.get(cacheKey) ?? pitcher;
     }
-    const enriched = await deps.fetchPitcherStats(pitcher, providerMode, args.cacheBust);
+    const enriched = await deps.fetchPitcherStats(pitcher, providerMode, args.cacheBust, game.startTime);
     metaStack.push(enriched.meta);
     if (enriched.warning) {
       warnings.push(enriched.warning);
+    }
+    if (Array.isArray(enriched.meta.notes) && enriched.meta.notes.length > 0) {
+      notes.push(...enriched.meta.notes);
     }
     pitcherStatsCache.set(cacheKey, enriched.pitcher);
     return enriched.pitcher;

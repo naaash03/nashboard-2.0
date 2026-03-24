@@ -29,6 +29,11 @@ type PlayerSearchResponse = {
   };
 };
 
+type ResolvedPitcherSelection = {
+  playerId: string;
+  fullName?: string;
+};
+
 function to12h(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -44,7 +49,7 @@ function isNumericPlayerId(value: string): boolean {
   return /^\d+$/.test(value.trim());
 }
 
-function normalizeName(value: string): string {
+export function normalizePitcherSearchName(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^\w\s]|_/g, " ")
@@ -52,11 +57,33 @@ function normalizeName(value: string): string {
     .trim();
 }
 
+export function resolvePitcherSelectionFromSearch(
+  query: string,
+  rows: Array<{ playerId: string; fullName: string }>,
+): ResolvedPitcherSelection | null {
+  if (rows.length === 0) {
+    return null;
+  }
+  const normalizedQuery = normalizePitcherSearchName(query);
+  const exact = rows.find((row) => normalizePitcherSearchName(row.fullName) === normalizedQuery && isNumericPlayerId(row.playerId));
+  if (exact) {
+    return { playerId: exact.playerId, fullName: exact.fullName };
+  }
+  const prefix = rows.find((row) => normalizePitcherSearchName(row.fullName).startsWith(normalizedQuery) && isNumericPlayerId(row.playerId));
+  if (prefix) {
+    return { playerId: prefix.playerId, fullName: prefix.fullName };
+  }
+  const firstNumeric = rows.find((row) => isNumericPlayerId(row.playerId));
+  return firstNumeric ? { playerId: firstNumeric.playerId, fullName: firstNumeric.fullName } : null;
+}
+
 function safeMessage(message?: string | null): string | null {
   if (!message) return null;
-  if (message.toLowerCase().includes("invalid")) return "Could not load pitcher arsenal for this pitcher id.";
-  if (message.toLowerCase().includes("failed")) return "Failed to load pitcher arsenal.";
-  return message;
+  const lowered = message.toLowerCase();
+  if (lowered.includes("pitch arsenal not available")) return "Pitch arsenal not available from upstream for this pitcher yet.";
+  if (lowered.includes("invalid")) return "Could not load pitcher arsenal for this pitcher id.";
+  if (lowered.includes("failed")) return "Failed to load pitcher arsenal.";
+  return "Failed to load pitcher arsenal.";
 }
 
 function safeWarning(message?: string): string | null {
@@ -74,19 +101,22 @@ function safeWarning(message?: string): string | null {
 export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
   const [inputPlayerRef, setInputPlayerRef] = useState<string>(String(props.config.playerId ?? ""));
   const [activePlayerId, setActivePlayerId] = useState<string>(isNumericPlayerId(String(props.config.playerId ?? "")) ? String(props.config.playerId ?? "") : "");
+  const [selectedPitcher, setSelectedPitcher] = useState<ResolvedPitcherSelection | null>(
+    isNumericPlayerId(String(props.config.playerId ?? "")) ? { playerId: String(props.config.playerId ?? "") } : null,
+  );
   const [data, setData] = useState<ArsenalResponse["data"]>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [endpoint, setEndpoint] = useState("");
 
-  const resolveToNumericPlayerId = useCallback(async (raw: string): Promise<string | null> => {
+  const resolvePitcherSelection = useCallback(async (raw: string): Promise<ResolvedPitcherSelection | null> => {
     const trimmed = raw.trim();
     if (!trimmed) {
       return null;
     }
     if (isNumericPlayerId(trimmed)) {
-      return trimmed;
+      return { playerId: trimmed };
     }
     if (trimmed.length < 3) {
       return null;
@@ -95,20 +125,7 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
     const response = await fetch(url, { cache: "no-store" });
     const json = (await response.json()) as PlayerSearchResponse;
     const rows = Array.isArray(json.data) ? json.data : [];
-    if (rows.length === 0) {
-      return null;
-    }
-    const normalizedQuery = normalizeName(trimmed);
-    const exact = rows.find((row) => normalizeName(row.fullName) === normalizedQuery && isNumericPlayerId(row.playerId));
-    if (exact) {
-      return exact.playerId;
-    }
-    const prefix = rows.find((row) => normalizeName(row.fullName).startsWith(normalizedQuery) && isNumericPlayerId(row.playerId));
-    if (prefix) {
-      return prefix.playerId;
-    }
-    const firstNumeric = rows.find((row) => isNumericPlayerId(row.playerId));
-    return firstNumeric?.playerId ?? null;
+    return resolvePitcherSelectionFromSearch(trimmed, rows);
   }, [props.dataMode, props.refreshTick]);
 
   const load = useCallback(async (playerId: string) => {
@@ -133,6 +150,12 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
       setData(json.data ?? null);
       setMeta(json.meta ?? null);
       setError(safeMessage(json.error) ?? null);
+      if (json.data?.playerId) {
+        setSelectedPitcher((previous) => ({
+          playerId: json.data?.playerId ?? previous?.playerId ?? playerId,
+          fullName: json.data?.playerName ?? previous?.fullName,
+        }));
+      }
     } catch {
       setError("Failed to load pitcher arsenal.");
       setData(null);
@@ -149,24 +172,26 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
 
     if (!configured) {
       setActivePlayerId("");
+      setSelectedPitcher(null);
       return;
     }
 
     let cancelled = false;
     void (async () => {
-      const resolved = await resolveToNumericPlayerId(configured);
+      const resolved = await resolvePitcherSelection(configured);
       if (cancelled) {
         return;
       }
       if (resolved) {
-        setActivePlayerId(resolved);
+        setActivePlayerId(resolved.playerId);
+        setSelectedPitcher(resolved);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [props.config.playerId, inputPlayerRef, resolveToNumericPlayerId]);
+  }, [props.config.playerId, resolvePitcherSelection]);
 
   useEffect(() => {
     if (!activePlayerId) {
@@ -178,15 +203,17 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const normalized = inputPlayerRef.trim();
-    const resolved = await resolveToNumericPlayerId(normalized);
+    const resolved = await resolvePitcherSelection(normalized);
     if (!resolved) {
       setError("Could not resolve a valid numeric MLB pitcher id from that input.");
       setData(null);
       return;
     }
-    setActivePlayerId(resolved);
-    setInputPlayerRef(resolved);
-    await props.onPersist({ config: { ...props.config, playerId: resolved } });
+    setActivePlayerId(resolved.playerId);
+    setSelectedPitcher(resolved);
+    setError(null);
+    setInputPlayerRef(resolved.fullName ?? normalized);
+    await props.onPersist({ config: { ...props.config, playerId: resolved.playerId } });
   };
 
   return (
@@ -214,6 +241,12 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
         />
         <button type="submit" className="rounded border border-neutral-700 px-2 py-1" disabled={props.locked}>Load</button>
       </form>
+
+      {selectedPitcher ? (
+        <p className="text-[11px] text-neutral-400">
+          Selected pitcher: {selectedPitcher.fullName ?? "Player"} ({selectedPitcher.playerId})
+        </p>
+      ) : null}
 
       {loading ? <p className="text-neutral-300">Loading pitcher arsenal...</p> : null}
       {error ? <p className="text-amber-300">{error}</p> : null}

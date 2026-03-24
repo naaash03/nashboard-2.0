@@ -47,9 +47,21 @@ export type MlbScheduledTeam = {
 export type MlbScheduledGame = {
   gamePk?: number;
   gameDate: string;
+  officialDate?: string;
+  gameType?: string;
   status: "scheduled" | "live" | "final";
   detailedState?: string;
+  abstractState?: string;
   venue?: string;
+  awayScore?: number;
+  homeScore?: number;
+  seriesDescription?: string;
+  seriesGameNumber?: number;
+  gamesInSeries?: number;
+  doubleHeader?: string;
+  gameNumber?: number;
+  rescheduleDate?: string;
+  rescheduledFrom?: string;
   awayTeam: MlbScheduledTeam;
   homeTeam: MlbScheduledTeam;
 };
@@ -62,6 +74,15 @@ export interface MlbProvider {
 type MlbScheduleGame = {
   gamePk?: number;
   gameDate?: string;
+  officialDate?: string;
+  gameType?: string;
+  seriesDescription?: string;
+  seriesGameNumber?: number;
+  gamesInSeries?: number;
+  doubleHeader?: string;
+  gameNumber?: number;
+  rescheduleDate?: string;
+  rescheduledFromDate?: string;
   status?: {
     abstractGameState?: string;
     detailedState?: string;
@@ -72,10 +93,12 @@ type MlbScheduleGame = {
   teams?: {
     away?: {
       team?: { id?: number; name?: string };
+      score?: number;
       probablePitcher?: { id?: number; fullName?: string };
     };
     home?: {
       team?: { id?: number; name?: string };
+      score?: number;
       probablePitcher?: { id?: number; fullName?: string };
     };
   };
@@ -157,11 +180,19 @@ function teamKeyFromRaw(team?: { id?: number; name?: string }): string {
 }
 
 function normalizeUpcomingScheduleGames(teamId: number, payload: MlbScheduleResponse): MlbScheduledGame[] {
+  return normalizeScheduleGames(teamId, payload, { upcomingOnly: true });
+}
+
+function normalizeScheduleGames(
+  teamId: number,
+  payload: MlbScheduleResponse,
+  options?: { upcomingOnly?: boolean },
+): MlbScheduledGame[] {
   const rows: Array<{ gameDate: string; game: MlbScheduleGame }> = [];
 
   for (const dateBucket of payload.dates ?? []) {
     for (const game of dateBucket.games ?? []) {
-      if (!isUpcoming(game.gameDate, game.status?.abstractGameState)) {
+      if (options?.upcomingOnly && !isUpcoming(game.gameDate, game.status?.abstractGameState)) {
         continue;
       }
       if (!game.gameDate) {
@@ -183,9 +214,21 @@ function normalizeUpcomingScheduleGames(teamId: number, payload: MlbScheduleResp
   return rows.map(({ gameDate, game }) => ({
     gamePk: game.gamePk,
     gameDate,
+    officialDate: game.officialDate,
+    gameType: game.gameType,
     status: statusFromScheduleState(game.status?.abstractGameState),
+    abstractState: game.status?.abstractGameState,
     detailedState: game.status?.detailedState,
     venue: game.venue?.name,
+    awayScore: game.teams?.away?.score,
+    homeScore: game.teams?.home?.score,
+    seriesDescription: game.seriesDescription,
+    seriesGameNumber: game.seriesGameNumber,
+    gamesInSeries: game.gamesInSeries,
+    doubleHeader: game.doubleHeader,
+    gameNumber: game.gameNumber,
+    rescheduleDate: game.rescheduleDate,
+    rescheduledFrom: game.rescheduledFromDate,
     awayTeam: {
       id: game.teams?.away?.team?.id,
       key: teamKeyFromRaw(game.teams?.away?.team),
@@ -306,6 +349,61 @@ export async function getMlbUpcomingScheduleWithProbables(
   };
 }
 
+export async function getMlbTeamSeasonScheduleWithProbables(
+  teamKey: string,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+  options?: {
+    season?: number;
+    startDate?: string;
+    endDate?: string;
+    gameTypes?: string;
+  },
+): Promise<{ data: { teamKey: string; teamId: number; season: number; games: MlbScheduledGame[] } | null; meta: Meta }> {
+  const resolved = getMlbDataMode(dataMode);
+  const team = resolveMlbTeam(teamKey);
+
+  if (!team) {
+    return {
+      data: null,
+      meta: fallbackMeta(resolved, `Unknown MLB team key: ${teamKey.toUpperCase()}`),
+    };
+  }
+
+  const season = options?.season ?? new Date().getUTCFullYear();
+  const response = await fetchMlbJson<MlbScheduleResponse>({
+    endpoint: "/schedule",
+    params: {
+      teamId: team.id,
+      sportId: 1,
+      season,
+      gameTypes: options?.gameTypes ?? "S,R,F,D,L,W",
+      startDate: options?.startDate,
+      endDate: options?.endDate,
+      hydrate: "probablePitcher",
+    },
+    fixtureFile: "series_tracker_nym.json",
+    ttlSeconds: 300,
+    dataMode: resolved,
+    cacheBust,
+  });
+
+  const games = normalizeScheduleGames(team.id, response.data);
+  const warning = games.length === 0 ? `No season schedule found in the selected ${resolved} data window.` : response.meta.warning;
+  return {
+    data: {
+      teamKey: team.key,
+      teamId: team.id,
+      season,
+      games,
+    },
+    meta: {
+      ...response.meta,
+      warning,
+    },
+  };
+}
+
 export const mlbProvider: MlbProvider = {
   async getNextSevenGames(teamKey: string, mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg) {
     const schedule = await getMlbUpcomingScheduleWithProbables(teamKey, dataMode, cacheBust);
@@ -323,16 +421,40 @@ export const mlbProvider: MlbProvider = {
     const resolved = getMlbDataMode(dataMode);
     const currentYear = new Date().getUTCFullYear();
 
-    const response = await fetchMlbJson<MlbPitchArsenalResponse>({
-      endpoint: `/people/${encodeURIComponent(playerId)}`,
-      params: {
-        hydrate: `stats(group=[pitching],type=[pitchArsenal],season=${currentYear})`,
-      },
-      fixtureFile: "pitcher_arsenal_sample.json",
-      ttlSeconds: 300,
-      dataMode: resolved,
-      cacheBust,
-    });
+    let response;
+    try {
+      response = await fetchMlbJson<MlbPitchArsenalResponse>({
+        endpoint: `/people/${encodeURIComponent(playerId)}`,
+        params: {
+          hydrate: `stats(group=[pitching],type=[pitchArsenal],season=${currentYear})`,
+        },
+        fixtureFile: "pitcher_arsenal_sample.json",
+        ttlSeconds: 300,
+        dataMode: resolved,
+        cacheBust,
+      });
+    } catch (error) {
+      const text = String(error).toLowerCase();
+      const unsupported = text.includes("400")
+        || text.includes("404")
+        || text.includes("422")
+        || text.includes("not found")
+        || text.includes("invalid")
+        || text.includes("pitcharsenal")
+        || text.includes("pitch arsenal")
+        || text.includes("not available")
+        || text.includes("unsupported");
+      if (unsupported) {
+        return {
+          data: null,
+          meta: fallbackMeta(
+            resolved,
+            "Pitch arsenal is not available from MLB Stats API for this pitcher id.",
+          ),
+        };
+      }
+      throw error;
+    }
 
     const player = response.data.people?.[0];
     const splits = player?.stats?.flatMap((item) => item.splits ?? []) ?? [];

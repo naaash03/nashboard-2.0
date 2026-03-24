@@ -35,6 +35,17 @@ function toShortDate(value: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+export function probablePitcherDisplayName(name?: string): string {
+  const trimmed = (name ?? "").trim();
+  return trimmed.length > 0 ? trimmed : "TBD";
+}
+
+export function buildMlbHeadshotUrl(playerId?: string): string | null {
+  const id = (playerId ?? "").trim();
+  if (!/^\d+$/.test(id)) return null;
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/w_80,q_auto:best/v1/people/${id}/headshot/67/current`;
+}
+
 function safeWarning(message?: string): string | null {
   if (!message) return null;
   const lowered = message.toLowerCase();
@@ -126,15 +137,38 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
         <p className="text-neutral-400">No upcoming games in the current window.</p>
       ) : null}
 
-      {(data?.games ?? []).map((game) => (
+      {(data?.games ?? []).map((game) => {
+        const probableName = probablePitcherDisplayName(game.probablePitcherName);
+        const probableHeadshotUrl = buildMlbHeadshotUrl(game.probablePitcherId);
+        return (
         <div key={`${game.date}-${game.matchup}-${game.gamePk ?? "na"}`} className="rounded border border-neutral-700 bg-neutral-950 p-2">
-          <p className="font-medium">{game.matchup}</p>
-          <p>{toShortDate(game.date)} - {game.homeAway === "home" ? "Home" : "Away"}</p>
-          <p>Probable pitcher: {game.probablePitcherName ?? "TBD"}</p>
-          {props.mode === "ADVANCED" ? <p>GamePk: {game.gamePk ?? "-"}</p> : null}
-          {props.mode === "ADVANCED" ? <p>Probable pitcherId: {game.probablePitcherId ?? "-"}</p> : null}
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium">{game.matchup}</p>
+            <p className="text-[11px] text-neutral-400">{toShortDate(game.date)}</p>
+          </div>
+          <div className="mt-1">
+            <span className="rounded border border-neutral-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
+              {game.homeAway === "home" ? "Home" : "Away"}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            {probableHeadshotUrl && probableName !== "TBD" ? (
+              <img
+                src={probableHeadshotUrl}
+                alt={`${probableName} headshot`}
+                className="h-8 w-8 rounded-full border border-neutral-700 object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-neutral-700 text-[9px] text-neutral-500">SP</div>
+            )}
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-neutral-500">Probable Starter</p>
+              <p className="text-neutral-200">{probableName}</p>
+            </div>
+          </div>
+          {props.mode === "ADVANCED" ? <p className="mt-2 text-[10px] text-neutral-500">Game ID: {game.gamePk ?? "-"}</p> : null}
         </div>
-      ))}
+      )})}
 
       {safeWarning(meta?.warning) ? <p className="text-amber-300">{safeWarning(meta?.warning)}</p> : null}
       <div className="text-[10px] text-neutral-500">

@@ -150,11 +150,11 @@
           "teams": {
             "away": {
               "team": { "id": 121, "name": "New York Mets" },
-              "probablePitcher": { "fullName": "David Peterson" }
+              "probablePitcher": { "id": 1001, "fullName": "David Peterson" }
             },
             "home": {
               "team": { "id": 147, "name": "New York Yankees" },
-              "probablePitcher": { "fullName": "Gerrit Cole" }
+              "probablePitcher": { "id": 1002, "fullName": "Gerrit Cole" }
             }
           }
         }

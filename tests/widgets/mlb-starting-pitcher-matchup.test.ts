@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Meta } from "@/lib/providers/types";
 import {
   computePitcherEdge,
+  isTechnicalMatchupNote,
   resolveMlbStartingPitcherMatchup,
   selectMatchupGame,
+  toUserFacingMatchupNotes,
   type PitcherMatchupCard,
 } from "@/lib/sports/resolvers/mlbStartingPitcherMatchup";
 
@@ -107,6 +109,38 @@ describe("MLB Starting Pitcher Matchup route", () => {
     expect(matchupRes.status).toBe(200);
     expect(matchupBody.error).toBeNull();
     expect(matchupBody.data?.game?.gameId).toBe(String(gamePk));
+  });
+
+  it("falls back to the prior completed regular season when current sample is too thin", async () => {
+    const mod = await import("@/app/api/widgets/mlb-starting-pitcher-matchup/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-starting-pitcher-matchup?sport=mlb&teamKey=NYM&mode=advanced&dataMode=fixture"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeNull();
+    expect(body.data?.pitchers?.away).toEqual(expect.objectContaining({
+      era: expect.any(Number),
+      whip: expect.any(Number),
+      inningsPitched: expect.any(Number),
+      strikeouts: expect.any(Number),
+      kPer9: expect.any(Number),
+      bbPer9: expect.any(Number),
+      hrPer9: expect.any(Number),
+      opponentAvg: expect.any(Number),
+      statsBasisLabel: "Using 2025 regular season",
+    }));
+    expect(body.data?.pitchers?.home?.statsBasisLabel).toBe("Using 2025 regular season");
+  });
+
+  it("hydrates advanced cards from name-based identity fallback when starter id is unavailable", async () => {
+    const mod = await import("@/app/api/widgets/mlb-starting-pitcher-matchup/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-starting-pitcher-matchup?sport=mlb&teamKey=NYM&gameId=900001&mode=advanced&dataMode=fixture"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeNull();
+    expect(body.data?.pitchers?.away?.fullName).toBeTruthy();
+    expect(body.data?.pitchers?.away?.statsBasisLabel).toBe("Using 2025 regular season");
   });
 });
 
@@ -278,5 +312,92 @@ describe("MLB Starting Pitcher Matchup resolver", () => {
     expect(result.ok).toBe(false);
     expect(result.meta.state).toBe("failed");
     expect(result.error?.code).toBe("MISSING_TEAM_KEY");
+  });
+
+  it("keeps technical notes in meta while user-facing notes are filtered", async () => {
+    const result = await resolveMlbStartingPitcherMatchup({
+      teamKey: "NYM",
+      mode: "advanced",
+      dataMode: "fixture",
+    }, {
+      fetchTeamIdentity: async () => ({
+        team: { key: "NYM", name: "New York Mets", apiSportsTeamId: "22" },
+        meta: testMeta("mlb"),
+      }),
+      fetchApiSportsGames: async () => ({
+        games: [sampleGame()],
+        meta: testMeta("mlb"),
+        notes: [
+          "Schedule window 2026-03-01..2026-03-14 (America/New_York) from MLB schedule provider.",
+          "No configured season found; using inferred 2026.",
+          "Pitcher stat diagnostic: endpoint /people/608331 season 2025 gameType R type season returned data.",
+          "ESPN fallback was used to enrich probable starter context.",
+        ],
+      }),
+      fetchEspnGameFallback: async () => ({
+        game: null,
+        meta: testMeta("espn"),
+      }),
+      fetchPitcherStats: async (pitcher) => ({
+        pitcher,
+        meta: testMeta("mlb"),
+      }),
+      now: () => new Date("2026-03-09T15:00:00.000Z"),
+    });
+
+    expect(result.meta.notes).toContain("No configured season found; using inferred 2026.");
+    expect(result.data?.notes).toContain("ESPN fallback was used to enrich probable starter context.");
+    expect(result.data?.notes).toContain("Limited matchup data available.");
+    expect(result.data?.notes).not.toContain("No configured season found; using inferred 2026.");
+    expect(result.data?.notes).not.toContain("Pitcher stat diagnostic: endpoint /people/608331 season 2025 gameType R type season returned data.");
+    expect(isTechnicalMatchupNote("No configured season found; using inferred 2026.")).toBe(true);
+    expect(isTechnicalMatchupNote("Pitcher stat diagnostic: endpoint foo")).toBe(true);
+    expect(toUserFacingMatchupNotes(["Schedule window foo", "Limited matchup data available."])).toEqual(["Limited matchup data available."]);
+  });
+
+  it("passes selected game time into advanced pitcher stat hydration", async () => {
+    const seenTimes: string[] = [];
+    const result = await resolveMlbStartingPitcherMatchup({
+      teamKey: "NYM",
+      mode: "advanced",
+      dataMode: "fixture",
+    }, {
+      fetchTeamIdentity: async () => ({
+        team: { key: "NYM", name: "New York Mets", apiSportsTeamId: "22" },
+        meta: testMeta("mlb"),
+      }),
+      fetchApiSportsGames: async () => ({
+        games: [sampleGame({
+          startTime: "2026-03-11T23:10:00.000Z",
+          probableAway: pitcherCard("Away Starter", { playerId: "1" }),
+          probableHome: pitcherCard("Home Starter", { playerId: "2" }),
+        })],
+        meta: testMeta("mlb"),
+        notes: [],
+      }),
+      fetchEspnGameFallback: async () => ({
+        game: null,
+        meta: testMeta("espn"),
+      }),
+      fetchPitcherStats: async (pitcher, _providerMode, _cacheBust, selectedGameTime) => {
+        if (selectedGameTime) {
+          seenTimes.push(selectedGameTime);
+        }
+        return {
+          pitcher: {
+            ...pitcher,
+            statsBasisLabel: "Stats basis: 2025 regular season",
+          },
+          meta: testMeta("mlb"),
+        };
+      },
+      now: () => new Date("2026-03-09T15:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(seenTimes).toEqual([
+      "2026-03-11T23:10:00.000Z",
+      "2026-03-11T23:10:00.000Z",
+    ]);
   });
 });

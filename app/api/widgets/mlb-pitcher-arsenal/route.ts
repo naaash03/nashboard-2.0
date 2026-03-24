@@ -22,6 +22,19 @@ function isNumericPlayerId(value: string): boolean {
   return /^\d+$/.test(value.trim());
 }
 
+function isUnsupportedArsenalError(error: unknown): boolean {
+  const text = String(error).toLowerCase();
+  return text.includes("400")
+    || text.includes("404")
+    || text.includes("422")
+    || text.includes("not found")
+    || text.includes("invalid")
+    || text.includes("pitcharsenal")
+    || text.includes("pitch arsenal")
+    || text.includes("unsupported")
+    || text.includes("not available");
+}
+
 function normalizeName(value: string): string {
   return value
     .toLowerCase()
@@ -122,6 +135,22 @@ export async function GET(req: Request) {
       error: null,
     });
   } catch (error) {
+    if (isUnsupportedArsenalError(error)) {
+      const warning = "Pitch arsenal is not available from MLB Stats API for this pitcher id.";
+      const meta = fallbackMeta(resolvedDataMode, warning);
+      return NextResponse.json({
+        data: null,
+        meta,
+        contract: toWidgetPayload({
+          data: null,
+          error: null,
+          meta,
+          primaryProvider: "mlb",
+        }),
+        error: null,
+      });
+    }
+
     const message = "Failed to load MLB pitcher arsenal";
     const meta = fallbackMeta(resolvedDataMode, `MLB pitcher arsenal upstream failure: ${String(error)}`);
     return NextResponse.json({

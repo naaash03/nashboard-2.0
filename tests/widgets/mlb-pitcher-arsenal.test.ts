@@ -71,4 +71,48 @@ describe("MLB pitcher arsenal route", () => {
     expect(body.error).toBe("Could not resolve a valid MLB pitcher id from the provided input.");
     expect(body.data).toBeNull();
   });
+
+  it("returns a graceful partial response for unsupported numeric pitcher ids", async () => {
+    vi.doMock("@/lib/providers/mlb/client", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/providers/mlb/client")>("@/lib/providers/mlb/client");
+      return {
+        ...actual,
+        getMlbDataMode: vi.fn(() => "live"),
+        fetchMlbJson: vi.fn(async () => {
+          throw new Error("MLB Stats API 404: player not found");
+        }),
+      };
+    });
+
+    const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=32827&mode=advanced&dataMode=live"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeNull();
+    expect(body.data).toBeNull();
+    expect(body.meta?.warning).toBe("Pitch arsenal is not available from MLB Stats API for this pitcher id.");
+  });
+
+  it("treats unsupported pitchArsenal upstream errors as partial instead of failed", async () => {
+    vi.doMock("@/lib/providers/mlb/client", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/providers/mlb/client")>("@/lib/providers/mlb/client");
+      return {
+        ...actual,
+        getMlbDataMode: vi.fn(() => "live"),
+        fetchMlbJson: vi.fn(async () => {
+          throw new Error("422 Unprocessable Entity: pitchArsenal unsupported for this player");
+        }),
+      };
+    });
+
+    const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=32827&mode=advanced&dataMode=live"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeNull();
+    expect(body.data).toBeNull();
+    expect(body.meta?.warning).toBe("Pitch arsenal is not available from MLB Stats API for this pitcher id.");
+  });
 });
