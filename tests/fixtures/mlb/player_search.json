@@ -1,7 +1,7 @@
-{
+﻿{
   "people": [
     {
-      "id": 665487,
+      "id": 673540,
       "fullName": "Kodai Senga",
       "firstName": "Kodai",
       "lastName": "Senga",
@@ -13,27 +13,15 @@
       "active": true
     },
     {
-      "id": 660271,
-      "fullName": "Juan Soto",
-      "firstName": "Juan",
-      "lastName": "Soto",
+      "id": 605280,
+      "fullName": "Clay Holmes",
+      "firstName": "Clay",
+      "lastName": "Holmes",
       "currentTeam": { "id": 121, "name": "New York Mets" },
-      "primaryPosition": { "code": "9", "name": "Right Fielder", "type": "Outfielder", "abbreviation": "RF" },
-      "pitchHand": { "code": "L", "description": "Left" },
-      "batSide": { "code": "L", "description": "Left" },
-      "jerseyNumber": "22",
-      "active": true
-    },
-    {
-      "id": 592518,
-      "fullName": "Freddie Freeman",
-      "firstName": "Freddie",
-      "lastName": "Freeman",
-      "currentTeam": { "id": 119, "name": "Los Angeles Dodgers" },
-      "primaryPosition": { "code": "3", "name": "First Baseman", "type": "Infielder", "abbreviation": "1B" },
+      "primaryPosition": { "code": "1", "name": "Pitcher", "type": "Pitcher", "abbreviation": "P" },
       "pitchHand": { "code": "R", "description": "Right" },
-      "batSide": { "code": "L", "description": "Left" },
-      "jerseyNumber": "5",
+      "batSide": { "code": "R", "description": "Right" },
+      "jerseyNumber": "35",
       "active": true
     },
     {
@@ -49,15 +37,58 @@
       "active": true
     },
     {
-      "id": 677951,
-      "fullName": "Shohei Ohtani",
-      "firstName": "Shohei",
-      "lastName": "Ohtani",
-      "currentTeam": { "id": 119, "name": "Los Angeles Dodgers" },
-      "primaryPosition": { "code": "10", "name": "Designated Hitter", "type": "Hitter", "abbreviation": "DH" },
-      "pitchHand": { "code": "L", "description": "Left" },
+      "id": 665742,
+      "fullName": "Juan Soto",
+      "firstName": "Juan",
+      "lastName": "Soto",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "9", "name": "Right Fielder", "type": "Outfielder", "abbreviation": "RF" },
       "batSide": { "code": "L", "description": "Left" },
-      "jerseyNumber": "17",
+      "jerseyNumber": "22",
+      "active": true
+    },
+    {
+      "id": 596019,
+      "fullName": "Francisco Lindor",
+      "firstName": "Francisco",
+      "lastName": "Lindor",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "6", "name": "Shortstop", "type": "Infielder", "abbreviation": "SS" },
+      "batSide": { "code": "S", "description": "Switch" },
+      "jerseyNumber": "12",
+      "active": true
+    },
+    {
+      "id": 607043,
+      "fullName": "Brandon Nimmo",
+      "firstName": "Brandon",
+      "lastName": "Nimmo",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "8", "name": "Center Fielder", "type": "Outfielder", "abbreviation": "CF" },
+      "batSide": { "code": "L", "description": "Left" },
+      "jerseyNumber": "9",
+      "active": true
+    },
+    {
+      "id": 624413,
+      "fullName": "Pete Alonso",
+      "firstName": "Pete",
+      "lastName": "Alonso",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "3", "name": "First Baseman", "type": "Infielder", "abbreviation": "1B" },
+      "batSide": { "code": "R", "description": "Right" },
+      "jerseyNumber": "20",
+      "active": true
+    },
+    {
+      "id": 668901,
+      "fullName": "Mark Vientos",
+      "firstName": "Mark",
+      "lastName": "Vientos",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "5", "name": "Third Baseman", "type": "Infielder", "abbreviation": "3B" },
+      "batSide": { "code": "R", "description": "Right" },
+      "jerseyNumber": "27",
       "active": true
     }
   ]

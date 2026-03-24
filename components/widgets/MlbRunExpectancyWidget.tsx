@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
@@ -24,8 +24,29 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-// Baseline: Empty bases, 0 outs = 0.544
 const BASELINE_RE = 0.544;
+
+function explainSituation(bases: string, outs: number): string {
+  const outLabel = `${outs} out${outs === 1 ? "" : "s"}`;
+  switch (bases) {
+    case "Loaded":
+      return `Bases loaded with ${outLabel} is one of the highest-pressure spots in the inning because almost any ball in play can score a run.`;
+    case "2nd+3rd":
+      return `Runners on second and third with ${outLabel} puts two men in scoring position, so even a routine single or productive out can cash in runs quickly.`;
+    case "1st+3rd":
+      return `First and third with ${outLabel} matters because the offense has both an immediate run at third and another runner already in motion behind him.`;
+    case "3rd":
+      return `A runner on third with ${outLabel} matters because a sacrifice fly, ground ball, or simple single can score without needing extra-base contact.`;
+    case "2nd":
+      return `A runner on second with ${outLabel} is already in scoring position, so a clean single often turns into a run.`;
+    case "1st+2nd":
+      return `First and second with ${outLabel} gives the offense two baserunners and multiple ways to score with one well-placed hit.`;
+    case "1st":
+      return `A runner on first with ${outLabel} is a modest scoring setup because the offense still needs at least one more advance to create a real scoring chance.`;
+    default:
+      return `Empty bases with ${outLabel} is the inning baseline: the offense still has room to build, but nothing is threatening yet.`;
+  }
+}
 
 export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
   const [reData, setReData] = useState<RunExpectancyData | null>(null);
@@ -52,8 +73,7 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
   }, []);
 
   const advanced = props.mode === "ADVANCED";
-
-  const selectedState = reData?.states.find((s) => s.bases === selectedBases) ?? null;
+  const selectedState = reData?.states.find((state) => state.bases === selectedBases) ?? null;
   const expectedRuns =
     selectedState && selectedOuts !== null
       ? selectedOuts === 0
@@ -76,7 +96,7 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
     return `cursor-pointer rounded p-1.5 text-center transition-colors ${
       isSelected
         ? "bg-blue-700 text-white"
-        : "bg-neutral-900 hover:bg-neutral-800 text-neutral-300"
+        : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800"
     }`;
   }
 
@@ -105,13 +125,12 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
 
       {reData && (
         <div className="space-y-2">
-          <p className="text-neutral-500">Click a cell to select the current situation.</p>
+          <p className="text-neutral-500">Click a cell to select the current base/out situation.</p>
 
-          {/* Grid header */}
           <div className="grid grid-cols-4 gap-1">
-            <div className="text-neutral-500 py-1 font-medium">Bases</div>
+            <div className="py-1 font-medium text-neutral-500">Bases</div>
             {[0, 1, 2].map((outs) => (
-              <div key={outs} className="text-center text-neutral-500 py-1 font-medium">
+              <div key={outs} className="py-1 text-center font-medium text-neutral-500">
                 {outs} Out{outs !== 1 ? "s" : ""}
               </div>
             ))}
@@ -119,9 +138,7 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
 
           {reData.states.map((state) => (
             <div key={state.bases} className="grid grid-cols-4 gap-1">
-              <div className="flex items-center text-neutral-400 font-medium py-1">
-                {state.bases}
-              </div>
+              <div className="flex items-center py-1 font-medium text-neutral-400">{state.bases}</div>
               {[0, 1, 2].map((outs) => (
                 <button
                   key={outs}
@@ -132,39 +149,38 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
                     setSelectedOuts(outs);
                   }}
                 >
-                  <span className="block text-[11px] font-medium">
-                    {getReValue(state, outs).toFixed(3)}
-                  </span>
+                  <span className="block text-[11px] font-medium">{getReValue(state, outs).toFixed(3)}</span>
                 </button>
               ))}
             </div>
           ))}
 
-          {/* Selected state summary */}
           {selectedState && selectedOuts !== null && expectedRuns !== null && scorePct !== null && (
-            <div className="rounded border border-blue-800 bg-blue-950 p-2 space-y-1">
-              {!advanced && (
-                <p className="text-blue-100">
-                  With <strong>{selectedBases}</strong>, {selectedOuts} out{selectedOuts !== 1 ? "s" : ""}{" "}
-                  — teams score{" "}
-                  <strong>{expectedRuns.toFixed(3)} runs on average</strong>, and score at least 1
-                  run{" "}
-                  <strong>{(scorePct * 100).toFixed(1)}%</strong> of the time.
-                </p>
-              )}
+            <div className="space-y-1 rounded border border-blue-800 bg-blue-950 p-2">
+              <p className="text-blue-100">
+                With <strong>{selectedState.bases}</strong>, {selectedOuts} out{selectedOuts !== 1 ? "s" : ""} - teams score <strong>{expectedRuns.toFixed(3)} runs on average</strong>, and score at least one run <strong>{(scorePct * 100).toFixed(1)}%</strong> of the time.
+              </p>
+              {!advanced && <p className="text-blue-200">{explainSituation(selectedState.bases, selectedOuts)}</p>}
               {advanced && (
-                <div className="space-y-0.5 text-blue-200">
-                  <p>
-                    <span className="text-blue-400">RE</span> = {expectedRuns.toFixed(3)}
+                <div className="space-y-1 text-blue-100">
+                  <p className="text-blue-200">{explainSituation(selectedState.bases, selectedOuts)}</p>
+                  <div className="space-y-0.5 rounded border border-blue-900/70 bg-blue-900/30 p-2 text-blue-200">
+                    <p>
+                      <span className="text-blue-400">RE value</span>: {expectedRuns.toFixed(3)}
+                    </p>
+                    <p>
+                      <span className="text-blue-400">Probability of scoring</span>: {(scorePct * 100).toFixed(1)}%
+                    </p>
+                    <p>
+                      <span className="text-blue-400">Delta vs baseline</span> (Empty, 0 outs = {BASELINE_RE}): {expectedRuns >= BASELINE_RE ? "+" : ""}
+                      {(expectedRuns - BASELINE_RE).toFixed(3)}
+                    </p>
+                  </div>
+                  <p className="text-blue-300">
+                    RE24 is the average number of runs teams score from this exact base/out state until the inning ends.
                   </p>
-                  <p>
-                    <span className="text-blue-400">P(score)</span> = {(scorePct * 100).toFixed(1)}%
-                  </p>
-                  <p>
-                    <span className="text-blue-400">vs Baseline</span> (Empty, 0 out ={" "}
-                    {BASELINE_RE}){" "}
-                    {expectedRuns >= BASELINE_RE ? "+" : ""}
-                    {(expectedRuns - BASELINE_RE).toFixed(3)} RE
+                  <p className="text-blue-200">
+                    This state matters because one out or one extra baserunner can change the inning from a low-threat setup into a high-scoring opportunity immediately.
                   </p>
                 </div>
               )}
@@ -176,8 +192,7 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
       )}
 
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
-        {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
       <button
         type="button"

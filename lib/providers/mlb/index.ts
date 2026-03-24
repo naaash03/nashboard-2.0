@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 import { randomUUID } from "node:crypto";
 import { fetchMlbJson, resolveDataMode } from "@/lib/providers/mlb/client";
 import type { Meta } from "@/lib/providers/types";
@@ -11,7 +11,7 @@ import type { MlbFetchMeta } from "@/lib/providers/mlb/client";
 const MLB_SEASON = 2026;
 
 // ---------------------------------------------------------------------------
-// Team maps — abbreviation → MLB Stats API team ID (all 30 teams)
+// Team maps â€” abbreviation â†’ MLB Stats API team ID (all 30 teams)
 // ---------------------------------------------------------------------------
 
 export const MLB_TEAM_IDS: Record<string, number> = {
@@ -34,7 +34,7 @@ export const MLB_TEAM_IDS: Record<string, number> = {
   LV:  133,  // Las Vegas / Oakland Athletics (transitional)
 };
 
-/** MLB Stats API team ID → canonical abbreviation */
+/** MLB Stats API team ID â†’ canonical abbreviation */
 export const MLB_TEAM_ABBREVS: Record<number, string> = {
   147: "NYY", 111: "BOS", 141: "TOR", 110: "BAL", 139: "TB",
   145: "CWS", 114: "CLE", 116: "DET", 118: "KC",  142: "MIN",
@@ -59,8 +59,15 @@ export type MlbNextGames = {
     opponentKey: string;
     homeAway: "home" | "away";
     status: string;
+    gameType?: string;
+    gameTypeLabel?: string;
     venue?: string;
     seriesDescription?: string;
+    probableStarter?: {
+      playerId: string;
+      fullName: string;
+      throwsHand?: string;
+    } | null;
   }>;
 };
 
@@ -68,6 +75,10 @@ export type PitcherArsenal = {
   playerId: string;
   playerName?: string;
   season: number;
+  seasonLabel?: string;
+  fallbackSeason?: number;
+  status: "current" | "fallback" | "unavailable";
+  message?: string;
   pitches: Array<{
     type: string;
     usagePct?: number;
@@ -90,27 +101,44 @@ export type MlbSeriesGame = {
   date: string;
   gameTime: string;
   status: string;
+  opponent: string;
+  opponentKey: string;
+  homeAway: "home" | "away";
+  gameType?: string;
+  gameTypeLabel?: string;
   homeScore?: number;
   awayScore?: number;
+  venue?: string;
+  duration?: string;
+  startingPitcher?: string | null;
+};
+
+export type MlbSeriesInfo = {
+  seriesId: string;
+  opponent: string;
+  opponentKey: string;
+  homeAway: "home" | "away";
+  games: MlbSeriesGame[];
+  teamWins: number;
+  teamLosses: number;
+  seriesDescription: string;
+  gameTypeFilter: "R" | "S";
+  gameTypeLabel: string;
 };
 
 export type MlbSeriesTracker = {
   teamKey: string;
   teamName: string;
-  currentSeriesOrNextSeries: {
-    opponent: string;
-    opponentKey: string;
-    homeAway: "home" | "away";
-    games: MlbSeriesGame[];
-    teamWins: number;
-    teamLosses: number;
-    seriesDescription: string;
-  } | null;
+  gameTypeFilter: "R" | "S";
+  availableSeries: MlbSeriesInfo[];
+  selectedSeries: MlbSeriesInfo | null;
 };
 
 export type MlbPitcherInfo = {
   playerId: string;
   fullName: string;
+  teamKey?: string;
+  teamName?: string;
   throwsHand?: string;
   era?: string;
   whip?: string;
@@ -118,15 +146,40 @@ export type MlbPitcherInfo = {
   strikeOuts?: number;
   wins?: number;
   losses?: number;
+  baseOnBalls?: number;
+  kPer9?: string;
+  bbPer9?: string;
+  fip?: string;
+  seasonUsed?: number;
+  scoutingNote?: string;
+  last5Starts?: {
+    starts: number;
+    inningsPitched?: string;
+    era?: string;
+    trend: "up" | "down" | "steady" | "n/a";
+    summary: string;
+  };
 };
 
 export type MlbPitcherMatchup = {
+  options: Array<{
+    gamePk: number;
+    label: string;
+    gameDate: string;
+    gameType?: string;
+    gameTypeLabel?: string;
+    status: string;
+    isUpcoming: boolean;
+  }>;
+  selectedGamePk: number;
   game: {
     gameId: string;
     gamePk: number;
     gameTime: string;
     officialDate: string;
     status: string;
+    gameType?: string;
+    gameTypeLabel?: string;
     homeTeam: { key: string; name: string; id: number };
     awayTeam: { key: string; name: string; id: number };
     venue?: string;
@@ -136,6 +189,8 @@ export type MlbPitcherMatchup = {
     home: MlbPitcherInfo | null;
     away: MlbPitcherInfo | null;
   };
+  scoutingSummary: string;
+  advancedSummary: string;
 };
 
 export type MlbScheduledGame = {
@@ -165,7 +220,7 @@ export type MlbPlayerSearchResult = {
 };
 
 // ---------------------------------------------------------------------------
-// New types — Feature 1: Recent Results
+// New types â€” Feature 1: Recent Results
 // ---------------------------------------------------------------------------
 
 export type MlbRecentResult = {
@@ -174,6 +229,8 @@ export type MlbRecentResult = {
   opponent: string;
   opponentKey: string;
   homeAway: "home" | "away";
+  gameType?: string;
+  gameTypeLabel?: string;
   result: "W" | "L" | null;
   teamScore: number | null;
   opponentScore: number | null;
@@ -187,7 +244,7 @@ export type MlbRecentResults = {
 };
 
 // ---------------------------------------------------------------------------
-// New types — Feature 2: Season Stats Explorer
+// New types â€” Feature 2: Season Stats Explorer
 // ---------------------------------------------------------------------------
 
 export type MlbPlayerYearStats = {
@@ -248,7 +305,7 @@ export type MlbTeamSeasonStatsData = {
 };
 
 // ---------------------------------------------------------------------------
-// New types — Feature 3: Platoon Advantage
+// New types â€” Feature 3: Platoon Advantage
 // ---------------------------------------------------------------------------
 
 export type MlbPitcherSplits = {
@@ -269,10 +326,22 @@ export type MlbPlatoonAdvantage = {
   advantage: "home" | "away" | "neutral";
   advantageScore: number;
   explanation: string;
+  analysisMode: "splits" | "handedness";
+  handednessAnalyses: Array<{
+    pitcherTeamKey: string;
+    lineupTeamKey: string;
+    pitcherName: string;
+    pitcherHand: string;
+    lineupHandedness: "left" | "right" | "balanced" | "unknown";
+    lineupSummary: string;
+    edge: "pitcher" | "hitter" | "neutral" | "unknown";
+    summary: string;
+    reasoning: string;
+  }>;
 };
 
 // ---------------------------------------------------------------------------
-// New types — Feature 4: Recent Form Rating
+// New types â€” Feature 4: Recent Form Rating
 // ---------------------------------------------------------------------------
 
 export type MlbFormPeriod = {
@@ -283,6 +352,8 @@ export type MlbFormPeriod = {
   runsAllowed: number;
   runDiff: number;
   winPct: number;
+  games: number;
+  runDiffPerGame: number;
 };
 
 export type MlbRecentForm = {
@@ -295,30 +366,49 @@ export type MlbRecentForm = {
   last14: MlbFormPeriod;
   last30: MlbFormPeriod;
   explanation: string;
+  sampleContext: string;
+  primaryGameType: "R" | "S" | "mixed" | "unknown";
+  primaryGameTypeLabel: string;
 };
 
 // ---------------------------------------------------------------------------
-// New types — Feature 5: Bullpen Fatigue
+// New types â€” Feature 5: Bullpen Fatigue
 // ---------------------------------------------------------------------------
 
-export type MlbRelieverFatigue = {
+export type MlbPitcherAvailability = {
   playerId: string;
   fullName: string;
   fatigue: "fatigued" | "tired" | "available" | "fresh" | "rested";
   daysRest: number;
   lastAppearance: string | null;
   lastAppearancePitches: number | null;
+  lastAppearanceStrikes: number | null;
+  inningsLastAppearance?: string | null;
+  seasonKPer9?: string;
+  seasonUsed?: number;
   recentAppearances: Array<{
     date: string;
     inningsPitched: string;
     numberOfPitches: number;
+    strikes?: number;
   }>;
 };
 
 export type MlbBullpenFatigue = {
   teamKey: string;
   teamName: string;
-  relievers: MlbRelieverFatigue[];
+  starters: Array<{
+    playerId: string;
+    fullName: string;
+    lastStartDate: string | null;
+    daysRest: number;
+    inningsLastStart: string | null;
+    pitchesLastStart: number | null;
+    strikesLastStart: number | null;
+    seasonKPer9?: string;
+    seasonUsed?: number;
+  }>;
+  relievers: MlbPitcherAvailability[];
   fetchedAt: string;
 };
 
@@ -347,6 +437,8 @@ export interface MlbProvider {
     teamKey: string,
     dataMode?: "live" | "fixture",
     cacheBust?: string,
+    gameTypeFilter?: "R" | "S",
+    seriesId?: string,
   ): Promise<{ data: MlbSeriesTracker | null; meta: Meta }>;
 
   /** Probable starting pitchers for a specific game by gamePk */
@@ -354,6 +446,7 @@ export interface MlbProvider {
     gamePk: string | number,
     dataMode?: "live" | "fixture",
     cacheBust?: string,
+    teamKey?: string,
   ): Promise<{ data: MlbPitcherMatchup | null; meta: Meta }>;
 
   /** Full league schedule for today */
@@ -428,6 +521,10 @@ type MlbProbablePitcherEntry = {
 
 type MlbGameEntry = {
   gamePk: number;
+  gameGuid?: string;
+  link?: string;
+  gameType?: string;
+  season?: string;
   gameDate: string;
   officialDate: string;
   status: {
@@ -456,6 +553,17 @@ type MlbGameEntry = {
   gamesInSeries?: number;
   seriesGameNumber?: number;
   scheduledInnings?: number;
+};
+
+type MlbPeopleResponse = {
+  people?: Array<{
+    id: number;
+    fullName: string;
+    pitchHand?: { code?: string; description?: string };
+    batSide?: { code?: string; description?: string };
+    primaryPosition?: { code?: string; name?: string; type?: string; abbreviation?: string };
+    currentTeam?: { id?: number; name?: string };
+  }>;
 };
 
 type MlbScheduleResponse = {
@@ -632,6 +740,8 @@ type MlbGameLogResponse = {
       stat?: {
         inningsPitched?: string;
         numberOfPitches?: number;
+        pitchesThrown?: number;
+        strikes?: number;
         strikeOuts?: number;
         baseOnBalls?: number;
         hits?: number;
@@ -655,6 +765,53 @@ type MlbLinescoreScheduleResponse = {
       };
     }>;
   }>;
+};
+
+type MlbBoxscoreTeamPlayer = {
+  person?: { id: number; fullName: string };
+  stats?: {
+    pitching?: {
+      inningsPitched?: string;
+      numberOfPitches?: number;
+      pitchesThrown?: number;
+      strikes?: number;
+      strikeOuts?: number;
+      baseOnBalls?: number;
+      earnedRuns?: number;
+      era?: string;
+    };
+  };
+  seasonStats?: {
+    pitching?: {
+      gamesPlayed?: number;
+      gamesStarted?: number;
+      wins?: number;
+      losses?: number;
+      era?: string;
+      whip?: string;
+      inningsPitched?: string;
+      strikeOuts?: number;
+      baseOnBalls?: number;
+      strikeoutsPer9Inn?: string;
+      walksPer9Inn?: string;
+      homeRuns?: number;
+    };
+  };
+};
+
+type MlbBoxscoreTeam = {
+  team?: MlbTeamRef & { abbreviation?: string };
+  pitchers?: number[];
+  players?: Record<string, MlbBoxscoreTeamPlayer>;
+  info?: Array<{ title?: string; label?: string; value?: string }>;
+};
+
+type MlbBoxscoreResponse = {
+  teams?: {
+    home?: MlbBoxscoreTeam;
+    away?: MlbBoxscoreTeam;
+  };
+  info?: Array<{ label?: string; value?: string }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -744,7 +901,150 @@ function extractPitchArsenal(data: MlbPitchArsenalResponse): PitcherArsenal["pit
     .sort((a, b) => (b.usagePct ?? 0) - (a.usagePct ?? 0));
 }
 
-function extractSeasonStats(data: MlbSeasonStatsResponse): PitcherArsenal["seasonStats"] {
+function gameTypeLabel(gameType?: string): string {
+  if (gameType === "S") return "Spring Training";
+  if (gameType === "R") return "Regular Season";
+  return "Season Unspecified";
+}
+
+function inningsToNumber(value?: string): number | undefined {
+  if (!value) return undefined;
+  const [wholePart, remainderPart = "0"] = value.split(".");
+  const whole = Number.parseInt(wholePart, 10);
+  const remainder = Number.parseInt(remainderPart, 10);
+  if (Number.isNaN(whole) || Number.isNaN(remainder)) return undefined;
+  return whole + remainder / 3;
+}
+
+function formatPerNine(value: number | undefined, inningsPitched?: string): string | undefined {
+  if (value === undefined) return undefined;
+  const innings = inningsToNumber(inningsPitched);
+  if (!innings || innings <= 0) return undefined;
+  return ((value * 9) / innings).toFixed(1);
+}
+
+function pitchCountFromStat(stat?: {
+  numberOfPitches?: number;
+  pitchesThrown?: number;
+}): number | undefined {
+  return stat?.pitchesThrown ?? stat?.numberOfPitches;
+}
+
+function strikesFromStat(stat?: { strikes?: number }): number | undefined {
+  return stat?.strikes;
+}
+
+function summarizePitcherScouting(pitcher: Pick<MlbPitcherInfo, "era" | "kPer9" | "bbPer9">): string {
+  const era = Number.parseFloat(pitcher.era ?? "NaN");
+  const kPer9 = Number.parseFloat(pitcher.kPer9 ?? "NaN");
+  const bbPer9 = Number.parseFloat(pitcher.bbPer9 ?? "NaN");
+
+  if (Number.isNaN(era) && Number.isNaN(kPer9)) {
+    return "Season line is still sparse, so this is mostly a role and handedness read right now.";
+  }
+  if (!Number.isNaN(era) && era <= 3.5 && !Number.isNaN(kPer9) && kPer9 >= 9) {
+    return "He has missed bats and limited damage, which points to a strong current run-prevention profile.";
+  }
+  if (!Number.isNaN(kPer9) && kPer9 >= 9.5) {
+    return "The strikeout rate is the carrying tool here, so hitters need to survive swing-and-miss pressure.";
+  }
+  if (!Number.isNaN(bbPer9) && bbPer9 >= 3.5) {
+    return "Command is the swing factor because the walk rate leaves room for traffic.";
+  }
+  if (!Number.isNaN(era) && era <= 4.0) {
+    return "He has mostly kept games under control, even without an overpowering strikeout profile.";
+  }
+  return "This looks more like a contact-management outing than a pure bat-missing matchup.";
+}
+
+function buildLast5StartsSummary(
+  pitcherName: string,
+  splits: Array<{
+    date?: string;
+    stat?: {
+      inningsPitched?: string;
+      earnedRuns?: number;
+      strikeOuts?: number;
+    };
+  }>,
+): MlbPitcherInfo["last5Starts"] {
+  const recent = [...splits]
+    .filter((split) => Boolean(split.date))
+    .sort((a, b) => new Date(b.date ?? "").getTime() - new Date(a.date ?? "").getTime())
+    .slice(0, 5);
+
+  if (recent.length === 0) {
+    return {
+      starts: 0,
+      trend: "n/a",
+      summary: `${pitcherName} does not have a recent five-start sample posted yet.`,
+    };
+  }
+
+  const totalInnings = recent.reduce((sum, split) => sum + (inningsToNumber(split.stat?.inningsPitched) ?? 0), 0);
+  const totalEarnedRuns = recent.reduce((sum, split) => sum + (split.stat?.earnedRuns ?? 0), 0);
+  const era = totalInnings > 0 ? ((totalEarnedRuns * 9) / totalInnings).toFixed(2) : undefined;
+
+  const newestTwo = recent.slice(0, Math.min(2, recent.length));
+  const olderThree = recent.slice(Math.min(2, recent.length));
+  const newestEra =
+    newestTwo.length > 0
+      ? (() => {
+          const innings = newestTwo.reduce(
+            (sum, split) => sum + (inningsToNumber(split.stat?.inningsPitched) ?? 0),
+            0,
+          );
+          const earnedRuns = newestTwo.reduce((sum, split) => sum + (split.stat?.earnedRuns ?? 0), 0);
+          return innings > 0 ? (earnedRuns * 9) / innings : undefined;
+        })()
+      : undefined;
+  const olderEra =
+    olderThree.length > 0
+      ? (() => {
+          const innings = olderThree.reduce(
+            (sum, split) => sum + (inningsToNumber(split.stat?.inningsPitched) ?? 0),
+            0,
+          );
+          const earnedRuns = olderThree.reduce((sum, split) => sum + (split.stat?.earnedRuns ?? 0), 0);
+          return innings > 0 ? (earnedRuns * 9) / innings : undefined;
+        })()
+      : undefined;
+
+  let trend: "up" | "down" | "steady" | "n/a" = "steady";
+  if (newestEra === undefined || olderEra === undefined) {
+    trend = "n/a";
+  } else if (newestEra + 0.75 < olderEra) {
+    trend = "up";
+  } else if (newestEra - 0.75 > olderEra) {
+    trend = "down";
+  }
+
+  const inningsLabel = totalInnings > 0 ? totalInnings.toFixed(1) : undefined;
+  const summary =
+    recent.length === 1
+      ? `${pitcherName} has only one recent start logged, so trend context is limited.`
+      : `${pitcherName} has a ${era ?? "-"} ERA over the last ${recent.length} starts${
+          inningsLabel ? ` (${inningsLabel} IP)` : ""
+        }.`;
+
+  return {
+    starts: recent.length,
+    inningsPitched: inningsLabel,
+    era,
+    trend,
+    summary,
+  };
+}
+
+type PitchingSeasonSummary = NonNullable<PitcherArsenal["seasonStats"]> & {
+  baseOnBalls?: number;
+  kPer9?: string;
+  bbPer9?: string;
+  fip?: string;
+  seasonUsed?: number;
+};
+
+function extractSeasonStats(data: MlbSeasonStatsResponse, seasonUsed?: number): PitchingSeasonSummary | undefined {
   const group = data.stats?.find((s) => s.group?.displayName?.toLowerCase() === "pitching");
   const split = group?.splits?.[0];
   if (!split?.stat) return undefined;
@@ -757,26 +1057,250 @@ function extractSeasonStats(data: MlbSeasonStatsResponse): PitcherArsenal["seaso
     wins: s.wins,
     losses: s.losses,
     gamesStarted: s.gamesStarted,
+    baseOnBalls: s.baseOnBalls,
+    kPer9: formatPerNine(s.strikeOuts, s.inningsPitched),
+    bbPer9: formatPerNine(s.baseOnBalls, s.inningsPitched),
+    seasonUsed,
   };
 }
 
-/** Fetch season stats for a pitcher; used inside getStartingPitcherMatchup */
-async function fetchPitcherStats(
+async function fetchPitcherSeasonSummary(
   pitcherId: number,
   dataMode: "live" | "fixture",
-): Promise<Pick<MlbPitcherInfo, "era" | "whip" | "inningsPitched" | "strikeOuts" | "wins" | "losses"> | undefined> {
+  cacheBust?: string,
+  seasons: number[] = [MLB_SEASON, MLB_SEASON - 1],
+): Promise<PitchingSeasonSummary | undefined> {
+  for (const season of seasons) {
+    try {
+      const result = await fetchMlbJson<MlbSeasonStatsResponse>({
+        endpoint: `/people/${pitcherId}/stats`,
+        params: { stats: "season", group: "pitching", season },
+        fixtureFile: "pitcher_season_stats.json",
+        ttlSeconds: 3_600,
+        dataMode,
+        cacheBust,
+      });
+      const summary = extractSeasonStats(result.data, season);
+      if (summary) return summary;
+    } catch {
+      // Keep trying earlier seasons
+    }
+  }
+  return undefined;
+}
+
+async function fetchPitcherGameLog(
+  pitcherId: number,
+  dataMode: "live" | "fixture",
+  cacheBust?: string,
+  seasons: number[] = [MLB_SEASON, MLB_SEASON - 1],
+): Promise<{
+  seasonUsed?: number;
+  splits: NonNullable<MlbGameLogResponse["stats"]>[number]["splits"];
+}> {
+  for (const season of seasons) {
+    try {
+      const result = await fetchMlbJson<MlbGameLogResponse>({
+        endpoint: `/people/${pitcherId}/stats`,
+        params: { stats: "gameLog", group: "pitching", season },
+        fixtureFile: "pitcher_game_log.json",
+        ttlSeconds: 900,
+        dataMode,
+        cacheBust,
+      });
+      const splits = result.data.stats?.[0]?.splits ?? [];
+      if (splits.length > 0) {
+        return { seasonUsed: season, splits };
+      }
+    } catch {
+      // Keep trying earlier seasons
+    }
+  }
+  return { seasonUsed: undefined, splits: [] };
+}
+
+async function fetchPitcherThrowingHand(
+  pitcherId: number,
+  dataMode: "live" | "fixture",
+  cacheBust?: string,
+): Promise<string | undefined> {
   try {
-    const result = await fetchMlbJson<MlbSeasonStatsResponse>({
-      endpoint: `/people/${pitcherId}/stats`,
-      params: { stats: "season", group: "pitching", season: MLB_SEASON },
-      fixtureFile: "pitcher_season_stats.json",
+    const result = await fetchMlbJson<MlbPeopleResponse>({
+      endpoint: `/people/${pitcherId}`,
+      fixtureFile: "player_search.json",
       ttlSeconds: 3_600,
       dataMode,
+      cacheBust,
     });
-    return extractSeasonStats(result.data);
+    return (
+      result.data.people?.find((person) => person.id === pitcherId)?.pitchHand?.code ??
+      result.data.people?.[0]?.pitchHand?.code
+    );
   } catch {
     return undefined;
   }
+}
+
+async function fetchTeamLineupHandedness(
+  teamId: number,
+  dataMode: "live" | "fixture",
+  cacheBust?: string,
+): Promise<{
+  lineupHandedness: "left" | "right" | "balanced" | "unknown";
+  lineupSummary: string;
+}> {
+  try {
+    const rosterResult = await fetchMlbJson<MlbRosterResponse>({
+      endpoint: `/teams/${teamId}/roster`,
+      params: { rosterType: "active", season: MLB_SEASON },
+      fixtureFile: "team_roster.json",
+      ttlSeconds: 1_800,
+      dataMode,
+      cacheBust,
+    });
+    const hitterIds = (rosterResult.data.roster ?? [])
+      .filter((player) => player.position?.type !== "Pitcher" && player.person?.id)
+      .slice(0, 13)
+      .map((player) => player.person!.id);
+
+    if (hitterIds.length === 0) {
+      return {
+        lineupHandedness: "unknown",
+        lineupSummary: "The active lineup hand split could not be determined from the active roster.",
+      };
+    }
+
+    const peopleResult = await fetchMlbJson<MlbPeopleResponse>({
+      endpoint: "/people",
+      params: { personIds: hitterIds.join(",") },
+      fixtureFile: "player_search.json",
+      ttlSeconds: 1_800,
+      dataMode,
+      cacheBust,
+    });
+
+    let left = 0;
+    let right = 0;
+    let switchHitters = 0;
+    const requestedIds = new Set(hitterIds);
+    for (const person of peopleResult.data.people ?? []) {
+      if (!requestedIds.has(person.id)) continue;
+      const side = person.batSide?.code;
+      if (side === "L") left++;
+      else if (side === "R") right++;
+      else if (side === "S") switchHitters++;
+    }
+
+    if (left === 0 && right === 0 && switchHitters === 0) {
+      return {
+        lineupHandedness: "unknown",
+        lineupSummary: "Batside data is not available for enough hitters to rate the lineup tendency.",
+      };
+    }
+
+    const adjustedLeft = left + switchHitters * 0.5;
+    const adjustedRight = right + switchHitters * 0.5;
+    const lineupHandedness =
+      Math.abs(adjustedLeft - adjustedRight) <= 1
+        ? "balanced"
+        : adjustedRight > adjustedLeft
+        ? "right"
+        : "left";
+
+    return {
+      lineupHandedness,
+      lineupSummary: `${hitterIds.length} active hitters checked: ${left} left-handed, ${right} right-handed, ${switchHitters} switch-hitters.`,
+    };
+  } catch {
+    return {
+      lineupHandedness: "unknown",
+      lineupSummary: "The lineup-handedness estimate is unavailable right now.",
+    };
+  }
+}
+
+function summarizeHandednessMatchup(
+  pitcherName: string,
+  pitcherHand: string | undefined,
+  lineupTeamKey: string,
+  lineupHandedness: "left" | "right" | "balanced" | "unknown",
+  lineupSummary: string,
+): {
+  edge: "pitcher" | "hitter" | "neutral" | "unknown";
+  summary: string;
+  reasoning: string;
+} {
+  const handLabel = pitcherHand === "L" ? "left-handed" : pitcherHand === "R" ? "right-handed" : "unknown-handed";
+  if (!pitcherHand || lineupHandedness === "unknown") {
+    return {
+      edge: "unknown",
+      summary: `${pitcherName}'s handedness is known, but ${lineupTeamKey}'s lineup tendency could not be pinned down reliably.`,
+      reasoning: lineupSummary,
+    };
+  }
+
+  if (lineupHandedness === "balanced") {
+    return {
+      edge: "neutral",
+      summary: `${pitcherName} is ${handLabel}, and ${lineupTeamKey}'s active lineup looks fairly balanced. No clear handedness edge.`,
+      reasoning: lineupSummary,
+    };
+  }
+
+  const sameSide =
+    (pitcherHand === "R" && lineupHandedness === "right") ||
+    (pitcherHand === "L" && lineupHandedness === "left");
+
+  return {
+    edge: sameSide ? "pitcher" : "hitter",
+    summary: `${pitcherName} is ${pitcherHand}HP. ${lineupTeamKey}'s lineup trends ${lineupHandedness}-handed. Slight ${
+      sameSide ? "pitcher" : "hitter"
+    } advantage.`,
+    reasoning: lineupSummary,
+  };
+}
+
+async function fetchBoxscore(
+  gamePk: number,
+  dataMode: "live" | "fixture",
+  cacheBust?: string,
+): Promise<MlbBoxscoreResponse | undefined> {
+  try {
+    const result = await fetchMlbJson<MlbBoxscoreResponse>({
+      endpoint: `/game/${gamePk}/boxscore`,
+      fixtureFile: "game_boxscore.json",
+      ttlSeconds: 300,
+      dataMode,
+      cacheBust,
+    });
+    return result.data;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractStarterFromBoxscore(
+  team: MlbBoxscoreTeam | undefined,
+): {
+  playerId: number;
+  fullName: string;
+  outing?: NonNullable<MlbBoxscoreTeamPlayer["stats"]>["pitching"];
+  season?: NonNullable<MlbBoxscoreTeamPlayer["seasonStats"]>["pitching"];
+} | null {
+  const starterId = team?.pitchers?.[0];
+  if (!starterId) return null;
+  const player = team?.players?.[`ID${starterId}`];
+  return {
+    playerId: starterId,
+    fullName: player?.person?.fullName ?? "Unknown",
+    outing: player?.stats?.pitching,
+    season: player?.seasonStats?.pitching,
+  };
+}
+
+function durationFromBoxscore(boxscore?: MlbBoxscoreResponse): string | undefined {
+  const duration = boxscore?.info?.find((entry) => entry.label === "T")?.value;
+  return duration || undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -796,14 +1320,16 @@ export const mlbProvider: MlbProvider = {
     try {
       const result = await fetchMlbJson<MlbScheduleResponse>({
         endpoint: "/schedule",
-        params: { sportId: 1, teamId, startDate, endDate },
+        params: { sportId: 1, teamId, startDate, endDate, hydrate: "probablePitcher" },
         fixtureFile: "team_next_7.json",
         ttlSeconds: 300,
         dataMode: dm,
         cacheBust,
       });
 
-      const games = flattenSchedule(result.data);
+      const games = flattenSchedule(result.data).filter(
+        (game) => new Date(game.gameDate).getTime() >= new Date(`${startDate}T00:00:00Z`).getTime(),
+      );
       const firstGame = games[0];
       const teamName = firstGame
         ? firstGame.teams.home.team.id === teamId
@@ -827,8 +1353,25 @@ export const mlbProvider: MlbProvider = {
               opponentKey,
               homeAway: (isHome ? "home" : "away") as "home" | "away",
               status: game.status.detailedState,
+              gameType: game.gameType,
+              gameTypeLabel: gameTypeLabel(game.gameType),
               venue: game.venue?.name,
               seriesDescription: game.seriesDescription,
+              probableStarter: isHome
+                ? game.teams.home.probablePitcher
+                  ? {
+                      playerId: String(game.teams.home.probablePitcher.id),
+                      fullName: game.teams.home.probablePitcher.fullName,
+                      throwsHand: game.teams.home.probablePitcher.pitchHand?.code,
+                    }
+                  : null
+                : game.teams.away.probablePitcher
+                ? {
+                    playerId: String(game.teams.away.probablePitcher.id),
+                    fullName: game.teams.away.probablePitcher.fullName,
+                    throwsHand: game.teams.away.probablePitcher.pitchHand?.code,
+                  }
+                : null,
             };
           }),
         },
@@ -855,61 +1398,95 @@ export const mlbProvider: MlbProvider = {
     }
 
     try {
-      const arsenalResult = await fetchMlbJson<MlbPitchArsenalResponse>({
-        endpoint: `/people/${encodeURIComponent(playerId)}/stats`,
-        params: { stats: "pitchArsenal", season: MLB_SEASON },
-        fixtureFile: "pitcher_arsenal.json",
-        ttlSeconds: 3_600,
-        dataMode: dm,
-        cacheBust,
-      });
+      const seasonsToTry = [MLB_SEASON, MLB_SEASON - 1];
+      let selectedSeason = MLB_SEASON;
+      let selectedPitches: PitcherArsenal["pitches"] = [];
+      let selectedMeta: Meta | null = null;
 
-      const pitches = extractPitchArsenal(arsenalResult.data);
-
-      let seasonStats: PitcherArsenal["seasonStats"];
-      try {
-        const statsResult = await fetchMlbJson<MlbSeasonStatsResponse>({
+      for (const season of seasonsToTry) {
+        const arsenalResult = await fetchMlbJson<MlbPitchArsenalResponse>({
           endpoint: `/people/${encodeURIComponent(playerId)}/stats`,
-          params: { stats: "season", group: "pitching", season: MLB_SEASON },
-          fixtureFile: "pitcher_season_stats.json",
+          params: { stats: "pitchArsenal", season },
+          fixtureFile:
+            season === MLB_SEASON ? "pitcher_arsenal_2026.json" : "pitcher_arsenal_2025.json",
           ttlSeconds: 3_600,
           dataMode: dm,
           cacheBust,
         });
-        seasonStats = extractSeasonStats(statsResult.data);
-      } catch {
-        // Season stats are supplemental — swallow errors
+        selectedMeta = asMeta(arsenalResult.meta);
+        selectedPitches = extractPitchArsenal(arsenalResult.data);
+        if (selectedPitches.length > 0) {
+          selectedSeason = season;
+          break;
+        }
       }
 
+      const seasonStats = await fetchPitcherSeasonSummary(
+        Number.parseInt(playerId, 10),
+        dm,
+        cacheBust,
+        [selectedSeason],
+      );
+      const status: PitcherArsenal["status"] =
+        selectedPitches.length === 0
+          ? "unavailable"
+          : selectedSeason === MLB_SEASON
+          ? "current"
+          : "fallback";
+
       return {
-        data: { playerId, season: MLB_SEASON, pitches, seasonStats },
-        meta: asMeta(arsenalResult.meta),
+        data: {
+          playerId,
+          season: selectedSeason,
+          seasonLabel:
+            status === "fallback"
+              ? `${selectedSeason} arsenal (${MLB_SEASON} data pending)`
+              : `${selectedSeason} arsenal`,
+          fallbackSeason: status === "fallback" ? selectedSeason : undefined,
+          status,
+          message:
+            status === "fallback"
+              ? `${selectedSeason} arsenal shown because ${MLB_SEASON} pitch data is not yet available.`
+              : status === "unavailable"
+              ? "Arsenal data not yet available for this pitcher."
+              : undefined,
+          pitches: selectedPitches,
+          seasonStats,
+        },
+        meta:
+          selectedMeta ?? {
+            sourceUsed: "demo",
+            updatedAt: nowISO(),
+            requestId: randomUUID(),
+            dataMode: dm,
+          },
       };
     } catch (error) {
       return { data: null, meta: errorMeta("getPitcherArsenal", error, dm) };
     }
   },
 
-  async getSeriesTracker(teamKey, dataMode, cacheBust) {
+  async getSeriesTracker(teamKey, dataMode, cacheBust, gameTypeFilter = "R", seriesId) {
     const dm = resolveDataMode(dataMode);
     const teamId = MLB_TEAM_IDS[teamKey];
     if (!teamId) return { data: null, meta: unknownTeamMeta(teamKey, dm) };
 
+    const filter = gameTypeFilter === "S" ? "S" : "R";
     const today = todayISO();
-    const startDate = addDays(today, -4);
+    const startDate = addDays(today, -21);
     const endDate = addDays(today, 10);
 
     try {
       const result = await fetchMlbJson<MlbScheduleResponse>({
         endpoint: "/schedule",
-        params: { sportId: 1, teamId, startDate, endDate },
+        params: { sportId: 1, teamId, startDate, endDate, gameType: filter },
         fixtureFile: "team_next_7.json",
         ttlSeconds: 300,
         dataMode: dm,
         cacheBust,
       });
 
-      const allGames = flattenSchedule(result.data);
+      const allGames = flattenSchedule(result.data).filter((game) => (game.gameType ?? filter) === filter);
       const firstGame = allGames[0];
       const teamName = firstGame
         ? firstGame.teams.home.team.id === teamId
@@ -917,82 +1494,116 @@ export const mlbProvider: MlbProvider = {
           : firstGame.teams.away.team.name
         : teamKey;
 
-      // Group consecutive games against the same opponent into series
       type SeriesGroup = {
+        seriesId: string;
         opponentId: number;
         opponentName: string;
+        opponentKey: string;
         homeAway: "home" | "away";
         games: MlbGameEntry[];
       };
+
       const seriesGroups: SeriesGroup[] = [];
       for (const game of allGames) {
         const isHome = game.teams.home.team.id === teamId;
         const opponent = isHome ? game.teams.away.team : game.teams.home.team;
-        const last = seriesGroups[seriesGroups.length - 1];
-        if (last && last.opponentId === opponent.id) {
-          last.games.push(game);
+        const opponentKey = MLB_TEAM_ABBREVS[opponent.id] ?? abbrevFromName(opponent.name);
+        const homeAway = (isHome ? "home" : "away") as "home" | "away";
+        const lastGroup = seriesGroups[seriesGroups.length - 1];
+        if (
+          lastGroup &&
+          lastGroup.opponentId === opponent.id &&
+          lastGroup.homeAway === homeAway
+        ) {
+          lastGroup.games.push(game);
         } else {
           seriesGroups.push({
+            seriesId: `${filter}-${opponentKey}-${game.officialDate}`,
             opponentId: opponent.id,
             opponentName: opponent.name,
-            homeAway: isHome ? "home" : "away",
+            opponentKey,
+            homeAway,
             games: [game],
           });
         }
       }
 
-      // Prefer the series that contains today, else the most recent
-      const relevantSeries =
-        seriesGroups.find((sg) => sg.games.some((g) => g.officialDate >= today)) ??
+      const mapSeries = async (group: SeriesGroup, enrichCompletedGames: boolean): Promise<MlbSeriesInfo> => {
+        let teamWins = 0;
+        let teamLosses = 0;
+        const boxscores = enrichCompletedGames
+          ? await Promise.all(
+              group.games.map((game) =>
+                game.status.abstractGameState === "Final" ? fetchBoxscore(game.gamePk, dm, cacheBust) : Promise.resolve(undefined),
+              ),
+            )
+          : [];
+
+        const games = group.games.map((game, index) => {
+          if (
+            game.status.abstractGameState === "Final" &&
+            game.teams.home.score !== undefined &&
+            game.teams.away.score !== undefined
+          ) {
+            const isHome = group.homeAway === "home";
+            const teamScore = isHome ? game.teams.home.score : game.teams.away.score;
+            const oppScore = isHome ? game.teams.away.score : game.teams.home.score;
+            if (teamScore > oppScore) teamWins += 1;
+            else teamLosses += 1;
+          }
+
+          const boxscore = enrichCompletedGames ? boxscores[index] : undefined;
+          const teamBox = group.homeAway === "home" ? boxscore?.teams?.home : boxscore?.teams?.away;
+          const starter = extractStarterFromBoxscore(teamBox);
+
+          return {
+            gamePk: game.gamePk,
+            date: game.officialDate,
+            gameTime: game.gameDate,
+            status: game.status.detailedState,
+            opponent: group.opponentName,
+            opponentKey: group.opponentKey,
+            homeAway: group.homeAway,
+            gameType: game.gameType,
+            gameTypeLabel: gameTypeLabel(game.gameType),
+            homeScore: game.teams.home.score,
+            awayScore: game.teams.away.score,
+            venue: game.venue?.name,
+            duration: durationFromBoxscore(boxscore),
+            startingPitcher: starter?.fullName ?? null,
+          } satisfies MlbSeriesGame;
+        });
+
+        return {
+          seriesId: group.seriesId,
+          opponent: group.opponentName,
+          opponentKey: group.opponentKey,
+          homeAway: group.homeAway,
+          games,
+          teamWins,
+          teamLosses,
+          seriesDescription: group.games[0]?.seriesDescription ?? gameTypeLabel(filter),
+          gameTypeFilter: filter,
+          gameTypeLabel: gameTypeLabel(filter),
+        };
+      };
+
+      const availableSeries = await Promise.all(seriesGroups.map((group) => mapSeries(group, false)));
+      const defaultSeries =
+        seriesGroups.find((group) => group.games.some((game) => game.officialDate >= today)) ??
         seriesGroups[seriesGroups.length - 1] ??
         null;
-
-      if (!relevantSeries) {
-        return {
-          data: { teamKey, teamName, currentSeriesOrNextSeries: null },
-          meta: asMeta(result.meta),
-        };
-      }
-
-      let teamWins = 0;
-      let teamLosses = 0;
-      for (const g of relevantSeries.games) {
-        if (
-          g.status.abstractGameState === "Final" &&
-          g.teams.home.score !== undefined &&
-          g.teams.away.score !== undefined
-        ) {
-          const isHome = g.teams.home.team.id === teamId;
-          const teamScore = isHome ? g.teams.home.score : g.teams.away.score;
-          const oppScore = isHome ? g.teams.away.score : g.teams.home.score;
-          if (teamScore > oppScore) teamWins++;
-          else teamLosses++;
-        }
-      }
-
-      const opponentKey =
-        MLB_TEAM_ABBREVS[relevantSeries.opponentId] ?? abbrevFromName(relevantSeries.opponentName);
+      const selectedBaseSeries =
+        seriesGroups.find((group) => group.seriesId === seriesId) ?? defaultSeries;
+      const selectedSeries = selectedBaseSeries ? await mapSeries(selectedBaseSeries, true) : null;
 
       return {
         data: {
           teamKey,
           teamName,
-          currentSeriesOrNextSeries: {
-            opponent: relevantSeries.opponentName,
-            opponentKey,
-            homeAway: relevantSeries.homeAway,
-            games: relevantSeries.games.map((g) => ({
-              gamePk: g.gamePk,
-              date: g.officialDate,
-              gameTime: g.gameDate,
-              status: g.status.detailedState,
-              homeScore: g.teams.home.score,
-              awayScore: g.teams.away.score,
-            })),
-            teamWins,
-            teamLosses,
-            seriesDescription: relevantSeries.games[0]?.seriesDescription ?? "Series",
-          },
+          gameTypeFilter: filter,
+          availableSeries,
+          selectedSeries,
         },
         meta: asMeta(result.meta),
       };
@@ -1000,81 +1611,179 @@ export const mlbProvider: MlbProvider = {
       return { data: null, meta: errorMeta("getSeriesTracker", error, dm) };
     }
   },
-
-  async getStartingPitcherMatchup(gamePk, dataMode, cacheBust) {
+  async getStartingPitcherMatchup(gamePk, dataMode, cacheBust, teamKey) {
     const dm = resolveDataMode(dataMode);
+    const normalizedTeamKey = typeof teamKey === "string" ? teamKey.toUpperCase() : undefined;
+    const teamId = normalizedTeamKey ? MLB_TEAM_IDS[normalizedTeamKey] : undefined;
+    const today = todayISO();
 
     try {
-      const result = await fetchMlbJson<MlbScheduleResponse>({
-        endpoint: "/schedule",
-        params: { sportId: 1, gamePk, hydrate: "probablePitcher" },
-        fixtureFile: "game_with_pitchers.json",
-        ttlSeconds: 300,
-        dataMode: dm,
-        cacheBust,
-      });
+      let scheduleResult: { data: MlbScheduleResponse; meta: Meta };
+      if (teamId) {
+        const result = await fetchMlbJson<MlbScheduleResponse>({
+          endpoint: "/schedule",
+          params: {
+            sportId: 1,
+            teamId,
+            startDate: addDays(today, -14),
+            endDate: addDays(today, 7),
+            hydrate: "probablePitcher",
+            gameType: "R,S",
+          },
+          fixtureFile: "team_next_7.json",
+          ttlSeconds: 300,
+          dataMode: dm,
+          cacheBust,
+        });
+        scheduleResult = { data: result.data, meta: asMeta(result.meta) };
+      } else {
+        const result = await fetchMlbJson<MlbScheduleResponse>({
+          endpoint: "/schedule",
+          params: { sportId: 1, gamePk, hydrate: "probablePitcher" },
+          fixtureFile: "game_with_pitchers.json",
+          ttlSeconds: 300,
+          dataMode: dm,
+          cacheBust,
+        });
+        scheduleResult = { data: result.data, meta: asMeta(result.meta) };
+      }
 
-      const games = flattenSchedule(result.data);
-      const game = games[0];
-      if (!game) {
+      const games = flattenSchedule(scheduleResult.data).filter((game) => {
+        if (teamId) {
+          return game.teams.home.team.id === teamId || game.teams.away.team.id === teamId;
+        }
+        return true;
+      });
+      const upcomingGame = games.find((game) => game.status.abstractGameState !== "Final");
+      const pastGames = [...games]
+        .filter((game) => game.status.abstractGameState === "Final")
+        .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
+        .slice(0, 5);
+      const optionGames = [upcomingGame, ...pastGames].filter(
+        (game): game is MlbGameEntry => Boolean(game),
+      );
+      const selectedGamePk = gamePk ? Number.parseInt(String(gamePk), 10) : optionGames[0]?.gamePk;
+      const selectedGame =
+        optionGames.find((game) => game.gamePk === selectedGamePk) ??
+        games.find((game) => game.gamePk === selectedGamePk) ??
+        null;
+
+      if (!selectedGame) {
         return {
           data: null,
-          meta: { ...asMeta(result.meta), warning: `No game found for gamePk ${gamePk}` },
+          meta: { ...scheduleResult.meta, warning: "No matching game found for this team." },
         };
       }
 
-      const awayRef = game.teams.away;
-      const homeRef = game.teams.home;
+      const awayRef = selectedGame.teams.away;
+      const homeRef = selectedGame.teams.home;
       const awayKey = MLB_TEAM_ABBREVS[awayRef.team.id] ?? abbrevFromName(awayRef.team.name);
       const homeKey = MLB_TEAM_ABBREVS[homeRef.team.id] ?? abbrevFromName(homeRef.team.name);
+      const boxscore =
+        selectedGame.status.abstractGameState === "Final"
+          ? await fetchBoxscore(selectedGame.gamePk, dm, cacheBust)
+          : undefined;
+      const awayStarter = boxscore ? extractStarterFromBoxscore(boxscore.teams?.away) : null;
+      const homeStarter = boxscore ? extractStarterFromBoxscore(boxscore.teams?.home) : null;
 
-      const [awayStats, homeStats] = await Promise.all([
-        awayRef.probablePitcher
-          ? fetchPitcherStats(awayRef.probablePitcher.id, dm)
-          : Promise.resolve(undefined),
-        homeRef.probablePitcher
-          ? fetchPitcherStats(homeRef.probablePitcher.id, dm)
-          : Promise.resolve(undefined),
+      const buildPitcherInfo = async (
+        teamRef: typeof awayRef,
+        teamAbbrev: string,
+        probablePitcher: MlbProbablePitcherEntry | undefined,
+        starterFromBoxscore: ReturnType<typeof extractStarterFromBoxscore>,
+      ): Promise<MlbPitcherInfo | null> => {
+        const pitcherId = probablePitcher?.id ?? starterFromBoxscore?.playerId;
+        if (!pitcherId) return null;
+        const fullName = probablePitcher?.fullName ?? starterFromBoxscore?.fullName ?? "TBD";
+        const [seasonSummary, throwingHand, gameLog] = await Promise.all([
+          fetchPitcherSeasonSummary(pitcherId, dm, cacheBust),
+          fetchPitcherThrowingHand(pitcherId, dm, cacheBust),
+          fetchPitcherGameLog(pitcherId, dm, cacheBust),
+        ]);
+        const boxscoreSeason = starterFromBoxscore?.season;
+        const inningsPitched = seasonSummary?.inningsPitched ?? boxscoreSeason?.inningsPitched;
+        const strikeOuts = seasonSummary?.strikeOuts ?? boxscoreSeason?.strikeOuts;
+        const baseOnBalls = seasonSummary?.baseOnBalls ?? boxscoreSeason?.baseOnBalls;
+        const info: MlbPitcherInfo = {
+          playerId: String(pitcherId),
+          fullName,
+          teamKey: teamAbbrev,
+          teamName: teamRef.team.name,
+          throwsHand: probablePitcher?.pitchHand?.code ?? throwingHand,
+          era: seasonSummary?.era ?? boxscoreSeason?.era,
+          whip: seasonSummary?.whip ?? boxscoreSeason?.whip,
+          inningsPitched,
+          strikeOuts,
+          wins: seasonSummary?.wins ?? boxscoreSeason?.wins,
+          losses: seasonSummary?.losses ?? boxscoreSeason?.losses,
+          baseOnBalls,
+          kPer9: seasonSummary?.kPer9 ?? boxscoreSeason?.strikeoutsPer9Inn ?? formatPerNine(strikeOuts, inningsPitched),
+          bbPer9: seasonSummary?.bbPer9 ?? boxscoreSeason?.walksPer9Inn ?? formatPerNine(baseOnBalls, inningsPitched),
+          seasonUsed: seasonSummary?.seasonUsed ?? gameLog.seasonUsed,
+          last5Starts: buildLast5StartsSummary(fullName, gameLog.splits ?? []),
+        };
+        info.scoutingNote = summarizePitcherScouting(info);
+        return info;
+      };
+
+      const [awayPitcher, homePitcher] = await Promise.all([
+        buildPitcherInfo(awayRef, awayKey, awayRef.probablePitcher, awayStarter),
+        buildPitcherInfo(homeRef, homeKey, homeRef.probablePitcher, homeStarter),
       ]);
 
-      const buildPitcherInfo = (
-        probable: MlbProbablePitcherEntry | undefined,
-        stats: PitcherArsenal["seasonStats"],
-      ): MlbPitcherInfo | null => {
-        if (!probable) return null;
+      const options = optionGames.map((game) => {
+        const isHome = teamId ? game.teams.home.team.id === teamId : false;
+        const opponent = teamId ? (isHome ? game.teams.away.team : game.teams.home.team) : game.teams.away.team;
+        const opponentKey = MLB_TEAM_ABBREVS[opponent.id] ?? abbrevFromName(opponent.name);
+        const loc = teamId ? (isHome ? `vs ${opponentKey}` : `@ ${opponentKey}`) : `${game.teams.away.team.name} @ ${game.teams.home.team.name}`;
+        const isUpcoming = game.status.abstractGameState !== "Final";
         return {
-          playerId: String(probable.id),
-          fullName: probable.fullName,
-          throwsHand: probable.pitchHand?.code,
-          ...stats,
+          gamePk: game.gamePk,
+          label: `${isUpcoming ? "Next Game" : "Past Game"}: ${loc} · ${game.officialDate} (${gameTypeLabel(game.gameType)})`,
+          gameDate: game.officialDate,
+          gameType: game.gameType,
+          gameTypeLabel: gameTypeLabel(game.gameType),
+          status: game.status.detailedState,
+          isUpcoming,
         };
-      };
+      });
+
+      const scoutingSummary =
+        selectedGame.status.abstractGameState === "Final"
+          ? `This view shows the actual starters from the selected ${gameTypeLabel(selectedGame.gameType).toLowerCase()} game.`
+          : `This view shows the probable starters for the next scheduled game.`;
+      const advancedSummary = `${awayPitcher?.fullName ?? "TBD"}: ${awayPitcher?.scoutingNote ?? "No season line posted yet."} ${homePitcher?.fullName ?? "TBD"}: ${homePitcher?.scoutingNote ?? "No season line posted yet."}`;
 
       return {
         data: {
+          options,
+          selectedGamePk: selectedGame.gamePk,
           game: {
-            gameId: String(game.gamePk),
-            gamePk: game.gamePk,
-            gameTime: game.gameDate,
-            officialDate: game.officialDate,
-            status: game.status.detailedState,
+            gameId: String(selectedGame.gamePk),
+            gamePk: selectedGame.gamePk,
+            gameTime: selectedGame.gameDate,
+            officialDate: selectedGame.officialDate,
+            status: selectedGame.status.detailedState,
+            gameType: selectedGame.gameType,
+            gameTypeLabel: gameTypeLabel(selectedGame.gameType),
             homeTeam: { key: homeKey, name: homeRef.team.name, id: homeRef.team.id },
             awayTeam: { key: awayKey, name: awayRef.team.name, id: awayRef.team.id },
-            venue: game.venue?.name,
-            seriesDescription: game.seriesDescription,
+            venue: selectedGame.venue?.name,
+            seriesDescription: selectedGame.seriesDescription,
           },
           pitchers: {
-            away: buildPitcherInfo(awayRef.probablePitcher, awayStats),
-            home: buildPitcherInfo(homeRef.probablePitcher, homeStats),
+            away: awayPitcher,
+            home: homePitcher,
           },
+          scoutingSummary,
+          advancedSummary,
         },
-        meta: asMeta(result.meta),
+        meta: scheduleResult.meta,
       };
     } catch (error) {
       return { data: null, meta: errorMeta("getStartingPitcherMatchup", error, dm) };
     }
   },
-
   async getTodaysSchedule(dataMode, cacheBust) {
     const dm = resolveDataMode(dataMode);
     const today = todayISO();
@@ -1228,6 +1937,8 @@ export const mlbProvider: MlbProvider = {
           opponent: opponent.name,
           opponentKey,
           homeAway: (isHome ? "home" : "away") as "home" | "away",
+          gameType: game.gameType,
+          gameTypeLabel: gameTypeLabel(game.gameType),
           result,
           teamScore: teamScore ?? null,
           opponentScore: opponentScore ?? null,
@@ -1431,7 +2142,6 @@ export const mlbProvider: MlbProvider = {
     if (!teamId) return { data: null, meta: unknownTeamMeta(teamKey, dm) };
 
     try {
-      // Fetch next scheduled game for the team
       const startDate = todayISO();
       const endDate = addDays(startDate, 7);
       const schedResult = await fetchMlbJson<MlbScheduleResponse>({
@@ -1443,7 +2153,9 @@ export const mlbProvider: MlbProvider = {
         cacheBust,
       });
 
-      const games = flattenSchedule(schedResult.data);
+      const games = flattenSchedule(schedResult.data).filter(
+        (game) => game.status.abstractGameState !== "Final",
+      );
       const nextGame = games[0];
       if (!nextGame) {
         return {
@@ -1457,7 +2169,6 @@ export const mlbProvider: MlbProvider = {
       const homeKey = MLB_TEAM_ABBREVS[homeRef.team.id] ?? abbrevFromName(homeRef.team.name);
       const awayKey = MLB_TEAM_ABBREVS[awayRef.team.id] ?? abbrevFromName(awayRef.team.name);
 
-      // Fetch pitcher splits concurrently
       async function fetchSplits(pitcherId: number): Promise<MlbPitcherSplits> {
         try {
           const res = await fetchMlbJson<MlbPitcherSplitsResponse>({
@@ -1466,6 +2177,7 @@ export const mlbProvider: MlbProvider = {
             fixtureFile: "pitcher_splits.json",
             ttlSeconds: 3600,
             dataMode: dm,
+            cacheBust,
           });
           const group = res.data.stats?.find(
             (s) => s.group?.displayName?.toLowerCase() === "pitching",
@@ -1474,64 +2186,95 @@ export const mlbProvider: MlbProvider = {
           const vl = splits.find((s) => s.split?.code === "vl");
           const vr = splits.find((s) => s.split?.code === "vr");
           return {
-            vsLeft: vl ? {
-              era: vl.stat?.era,
-              whip: vl.stat?.whip,
-              avg: vl.stat?.avg,
-              ops: vl.stat?.ops,
-              sample: vl.stat?.battersFaced,
-            } : null,
-            vsRight: vr ? {
-              era: vr.stat?.era,
-              whip: vr.stat?.whip,
-              avg: vr.stat?.avg,
-              ops: vr.stat?.ops,
-              sample: vr.stat?.battersFaced,
-            } : null,
+            vsLeft: vl
+              ? {
+                  era: vl.stat?.era,
+                  whip: vl.stat?.whip,
+                  avg: vl.stat?.avg,
+                  ops: vl.stat?.ops,
+                  sample: vl.stat?.battersFaced,
+                }
+              : null,
+            vsRight: vr
+              ? {
+                  era: vr.stat?.era,
+                  whip: vr.stat?.whip,
+                  avg: vr.stat?.avg,
+                  ops: vr.stat?.ops,
+                  sample: vr.stat?.battersFaced,
+                }
+              : null,
           };
         } catch {
           return { vsLeft: null, vsRight: null };
         }
       }
 
-      const [homeSplits, awaySplits] = await Promise.all([
-        homeRef.probablePitcher ? fetchSplits(homeRef.probablePitcher.id) : Promise.resolve({ vsLeft: null, vsRight: null }),
-        awayRef.probablePitcher ? fetchSplits(awayRef.probablePitcher.id) : Promise.resolve({ vsLeft: null, vsRight: null }),
-      ]);
+      const [homeSplits, awaySplits, homeThrowingHand, awayThrowingHand, awayLineup, homeLineup] =
+        await Promise.all([
+          homeRef.probablePitcher ? fetchSplits(homeRef.probablePitcher.id) : Promise.resolve({ vsLeft: null, vsRight: null }),
+          awayRef.probablePitcher ? fetchSplits(awayRef.probablePitcher.id) : Promise.resolve({ vsLeft: null, vsRight: null }),
+          homeRef.probablePitcher
+            ? fetchPitcherThrowingHand(homeRef.probablePitcher.id, dm, cacheBust)
+            : Promise.resolve(undefined),
+          awayRef.probablePitcher
+            ? fetchPitcherThrowingHand(awayRef.probablePitcher.id, dm, cacheBust)
+            : Promise.resolve(undefined),
+          fetchTeamLineupHandedness(awayRef.team.id, dm, cacheBust),
+          fetchTeamLineupHandedness(homeRef.team.id, dm, cacheBust),
+        ]);
 
-      // Compute advantage score
-      // Positive = home advantage, negative = away advantage
-      let advantageScore = 0;
-      let explanation = "Platoon splits are not available for one or both starters.";
+      const homeAnalysis = homeRef.probablePitcher
+        ? summarizeHandednessMatchup(
+            homeRef.probablePitcher.fullName,
+            homeRef.probablePitcher.pitchHand?.code ?? homeThrowingHand,
+            awayKey,
+            awayLineup.lineupHandedness,
+            awayLineup.lineupSummary,
+          )
+        : null;
+      const awayAnalysis = awayRef.probablePitcher
+        ? summarizeHandednessMatchup(
+            awayRef.probablePitcher.fullName,
+            awayRef.probablePitcher.pitchHand?.code ?? awayThrowingHand,
+            homeKey,
+            homeLineup.lineupHandedness,
+            homeLineup.lineupSummary,
+          )
+        : null;
 
-      const homeEraVsL = parseFloat(homeSplits.vsLeft?.era ?? "NaN");
-      const homeEraVsR = parseFloat(homeSplits.vsRight?.era ?? "NaN");
-      const awayEraVsL = parseFloat(awaySplits.vsLeft?.era ?? "NaN");
-      const awayEraVsR = parseFloat(awaySplits.vsRight?.era ?? "NaN");
-
+      const homeEraVsL = Number.parseFloat(homeSplits.vsLeft?.era ?? "NaN");
+      const homeEraVsR = Number.parseFloat(homeSplits.vsRight?.era ?? "NaN");
+      const awayEraVsL = Number.parseFloat(awaySplits.vsLeft?.era ?? "NaN");
+      const awayEraVsR = Number.parseFloat(awaySplits.vsRight?.era ?? "NaN");
       const homeHasSplits = !Number.isNaN(homeEraVsL) && !Number.isNaN(homeEraVsR);
       const awayHasSplits = !Number.isNaN(awayEraVsL) && !Number.isNaN(awayEraVsR);
 
+      let analysisMode: MlbPlatoonAdvantage["analysisMode"] = "handedness";
+      let advantageScore = 0;
+      let explanation =
+        (homeKey === teamKey ? homeAnalysis?.summary : awayAnalysis?.summary) ??
+        "Split data is unavailable, so this is using handedness context instead.";
+
       if (homeHasSplits || awayHasSplits) {
-        // Home pitcher: positive gap means they dominate lefties more than righties
-        const homeGap = homeHasSplits ? homeEraVsR - homeEraVsL : 0; // positive = better vs L
-        // Away pitcher: positive gap means they dominate lefties more than righties
-        const awayGap = awayHasSplits ? awayEraVsR - awayEraVsL : 0; // positive = better vs L
-
-        // If home pitcher is better vs L (homeGap > 0) it favors home (away batters skew L)
-        // If away pitcher is better vs L (awayGap > 0) it favors away (home batters skew L)
+        analysisMode = "splits";
+        const homeGap = homeHasSplits ? homeEraVsR - homeEraVsL : 0;
+        const awayGap = awayHasSplits ? awayEraVsR - awayEraVsL : 0;
         advantageScore = Math.round((homeGap - awayGap) * 10) / 10;
-
-        const homeThrows = homeRef.probablePitcher?.pitchHand?.code ?? "?";
-        const awayThrows = awayRef.probablePitcher?.pitchHand?.code ?? "?";
-
         if (Math.abs(advantageScore) < 0.3) {
-          explanation = `${homeRef.team.name} (${homeThrows}HP) and ${awayRef.team.name} (${awayThrows}HP) starters show similar platoon splits — no clear advantage.`;
+          explanation = `${homeRef.team.name} and ${awayRef.team.name} have similar starter split profiles for this matchup.`;
         } else if (advantageScore > 0) {
-          explanation = `${homeRef.team.name}'s starter (${homeThrows}HP) has a stronger platoon edge vs left-handed batters (ERA vs L: ${homeSplits.vsLeft?.era ?? "-"} vs R: ${homeSplits.vsRight?.era ?? "-"}), giving a slight home advantage.`;
+          explanation = `${homeRef.probablePitcher?.fullName ?? homeRef.team.name} shows the stronger split edge, so this leans slightly toward the home side.`;
         } else {
-          explanation = `${awayRef.team.name}'s starter (${awayThrows}HP) has a stronger platoon edge vs left-handed batters (ERA vs L: ${awaySplits.vsLeft?.era ?? "-"} vs R: ${awaySplits.vsRight?.era ?? "-"}), giving a slight away advantage.`;
+          explanation = `${awayRef.probablePitcher?.fullName ?? awayRef.team.name} shows the stronger split edge, so this leans slightly toward the away side.`;
         }
+      } else {
+        const edgeToScore = (side: "home" | "away", edge: "pitcher" | "hitter" | "neutral" | "unknown" | undefined): number => {
+          if (!edge || edge === "neutral" || edge === "unknown") return 0;
+          if (side === "home") return edge === "pitcher" ? 0.5 : -0.5;
+          return edge === "pitcher" ? -0.5 : 0.5;
+        };
+        advantageScore = edgeToScore("home", homeAnalysis?.edge) + edgeToScore("away", awayAnalysis?.edge);
       }
 
       const advantage: "home" | "away" | "neutral" =
@@ -1541,16 +2284,15 @@ export const mlbProvider: MlbProvider = {
         ? {
             playerId: String(homeRef.probablePitcher.id),
             fullName: homeRef.probablePitcher.fullName,
-            throwsHand: homeRef.probablePitcher.pitchHand?.code ?? "?",
+            throwsHand: homeRef.probablePitcher.pitchHand?.code ?? homeThrowingHand ?? "?",
             splits: homeSplits,
           }
         : null;
-
       const awayPitcherData = awayRef.probablePitcher
         ? {
             playerId: String(awayRef.probablePitcher.id),
             fullName: awayRef.probablePitcher.fullName,
-            throwsHand: awayRef.probablePitcher.pitchHand?.code ?? "?",
+            throwsHand: awayRef.probablePitcher.pitchHand?.code ?? awayThrowingHand ?? "?",
             splits: awaySplits,
           }
         : null;
@@ -1569,6 +2311,35 @@ export const mlbProvider: MlbProvider = {
           advantage,
           advantageScore,
           explanation,
+          analysisMode,
+          handednessAnalyses: [
+            homeAnalysis
+              ? {
+                  pitcherTeamKey: homeKey,
+                  lineupTeamKey: awayKey,
+                  pitcherName: homeRef.probablePitcher?.fullName ?? homeRef.team.name,
+                  pitcherHand: homeRef.probablePitcher?.pitchHand?.code ?? homeThrowingHand ?? "?",
+                  lineupHandedness: awayLineup.lineupHandedness,
+                  lineupSummary: awayLineup.lineupSummary,
+                  edge: homeAnalysis.edge,
+                  summary: homeAnalysis.summary,
+                  reasoning: homeAnalysis.reasoning,
+                }
+              : null,
+            awayAnalysis
+              ? {
+                  pitcherTeamKey: awayKey,
+                  lineupTeamKey: homeKey,
+                  pitcherName: awayRef.probablePitcher?.fullName ?? awayRef.team.name,
+                  pitcherHand: awayRef.probablePitcher?.pitchHand?.code ?? awayThrowingHand ?? "?",
+                  lineupHandedness: homeLineup.lineupHandedness,
+                  lineupSummary: homeLineup.lineupSummary,
+                  edge: awayAnalysis.edge,
+                  summary: awayAnalysis.summary,
+                  reasoning: awayAnalysis.reasoning,
+                }
+              : null,
+          ].filter((value): value is NonNullable<MlbPlatoonAdvantage["handednessAnalyses"][number]> => Boolean(value)),
         },
         meta: asMeta(schedResult.meta),
       };
@@ -1576,7 +2347,6 @@ export const mlbProvider: MlbProvider = {
       return { data: null, meta: errorMeta("getPlatoonAdvantage", error, dm) };
     }
   },
-
   async getRecentForm(teamKey, dataMode, cacheBust) {
     const dm = resolveDataMode(dataMode);
     const teamId = MLB_TEAM_IDS[teamKey];
@@ -1595,7 +2365,6 @@ export const mlbProvider: MlbProvider = {
         cacheBust,
       });
 
-      // Flatten all games with linescore support
       type LinescoreGame = MlbGameEntry & {
         linescore?: {
           teams?: {
@@ -1605,12 +2374,10 @@ export const mlbProvider: MlbProvider = {
         };
       };
       const allGames: LinescoreGame[] = (result.data.dates ?? [])
-        .flatMap((d) => d.games as LinescoreGame[])
+        .flatMap((dateEntry) => dateEntry.games as LinescoreGame[])
         .sort((a, b) => new Date(a.gameDate).getTime() - new Date(b.gameDate).getTime());
+      const finalGames = allGames.filter((game) => game.status.abstractGameState === "Final");
 
-      const finalGames = allGames.filter((g) => g.status.abstractGameState === "Final");
-
-      // Determine team name
       const firstGame = allGames[0];
       const teamName = firstGame
         ? firstGame.teams.home.team.id === teamId
@@ -1618,52 +2385,49 @@ export const mlbProvider: MlbProvider = {
           : firstGame.teams.away.team.name
         : teamKey;
 
-      const today = endDate;
-
       function computePeriod(days: number): MlbFormPeriod {
-        const cutoff = addDays(today, -days);
-        const games = finalGames.filter((g) => g.officialDate >= cutoff && g.officialDate <= today);
+        const cutoff = addDays(endDate, -days);
+        const games = finalGames.filter((game) => game.officialDate >= cutoff && game.officialDate <= endDate);
         let wins = 0;
         let losses = 0;
         let runsScored = 0;
         let runsAllowed = 0;
 
-        for (const g of games) {
-          const isHome = g.teams.home.team.id === teamId;
-          // Prefer linescore runs, fall back to score
+        for (const game of games) {
+          const isHome = game.teams.home.team.id === teamId;
           const teamRuns = isHome
-            ? (g.linescore?.teams?.home?.runs ?? g.teams.home.score ?? 0)
-            : (g.linescore?.teams?.away?.runs ?? g.teams.away.score ?? 0);
+            ? (game.linescore?.teams?.home?.runs ?? game.teams.home.score ?? 0)
+            : (game.linescore?.teams?.away?.runs ?? game.teams.away.score ?? 0);
           const oppRuns = isHome
-            ? (g.linescore?.teams?.away?.runs ?? g.teams.away.score ?? 0)
-            : (g.linescore?.teams?.home?.runs ?? g.teams.home.score ?? 0);
-
+            ? (game.linescore?.teams?.away?.runs ?? game.teams.away.score ?? 0)
+            : (game.linescore?.teams?.home?.runs ?? game.teams.home.score ?? 0);
           runsScored += teamRuns;
           runsAllowed += oppRuns;
-          if (teamRuns > oppRuns) wins++;
-          else losses++;
+          if (teamRuns > oppRuns) wins += 1;
+          else losses += 1;
         }
 
-        const total = wins + losses;
-        const winPct = total > 0 ? wins / total : 0;
+        const totalGames = wins + losses;
+        const winPct = totalGames > 0 ? wins / totalGames : 0;
+        const runDiff = runsScored - runsAllowed;
         return {
           days,
           wins,
           losses,
           runsScored,
           runsAllowed,
-          runDiff: runsScored - runsAllowed,
+          runDiff,
           winPct: Math.round(winPct * 1000) / 1000,
+          games: totalGames,
+          runDiffPerGame: totalGames > 0 ? Math.round((runDiff / totalGames) * 10) / 10 : 0,
         };
       }
 
       const last7 = computePeriod(7);
       const last14 = computePeriod(14);
       const last30 = computePeriod(30);
-
       const weightedWinPct =
         Math.round((0.5 * last7.winPct + 0.3 * last14.winPct + 0.2 * last30.winPct) * 1000) / 1000;
-
       const rating: MlbRecentForm["rating"] =
         weightedWinPct >= 0.6
           ? "hot"
@@ -1672,17 +2436,53 @@ export const mlbProvider: MlbProvider = {
           : weightedWinPct >= 0.4
           ? "cool"
           : "cold";
-
       const ratingScore = Math.round(weightedWinPct * 100);
 
+      const gameTypeCounts = finalGames.reduce(
+        (acc, game) => {
+          const key = game.gameType === "S" ? "S" : game.gameType === "R" ? "R" : "other";
+          acc[key] += 1;
+          return acc;
+        },
+        { R: 0, S: 0, other: 0 },
+      );
+      const primaryGameType: MlbRecentForm["primaryGameType"] =
+        gameTypeCounts.S > 0 && gameTypeCounts.R === 0
+          ? "S"
+          : gameTypeCounts.R > 0 && gameTypeCounts.S === 0
+          ? "R"
+          : gameTypeCounts.R > 0 || gameTypeCounts.S > 0
+          ? "mixed"
+          : "unknown";
+      const primaryGameTypeLabel =
+        primaryGameType === "S"
+          ? "Spring Training"
+          : primaryGameType === "R"
+          ? "Regular Season"
+          : primaryGameType === "mixed"
+          ? "Mixed sample"
+          : "No recent sample";
+      const sampleContext =
+        primaryGameType === "S"
+          ? `This is based on Spring Training ${MLB_SEASON} results from the last 7, 14, and 30 days.`
+          : primaryGameType === "R"
+          ? `This is based on Regular Season ${MLB_SEASON} results from the last 7, 14, and 30 days.`
+          : primaryGameType === "mixed"
+          ? `This blends Spring Training and Regular Season games from the last 7, 14, and 30 days.`
+          : `No completed games were found in the last 30 days.`;
+
+      const runDiffPhrase =
+        last7.runDiffPerGame > 0
+          ? `outscoring opponents by ${Math.abs(last7.runDiffPerGame).toFixed(1)} runs per game`
+          : last7.runDiffPerGame < 0
+          ? `being outscored by ${Math.abs(last7.runDiffPerGame).toFixed(1)} runs per game`
+          : `playing even in run differential`;
+      const stretchLabel =
+        rating === "hot" ? "hot stretch" : rating === "warm" ? "steady stretch" : rating === "cool" ? "cool stretch" : "cold stretch";
       const explanation =
-        rating === "hot"
-          ? `${teamName} is on fire — ${last7.wins}-${last7.losses} over the last 7 days with a +${last7.runDiff} run differential.`
-          : rating === "warm"
-          ? `${teamName} is playing solid ball — ${last7.wins}-${last7.losses} in the last 7 days.`
-          : rating === "cool"
-          ? `${teamName} is struggling a bit — ${last7.wins}-${last7.losses} over the last 7 days.`
-          : `${teamName} is in a cold stretch — ${last7.wins}-${last7.losses} over the last 7 days with a ${last7.runDiff} run differential.`;
+        last7.games > 0
+          ? `${teamName} have gone ${last7.wins}-${last7.losses} in their last ${last7.games} game${last7.games === 1 ? "" : "s"} over the last ${last7.days} days and are ${runDiffPhrase}. They are in a ${stretchLabel}${primaryGameType === "S" ? " heading into the season" : " right now"}.`
+          : `${teamName} have not played a completed game in the last 7 days, so there is not a short-term form read yet.`;
 
       return {
         data: {
@@ -1695,6 +2495,9 @@ export const mlbProvider: MlbProvider = {
           last14,
           last30,
           explanation,
+          sampleContext,
+          primaryGameType,
+          primaryGameTypeLabel,
         },
         meta: asMeta(result.meta),
       };
@@ -1702,14 +2505,12 @@ export const mlbProvider: MlbProvider = {
       return { data: null, meta: errorMeta("getRecentForm", error, dm) };
     }
   },
-
   async getBullpenFatigue(teamKey, dataMode, cacheBust) {
     const dm = resolveDataMode(dataMode);
     const teamId = MLB_TEAM_IDS[teamKey];
     if (!teamId) return { data: null, meta: unknownTeamMeta(teamKey, dm) };
 
     try {
-      // Fetch active roster
       const rosterResult = await fetchMlbJson<MlbRosterResponse>({
         endpoint: `/teams/${teamId}/roster`,
         params: { rosterType: "active", season: MLB_SEASON },
@@ -1719,118 +2520,164 @@ export const mlbProvider: MlbProvider = {
         cacheBust,
       });
 
-      const roster = rosterResult.data.roster ?? [];
-      const teamName =
-        roster.length > 0
-          ? (roster[0]?.person?.fullName ? teamKey : teamKey) // We'll derive from team ID
-          : teamKey;
-
-      // Filter to pitchers only
+      const roster = (rosterResult.data.roster ?? []).filter((player) => player.status?.code === "A");
       const pitchers = roster.filter(
-        (p) =>
-          p.position?.type === "Pitcher" || p.position?.abbreviation === "P",
+        (player) => player.position?.type === "Pitcher" || player.position?.abbreviation === "P",
+      );
+      const today = new Date(`${todayISO()}T12:00:00Z`);
+
+      const recentSchedule = await fetchMlbJson<MlbScheduleResponse>({
+        endpoint: "/schedule",
+        params: { sportId: 1, teamId, startDate: addDays(todayISO(), -10), endDate: todayISO(), gameType: "R,S" },
+        fixtureFile: "recent_form_schedule.json",
+        ttlSeconds: 300,
+        dataMode: dm,
+        cacheBust,
+      });
+      const recentGames = flattenSchedule(recentSchedule.data)
+        .filter((game) => game.status.abstractGameState === "Final")
+        .sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime())
+        .slice(0, 7);
+      const recentBoxscores = await Promise.all(
+        recentGames.map((game) => fetchBoxscore(game.gamePk, dm, cacheBust)),
       );
 
-      const today = new Date(todayISO());
+      const pitcherSnapshots = await Promise.all(
+        pitchers.map(async (pitcher) => {
+          const pitcherId = pitcher.person?.id ?? 0;
+          const [seasonSummary, gameLog] = await Promise.all([
+            fetchPitcherSeasonSummary(pitcherId, dm, cacheBust),
+            fetchPitcherGameLog(pitcherId, dm, cacheBust),
+          ]);
+          const recentSplits = (gameLog.splits ?? [])
+            .filter((split) => {
+              if (!split.date) return false;
+              const gameDate = new Date(`${split.date}T12:00:00Z`);
+              const diffDays = (today.getTime() - gameDate.getTime()) / (1000 * 60 * 60 * 24);
+              return diffDays >= 0 && diffDays <= 5;
+            })
+            .sort(
+              (a, b) =>
+                new Date(`${b.date ?? "1970-01-01"}T12:00:00Z`).getTime() -
+                new Date(`${a.date ?? "1970-01-01"}T12:00:00Z`).getTime(),
+            );
+          const lastAppearance = recentSplits[0];
+          const lastAppearanceDate = lastAppearance?.date ?? null;
+          const lastAppearancePitches = pitchCountFromStat(lastAppearance?.stat) ?? null;
+          const lastAppearanceStrikes = strikesFromStat(lastAppearance?.stat) ?? null;
+          const daysRest = lastAppearanceDate
+            ? Math.floor((today.getTime() - new Date(`${lastAppearanceDate}T12:00:00Z`).getTime()) / (1000 * 60 * 60 * 24))
+            : 99;
+          let fatigue: MlbPitcherAvailability["fatigue"];
+          if (daysRest === 99) {
+            fatigue = "rested";
+          } else if (daysRest <= 1 && (lastAppearancePitches ?? 0) >= 30) {
+            fatigue = "fatigued";
+          } else if (daysRest <= 1) {
+            fatigue = "tired";
+          } else if (daysRest === 2) {
+            fatigue = "available";
+          } else if (daysRest <= 4) {
+            fatigue = "fresh";
+          } else {
+            fatigue = "rested";
+          }
 
-      // Fetch game logs concurrently for all pitchers
-      const gameLogResults = await Promise.all(
-        pitchers.map((pitcher) =>
-          fetchMlbJson<MlbGameLogResponse>({
-            endpoint: `/people/${pitcher.person?.id}/stats`,
-            params: { stats: "gameLog", group: "pitching", season: MLB_SEASON },
-            fixtureFile: "pitcher_game_log.json",
-            ttlSeconds: 900,
-            dataMode: dm,
-          }).catch(() => null),
-        ),
+          return {
+            playerId: String(pitcherId),
+            fullName: pitcher.person?.fullName ?? "Unknown",
+            seasonSummary,
+            gameLogSeason: gameLog.seasonUsed,
+            availability: {
+              playerId: String(pitcherId),
+              fullName: pitcher.person?.fullName ?? "Unknown",
+              fatigue,
+              daysRest,
+              lastAppearance: lastAppearanceDate,
+              lastAppearancePitches,
+              lastAppearanceStrikes,
+              inningsLastAppearance: lastAppearance?.stat?.inningsPitched ?? null,
+              seasonKPer9: seasonSummary?.kPer9,
+              seasonUsed: seasonSummary?.seasonUsed ?? gameLog.seasonUsed,
+              recentAppearances: recentSplits.map((split) => ({
+                date: split.date ?? "",
+                inningsPitched: split.stat?.inningsPitched ?? "0.0",
+                numberOfPitches: pitchCountFromStat(split.stat) ?? 0,
+                strikes: strikesFromStat(split.stat),
+              })),
+            } satisfies MlbPitcherAvailability,
+          };
+        }),
       );
 
-      const fatigueLevelOrder: Record<MlbRelieverFatigue["fatigue"], number> = {
+      const starterMap = new Map<string, MlbBullpenFatigue["starters"][number]>();
+      for (let index = 0; index < recentGames.length; index += 1) {
+        const game = recentGames[index];
+        const boxscore = recentBoxscores[index];
+        if (!boxscore) continue;
+        const isHome = game.teams.home.team.id === teamId;
+        const teamBox = isHome ? boxscore.teams?.home : boxscore.teams?.away;
+        const starter = extractStarterFromBoxscore(teamBox);
+        if (!starter) continue;
+        const starterId = String(starter.playerId);
+        if (starterMap.has(starterId)) continue;
+        const seasonSummary = pitcherSnapshots.find((snapshot) => snapshot.playerId === starterId)?.seasonSummary;
+        starterMap.set(starterId, {
+          playerId: starterId,
+          fullName: starter.fullName,
+          lastStartDate: game.officialDate,
+          daysRest: Math.floor((today.getTime() - new Date(`${game.officialDate}T12:00:00Z`).getTime()) / (1000 * 60 * 60 * 24)),
+          inningsLastStart: starter.outing?.inningsPitched ?? null,
+          pitchesLastStart: pitchCountFromStat(starter.outing) ?? null,
+          strikesLastStart: strikesFromStat(starter.outing) ?? null,
+          seasonKPer9: seasonSummary?.kPer9,
+          seasonUsed: seasonSummary?.seasonUsed,
+        });
+      }
+
+      const fallbackStarters = [...pitcherSnapshots]
+        .filter((snapshot) => !starterMap.has(snapshot.playerId))
+        .sort((a, b) => (b.seasonSummary?.gamesStarted ?? 0) - (a.seasonSummary?.gamesStarted ?? 0))
+        .slice(0, Math.max(0, 5 - starterMap.size));
+      for (const snapshot of fallbackStarters) {
+        starterMap.set(snapshot.playerId, {
+          playerId: snapshot.playerId,
+          fullName: snapshot.fullName,
+          lastStartDate: snapshot.availability.lastAppearance,
+          daysRest: snapshot.availability.daysRest,
+          inningsLastStart: snapshot.availability.inningsLastAppearance ?? null,
+          pitchesLastStart: snapshot.availability.lastAppearancePitches,
+          strikesLastStart: snapshot.availability.lastAppearanceStrikes,
+          seasonKPer9: snapshot.seasonSummary?.kPer9,
+          seasonUsed: snapshot.seasonSummary?.seasonUsed ?? snapshot.gameLogSeason,
+        });
+      }
+
+      const fatigueOrder: Record<MlbPitcherAvailability["fatigue"], number> = {
         fatigued: 0,
         tired: 1,
         available: 2,
         fresh: 3,
         rested: 4,
       };
+      const starters = [...starterMap.values()].sort((a, b) => a.daysRest - b.daysRest);
+      const relievers = pitcherSnapshots
+        .filter((snapshot) => !starterMap.has(snapshot.playerId))
+        .map((snapshot) => snapshot.availability)
+        .sort((a, b) => fatigueOrder[a.fatigue] - fatigueOrder[b.fatigue]);
 
-      const relievers: MlbRelieverFatigue[] = pitchers.map((pitcher, idx) => {
-        const logResult = gameLogResults[idx];
-        const group = logResult?.data.stats?.find(
-          (s) => s.group?.displayName?.toLowerCase() === "pitching",
-        );
-        const splits = group?.splits ?? [];
-
-        // Filter to last 5 days
-        const recentSplits = splits
-          .filter((s) => {
-            if (!s.date) return false;
-            const gameDate = new Date(s.date);
-            const diffMs = today.getTime() - gameDate.getTime();
-            const diffDays = diffMs / (1000 * 60 * 60 * 24);
-            return diffDays >= 0 && diffDays <= 5;
-          })
-          .sort((a, b) => new Date(b.date ?? "").getTime() - new Date(a.date ?? "").getTime());
-
-        const recentAppearances = recentSplits.map((s) => ({
-          date: s.date ?? "",
-          inningsPitched: s.stat?.inningsPitched ?? "0.0",
-          numberOfPitches: s.stat?.numberOfPitches ?? 0,
-        }));
-
-        // Determine days rest
-        let daysRest = 999;
-        let lastAppearance: string | null = null;
-        let lastAppearancePitches: number | null = null;
-
-        if (recentSplits.length > 0) {
-          const last = recentSplits[0];
-          lastAppearance = last.date ?? null;
-          lastAppearancePitches = last.stat?.numberOfPitches ?? null;
-          if (lastAppearance) {
-            const lastDate = new Date(lastAppearance);
-            daysRest = Math.floor(
-              (today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
-            );
-          }
-        }
-
-        // Determine fatigue level
-        let fatigue: MlbRelieverFatigue["fatigue"];
-        if (daysRest === 999) {
-          fatigue = "rested";
-        } else if (daysRest <= 1 && (lastAppearancePitches ?? 0) >= 30) {
-          fatigue = "fatigued";
-        } else if (daysRest <= 1) {
-          fatigue = "tired";
-        } else if (daysRest === 2) {
-          fatigue = "available";
-        } else if (daysRest <= 4) {
-          fatigue = "fresh";
-        } else {
-          fatigue = "rested";
-        }
-
-        return {
-          playerId: String(pitcher.person?.id ?? ""),
-          fullName: pitcher.person?.fullName ?? "Unknown",
-          fatigue,
-          daysRest: daysRest === 999 ? 99 : daysRest,
-          lastAppearance,
-          lastAppearancePitches,
-          recentAppearances,
-        };
-      });
-
-      // Sort: fatigued first, rested last
-      relievers.sort(
-        (a, b) => fatigueLevelOrder[a.fatigue] - fatigueLevelOrder[b.fatigue],
-      );
+      const firstGame = recentGames[0];
+      const teamName = firstGame
+        ? firstGame.teams.home.team.id === teamId
+          ? firstGame.teams.home.team.name
+          : firstGame.teams.away.team.name
+        : teamKey;
 
       return {
         data: {
           teamKey,
           teamName,
+          starters,
           relievers,
           fetchedAt: nowISO(),
         },
@@ -1841,9 +2688,15 @@ export const mlbProvider: MlbProvider = {
     }
   },
 };
-
 // ---------------------------------------------------------------------------
-// Legacy alias — keeps any existing import of mlbProviderStub working
+// Legacy alias â€” keeps any existing import of mlbProviderStub working
 // ---------------------------------------------------------------------------
 /** @deprecated Use mlbProvider instead */
 export const mlbProviderStub = mlbProvider;
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
@@ -11,6 +11,8 @@ type FormPeriod = {
   runsAllowed: number;
   runDiff: number;
   winPct: number;
+  games: number;
+  runDiffPerGame: number;
 };
 
 type RecentForm = {
@@ -23,6 +25,9 @@ type RecentForm = {
   last14: FormPeriod;
   last30: FormPeriod;
   explanation: string;
+  sampleContext: string;
+  primaryGameType: "R" | "S" | "mixed" | "unknown";
+  primaryGameTypeLabel: string;
 };
 
 function to12h(value: string): string {
@@ -46,11 +51,11 @@ function RatingBadge({ rating }: { rating: RecentForm["rating"] }) {
   );
 }
 
-function trendArrow(period7WinPct: number, period30WinPct: number): string {
-  const diff = period7WinPct - period30WinPct;
-  if (diff > 0.05) return "↑";
-  if (diff < -0.05) return "↓";
-  return "→";
+function trendLabel(periodWinPct: number, baselineWinPct: number): string {
+  const diff = periodWinPct - baselineWinPct;
+  if (diff > 0.05) return "^ Up";
+  if (diff < -0.05) return "v Down";
+  return "= Flat";
 }
 
 export default function MlbRecentFormWidget(props: WidgetCommonProps) {
@@ -70,7 +75,7 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
         meta?: WidgetMeta;
         error?: string;
       };
-      if (!res.ok) throw new Error(json.error ?? "Failed to load form data");
+      if (!res.ok) throw new Error(json.error ?? "Failed to load recent form data");
       return { data: json.data ?? null, meta: json.meta ?? null };
     },
     [props.dataMode],
@@ -146,53 +151,38 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
             <RatingBadge rating={data.rating} />
           </div>
 
-          <p className="text-neutral-300">{data.explanation}</p>
-
-          {/* Beginner: last 7 W-L */}
           {!advanced && (
-            <div className="rounded border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-neutral-500 text-[10px] uppercase mb-1">Last 7 Days</p>
-              <p className="font-medium">
-                {data.last7.wins}W - {data.last7.losses}L
-              </p>
-              <p className="text-neutral-400">
-                Run Diff: {data.last7.runDiff >= 0 ? "+" : ""}{data.last7.runDiff}
-              </p>
+            <div className="space-y-1 rounded border border-neutral-800 bg-neutral-950 p-2">
+              <p className="text-neutral-300">Recent form looks at wins, losses, and run differential over the last 7, 14, and 30 days of games.</p>
+              <p className="text-neutral-100">{data.explanation}</p>
+              <p className="text-neutral-500">{data.sampleContext}</p>
             </div>
           )}
 
-          {/* Advanced: all three periods */}
           {advanced && (
-            <div className="space-y-1">
+            <div className="space-y-2 rounded border border-neutral-800 bg-neutral-950 p-2">
+              <p className="text-neutral-300">Recent form based on the last 7, 14, and 30 days of games.</p>
+              <p className="text-neutral-500">{data.sampleContext}</p>
               <div className="grid grid-cols-5 gap-1 text-[10px] text-neutral-500">
                 <span>Period</span>
                 <span className="text-right">W-L</span>
-                <span className="text-right">R-Diff</span>
+                <span className="text-right">R/G Diff</span>
                 <span className="text-right">Win%</span>
                 <span className="text-right">Trend</span>
               </div>
-              {[data.last7, data.last14, data.last30].map((p) => (
-                <div
-                  key={p.days}
-                  className="grid grid-cols-5 gap-1 rounded border border-neutral-800 bg-neutral-950 p-1.5"
-                >
-                  <span className="text-neutral-400">L{p.days}</span>
-                  <span className="text-right">
-                    {p.wins}-{p.losses}
+              {[data.last7, data.last14, data.last30].map((period) => (
+                <div key={period.days} className="grid grid-cols-5 gap-1 rounded border border-neutral-800 p-1.5">
+                  <span className="text-neutral-400">L{period.days}</span>
+                  <span className="text-right">{period.wins}-{period.losses}</span>
+                  <span className={`text-right ${period.runDiffPerGame >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {period.runDiffPerGame >= 0 ? "+" : ""}{period.runDiffPerGame.toFixed(1)}
                   </span>
-                  <span className={`text-right ${p.runDiff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {p.runDiff >= 0 ? "+" : ""}{p.runDiff}
-                  </span>
-                  <span className="text-right text-neutral-300">
-                    {(p.winPct * 100).toFixed(1)}%
-                  </span>
-                  <span className="text-right">
-                    {p.days === 7 ? trendArrow(data.last7.winPct, data.last30.winPct) : ""}
-                  </span>
+                  <span className="text-right text-neutral-300">{(period.winPct * 100).toFixed(1)}%</span>
+                  <span className="text-right text-neutral-300">{trendLabel(period.winPct, data.last30.winPct)}</span>
                 </div>
               ))}
-              <p className="text-[10px] text-neutral-600">
-                Weighted win%: {(data.weightedWinPct * 100).toFixed(1)}% (50% L7 + 30% L14 + 20% L30)
+              <p className="text-[10px] text-neutral-500">
+                Trend compares each window to the 30-day baseline: `^ Up` means better than the 30-day sample, `v Down` means worse, and `= Flat` means roughly unchanged.
               </p>
             </div>
           )}
@@ -200,8 +190,7 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
       )}
 
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
-        {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
       <button
         type="button"

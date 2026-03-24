@@ -1,10 +1,185 @@
-{
+﻿{
   "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
-  "totalItems": 4,
+  "totalItems": 9,
   "totalEvents": 0,
-  "totalGames": 4,
+  "totalGames": 9,
   "totalGamesInProgress": 0,
   "dates": [
+    {
+      "date": "2026-03-18",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823630,
+          "gameDate": "2026-03-18T17:10:00Z",
+          "officialDate": "2026-03-18",
+          "gameType": "S",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "statusCode": "F",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 138, "name": "St. Louis Cardinals" },
+              "leagueRecord": { "wins": 12, "losses": 10, "pct": ".545" },
+              "score": 7
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 9, "losses": 12, "pct": ".429" },
+              "score": 5
+            }
+          },
+          "venue": { "id": 2856, "name": "Clover Park" },
+          "seriesDescription": "Spring Training",
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-19",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823632,
+          "gameDate": "2026-03-19T17:10:00Z",
+          "officialDate": "2026-03-19",
+          "gameType": "S",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "statusCode": "F",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 9, "losses": 13, "pct": ".409" },
+              "score": 3
+            },
+            "home": {
+              "team": { "id": 146, "name": "Miami Marlins" },
+              "leagueRecord": { "wins": 11, "losses": 10, "pct": ".524" },
+              "score": 4
+            }
+          },
+          "venue": { "id": 4169, "name": "Roger Dean Chevrolet Stadium" },
+          "seriesDescription": "Spring Training",
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-20",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823635,
+          "gameDate": "2026-03-20T18:10:00Z",
+          "officialDate": "2026-03-20",
+          "gameType": "S",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "statusCode": "F",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 120, "name": "Washington Nationals" },
+              "leagueRecord": { "wins": 10, "losses": 12, "pct": ".455" },
+              "score": 3
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 9, "losses": 14, "pct": ".391" },
+              "score": 1
+            }
+          },
+          "venue": { "id": 2856, "name": "Clover Park" },
+          "seriesDescription": "Spring Training",
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-21",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823638,
+          "gameDate": "2026-03-21T17:05:00Z",
+          "officialDate": "2026-03-21",
+          "gameType": "S",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "statusCode": "F",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 144, "name": "Atlanta Braves" },
+              "leagueRecord": { "wins": 13, "losses": 9, "pct": ".591" },
+              "score": 6
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 9, "losses": 15, "pct": ".375" },
+              "score": 2
+            }
+          },
+          "venue": { "id": 2856, "name": "Clover Park" },
+          "seriesDescription": "Spring Training",
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-22",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823640,
+          "gameDate": "2026-03-22T17:05:00Z",
+          "officialDate": "2026-03-22",
+          "gameType": "S",
+          "status": {
+            "abstractGameState": "Final",
+            "codedGameState": "F",
+            "detailedState": "Final",
+            "statusCode": "F",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 117, "name": "Houston Astros" },
+              "leagueRecord": { "wins": 14, "losses": 8, "pct": ".636" },
+              "score": 5
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 10, "losses": 15, "pct": ".400" },
+              "score": 6
+            }
+          },
+          "venue": { "id": 2856, "name": "Clover Park" },
+          "seriesDescription": "Spring Training",
+          "scheduledInnings": 9
+        }
+      ]
+    },
     {
       "date": "2026-03-26",
       "totalItems": 1,
@@ -14,6 +189,7 @@
           "gamePk": 823649,
           "gameDate": "2026-03-26T17:15:00Z",
           "officialDate": "2026-03-26",
+          "gameType": "R",
           "status": {
             "abstractGameState": "Preview",
             "codedGameState": "S",
@@ -24,11 +200,21 @@
           "teams": {
             "away": {
               "team": { "id": 134, "name": "Pittsburgh Pirates" },
-              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" },
+              "probablePitcher": {
+                "id": 695579,
+                "fullName": "Paul Skenes",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
             },
             "home": {
               "team": { "id": 121, "name": "New York Mets" },
-              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" },
+              "probablePitcher": {
+                "id": 673540,
+                "fullName": "Kodai Senga",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
             }
           },
           "venue": { "id": 3289, "name": "Citi Field" },
@@ -48,6 +234,7 @@
           "gamePk": 823650,
           "gameDate": "2026-03-27T17:15:00Z",
           "officialDate": "2026-03-27",
+          "gameType": "R",
           "status": {
             "abstractGameState": "Preview",
             "codedGameState": "S",
@@ -58,11 +245,21 @@
           "teams": {
             "away": {
               "team": { "id": 134, "name": "Pittsburgh Pirates" },
-              "leagueRecord": { "wins": 0, "losses": 1, "pct": ".000" }
+              "leagueRecord": { "wins": 0, "losses": 1, "pct": ".000" },
+              "probablePitcher": {
+                "id": 682630,
+                "fullName": "Jared Jones",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
             },
             "home": {
               "team": { "id": 121, "name": "New York Mets" },
-              "leagueRecord": { "wins": 1, "losses": 0, "pct": "1.000" }
+              "leagueRecord": { "wins": 1, "losses": 0, "pct": "1.000" },
+              "probablePitcher": {
+                "id": 605280,
+                "fullName": "Clay Holmes",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
             }
           },
           "venue": { "id": 3289, "name": "Citi Field" },
@@ -82,6 +279,7 @@
           "gamePk": 823652,
           "gameDate": "2026-03-28T16:10:00Z",
           "officialDate": "2026-03-28",
+          "gameType": "R",
           "status": {
             "abstractGameState": "Preview",
             "codedGameState": "S",
@@ -92,11 +290,21 @@
           "teams": {
             "away": {
               "team": { "id": 134, "name": "Pittsburgh Pirates" },
-              "leagueRecord": { "wins": 0, "losses": 2, "pct": ".000" }
+              "leagueRecord": { "wins": 0, "losses": 2, "pct": ".000" },
+              "probablePitcher": {
+                "id": 663559,
+                "fullName": "Bailey Falter",
+                "pitchHand": { "code": "L", "description": "Left" }
+              }
             },
             "home": {
               "team": { "id": 121, "name": "New York Mets" },
-              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }
+              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" },
+              "probablePitcher": {
+                "id": 656849,
+                "fullName": "David Peterson",
+                "pitchHand": { "code": "L", "description": "Left" }
+              }
             }
           },
           "venue": { "id": 3289, "name": "Citi Field" },
@@ -108,14 +316,15 @@
       ]
     },
     {
-      "date": "2026-03-31",
+      "date": "2026-03-30",
       "totalItems": 1,
       "totalGames": 1,
       "games": [
         {
-          "gamePk": 823660,
-          "gameDate": "2026-03-31T22:40:00Z",
-          "officialDate": "2026-03-31",
+          "gamePk": 823658,
+          "gameDate": "2026-03-30T22:10:00Z",
+          "officialDate": "2026-03-30",
+          "gameType": "R",
           "status": {
             "abstractGameState": "Preview",
             "codedGameState": "S",
@@ -126,11 +335,21 @@
           "teams": {
             "away": {
               "team": { "id": 121, "name": "New York Mets" },
-              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }
+              "leagueRecord": { "wins": 2, "losses": 1, "pct": ".667" },
+              "probablePitcher": {
+                "id": 642547,
+                "fullName": "Freddy Peralta",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
             },
             "home": {
               "team": { "id": 119, "name": "Los Angeles Dodgers" },
-              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }
+              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" },
+              "probablePitcher": {
+                "id": 808967,
+                "fullName": "Yoshinobu Yamamoto",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
             }
           },
           "venue": { "id": 22, "name": "Dodger Stadium" },

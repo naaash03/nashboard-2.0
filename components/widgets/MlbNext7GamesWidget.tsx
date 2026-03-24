@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
@@ -11,8 +11,15 @@ type GameEntry = {
   opponentKey: string;
   homeAway: "home" | "away";
   status: string;
+  gameType?: string;
+  gameTypeLabel?: string;
   venue?: string;
   seriesDescription?: string;
+  probableStarter?: {
+    playerId: string;
+    fullName: string;
+    throwsHand?: string;
+  } | null;
 };
 
 type NextGamesData = {
@@ -27,6 +34,8 @@ type RecentResult = {
   opponent: string;
   opponentKey: string;
   homeAway: "home" | "away";
+  gameType?: string;
+  gameTypeLabel?: string;
   result: "W" | "L" | null;
   teamScore: number | null;
   opponentScore: number | null;
@@ -45,14 +54,14 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function formatRecentResult(r: RecentResult): string {
-  const wl = r.result ?? "—";
+function formatRecentResult(result: RecentResult): string {
+  const wl = result.result ?? "-";
   const score =
-    r.teamScore !== null && r.opponentScore !== null
-      ? `${r.teamScore}-${r.opponentScore}`
-      : "—";
-  const loc = r.homeAway === "home" ? "vs" : "@";
-  return `${wl} ${score} ${loc} ${r.opponentKey}`;
+    result.teamScore !== null && result.opponentScore !== null
+      ? `${result.teamScore}-${result.opponentScore}`
+      : "-";
+  const loc = result.homeAway === "home" ? "vs" : "@";
+  return `${wl} ${score} ${loc} ${result.opponentKey}`;
 }
 
 export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
@@ -111,11 +120,9 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
         );
         if (!res.ok) return;
         const json = (await res.json()) as { data?: RecentResultsData | null };
-        if (!cancelled) {
-          setRecentResults(json.data ?? null);
-        }
+        if (!cancelled) setRecentResults(json.data ?? null);
       } catch {
-        // Recent results are supplemental — swallow errors
+        // Ignore supplemental recent result failures.
       }
     })();
     return () => {
@@ -167,23 +174,23 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
       {recentResults && recentResults.results.length > 0 && (
         <div className="space-y-1">
           <p className="text-[10px] uppercase tracking-wide text-neutral-500">Recent Results</p>
-          {recentResults.results.map((r) => (
-            <div
-              key={r.gamePk}
-              className="flex items-center justify-between rounded border border-neutral-800 bg-neutral-950 p-1.5"
-            >
-              <span
-                className={
-                  r.result === "W"
-                    ? "font-medium text-emerald-400"
-                    : r.result === "L"
-                    ? "font-medium text-red-400"
-                    : "text-neutral-400"
-                }
-              >
-                {formatRecentResult(r)}
-              </span>
-              <span className="text-neutral-500">{r.date}</span>
+          {recentResults.results.map((result) => (
+            <div key={result.gamePk} className="rounded border border-neutral-800 bg-neutral-950 p-1.5">
+              <div className="flex items-center justify-between">
+                <span
+                  className={
+                    result.result === "W"
+                      ? "font-medium text-emerald-400"
+                      : result.result === "L"
+                      ? "font-medium text-red-400"
+                      : "text-neutral-400"
+                  }
+                >
+                  {formatRecentResult(result)}
+                </span>
+                <span className="text-neutral-500">{result.date}</span>
+              </div>
+              <p className="text-[10px] text-neutral-500">{result.gameTypeLabel ?? "Season Unknown"}</p>
             </div>
           ))}
         </div>
@@ -196,10 +203,7 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
             <p className="text-neutral-400">No games in the next 7 days.</p>
           ) : (
             data.games.map((game) => (
-              <div
-                key={game.gamePk}
-                className="rounded border border-neutral-700 bg-neutral-950 p-1.5"
-              >
+              <div key={game.gamePk} className="rounded border border-neutral-700 bg-neutral-950 p-1.5">
                 <div className="flex items-center justify-between">
                   <span>
                     {game.homeAway === "home" ? "vs" : "@"} {game.opponentKey}
@@ -210,9 +214,16 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
                   <span>{to12h(game.gameTime)}</span>
                   <span>{game.status}</span>
                 </div>
-                {props.mode === "ADVANCED" && game.venue ? (
+                <p className="text-[10px] text-neutral-500">{game.gameTypeLabel ?? game.seriesDescription ?? "Season Unknown"}</p>
+                {props.mode === "ADVANCED" && game.probableStarter && (
+                  <p className="text-neutral-300">
+                    Probable starter: {game.probableStarter.fullName}
+                    {game.probableStarter.throwsHand ? ` (${game.probableStarter.throwsHand}HP)` : ""}
+                  </p>
+                )}
+                {props.mode === "ADVANCED" && game.venue && (
                   <p className="text-neutral-500">{game.venue}</p>
-                ) : null}
+                )}
               </div>
             ))
           )}
@@ -220,8 +231,7 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
       )}
 
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
-        {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
       <button
         type="button"

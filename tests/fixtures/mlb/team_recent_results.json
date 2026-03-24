@@ -1,56 +1,59 @@
-{
+﻿{
   "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
   "totalItems": 3,
   "totalGames": 3,
   "dates": [
     {
-      "date": "2026-03-22",
+      "date": "2026-03-17",
       "games": [
         {
-          "gamePk": 823640,
-          "gameDate": "2026-03-22T17:05:00Z",
-          "officialDate": "2026-03-22",
+          "gamePk": 823628,
+          "gameDate": "2026-03-17T17:05:00Z",
+          "officialDate": "2026-03-17",
+          "gameType": "S",
           "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
           "teams": {
-            "away": { "team": { "id": 144, "name": "Atlanta Braves" }, "leagueRecord": { "wins": 2, "losses": 1, "pct": ".667" }, "score": 3 },
-            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 3, "losses": 0, "pct": "1.000" }, "score": 7 }
+            "away": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 9, "losses": 12, "pct": ".429" }, "score": 3 },
+            "home": { "team": { "id": 146, "name": "Miami Marlins" }, "leagueRecord": { "wins": 10, "losses": 10, "pct": ".500" }, "score": 4 }
           },
-          "venue": { "id": 3289, "name": "Citi Field" },
-          "seriesDescription": "Regular Season"
+          "venue": { "id": 4169, "name": "Roger Dean Chevrolet Stadium" },
+          "seriesDescription": "Spring Training"
         }
       ]
     },
     {
-      "date": "2026-03-21",
+      "date": "2026-03-18",
       "games": [
         {
-          "gamePk": 823638,
-          "gameDate": "2026-03-21T17:05:00Z",
-          "officialDate": "2026-03-21",
+          "gamePk": 823630,
+          "gameDate": "2026-03-18T17:10:00Z",
+          "officialDate": "2026-03-18",
+          "gameType": "S",
           "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
           "teams": {
-            "away": { "team": { "id": 144, "name": "Atlanta Braves" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 5 },
-            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 2 }
+            "away": { "team": { "id": 138, "name": "St. Louis Cardinals" }, "leagueRecord": { "wins": 12, "losses": 10, "pct": ".545" }, "score": 7 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 9, "losses": 13, "pct": ".409" }, "score": 5 }
           },
-          "venue": { "id": 3289, "name": "Citi Field" },
-          "seriesDescription": "Regular Season"
+          "venue": { "id": 2856, "name": "Clover Park" },
+          "seriesDescription": "Spring Training"
         }
       ]
     },
     {
-      "date": "2026-03-20",
+      "date": "2026-03-19",
       "games": [
         {
-          "gamePk": 823635,
-          "gameDate": "2026-03-20T18:10:00Z",
-          "officialDate": "2026-03-20",
+          "gamePk": 823632,
+          "gameDate": "2026-03-19T18:10:00Z",
+          "officialDate": "2026-03-19",
+          "gameType": "S",
           "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
           "teams": {
-            "away": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 4 },
-            "home": { "team": { "id": 120, "name": "Washington Nationals" }, "leagueRecord": { "wins": 0, "losses": 2, "pct": ".000" }, "score": 1 }
+            "away": { "team": { "id": 120, "name": "Washington Nationals" }, "leagueRecord": { "wins": 10, "losses": 12, "pct": ".455" }, "score": 3 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 9, "losses": 14, "pct": ".391" }, "score": 1 }
           },
-          "venue": { "id": 3309, "name": "Nationals Park" },
-          "seriesDescription": "Regular Season"
+          "venue": { "id": 2856, "name": "Clover Park" },
+          "seriesDescription": "Spring Training"
         }
       ]
     }

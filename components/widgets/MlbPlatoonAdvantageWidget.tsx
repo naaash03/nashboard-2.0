@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
@@ -21,6 +21,18 @@ type PlatoonAdvantage = {
   advantage: "home" | "away" | "neutral";
   advantageScore: number;
   explanation: string;
+  analysisMode: "splits" | "handedness";
+  handednessAnalyses: Array<{
+    pitcherTeamKey: string;
+    lineupTeamKey: string;
+    pitcherName: string;
+    pitcherHand: string;
+    lineupHandedness: "left" | "right" | "balanced" | "unknown";
+    lineupSummary: string;
+    edge: "pitcher" | "hitter" | "neutral" | "unknown";
+    summary: string;
+    reasoning: string;
+  }>;
 };
 
 function to12h(value: string): string {
@@ -35,7 +47,7 @@ function AdvantageBadge({ advantage }: { advantage: "home" | "away" | "neutral" 
     away: "border-blue-500 bg-blue-950 text-blue-300",
     neutral: "border-neutral-600 bg-neutral-900 text-neutral-300",
   };
-  const labels = { home: "HOME ADVANTAGE", away: "AWAY ADVANTAGE", neutral: "NEUTRAL" };
+  const labels = { home: "HOME EDGE", away: "AWAY EDGE", neutral: "EVEN MATCHUP" };
   return (
     <span className={`rounded border px-2 py-0.5 text-[10px] font-medium uppercase ${colors[advantage]}`}>
       {labels[advantage]}
@@ -176,25 +188,29 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
             <p className="text-neutral-400">{data.game.officialDate}</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <AdvantageBadge advantage={data.advantage} />
-            {advanced && (
-              <span className="text-neutral-500">
-                Score: {data.advantageScore > 0 ? "+" : ""}{data.advantageScore}
-              </span>
-            )}
-          </div>
+          {data.analysisMode === "splits" ? (
+            <div className="flex items-center gap-2">
+              <AdvantageBadge advantage={data.advantage} />
+              {advanced && <span className="text-neutral-500">Score: {data.advantageScore > 0 ? "+" : ""}{data.advantageScore}</span>}
+            </div>
+          ) : (
+            <span className="rounded border border-amber-500 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
+              Handedness Read
+            </span>
+          )}
 
           <p className="text-neutral-300">{data.explanation}</p>
 
-          {advanced && (
+          {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 1 && (
+            <p className="text-neutral-500">{data.handednessAnalyses[0].reasoning}</p>
+          )}
+
+          {advanced && data.analysisMode === "splits" && (
             <div className="space-y-3 border-t border-neutral-800 pt-2">
               <p className="text-[10px] uppercase tracking-wide text-neutral-500">Pitcher Splits</p>
               {data.awayPitcher ? (
                 <div>
-                  <p className="text-[10px] text-neutral-500 uppercase mb-1">
-                    Away · {data.game.awayTeam.key}
-                  </p>
+                  <p className="mb-1 text-[10px] uppercase text-neutral-500">Away · {data.game.awayTeam.key}</p>
                   <SplitsTable pitcher={data.awayPitcher} />
                 </div>
               ) : (
@@ -202,9 +218,7 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
               )}
               {data.homePitcher ? (
                 <div>
-                  <p className="text-[10px] text-neutral-500 uppercase mb-1">
-                    Home · {data.game.homeTeam.key}
-                  </p>
+                  <p className="mb-1 text-[10px] uppercase text-neutral-500">Home · {data.game.homeTeam.key}</p>
                   <SplitsTable pitcher={data.homePitcher} />
                 </div>
               ) : (
@@ -212,12 +226,23 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
               )}
             </div>
           )}
+
+          {advanced && data.analysisMode === "handedness" && (
+            <div className="space-y-2 border-t border-neutral-800 pt-2">
+              <p className="text-[10px] uppercase tracking-wide text-neutral-500">Handedness Analysis</p>
+              {data.handednessAnalyses.map((analysis) => (
+                <div key={`${analysis.pitcherTeamKey}-${analysis.lineupTeamKey}`} className="rounded border border-neutral-800 bg-neutral-950 p-2">
+                  <p className="font-medium">{analysis.summary}</p>
+                  <p className="text-neutral-500">{analysis.reasoning}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
-        {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
       <button
         type="button"

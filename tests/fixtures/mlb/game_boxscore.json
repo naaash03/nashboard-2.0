@@ -1,0 +1,76 @@
+﻿{
+  "teams": {
+    "away": {
+      "pitchers": [669456, 621345],
+      "players": {
+        "ID669456": {
+          "person": { "id": 669456, "fullName": "Mitch Keller" },
+          "stats": {
+            "pitching": {
+              "inningsPitched": "5.1",
+              "numberOfPitches": 92,
+              "pitchesThrown": 92,
+              "strikes": 59,
+              "strikeOuts": 6,
+              "baseOnBalls": 2,
+              "earnedRuns": 2,
+              "era": "3.38"
+            }
+          },
+          "seasonStats": {
+            "pitching": {
+              "gamesStarted": 30,
+              "wins": 11,
+              "losses": 9,
+              "era": "3.82",
+              "whip": "1.21",
+              "inningsPitched": "184.0",
+              "strikeOuts": 183,
+              "baseOnBalls": 61,
+              "strikeoutsPer9Inn": "8.9",
+              "walksPer9Inn": "3.0"
+            }
+          }
+        }
+      }
+    },
+    "home": {
+      "pitchers": [673540, 642207, 621345],
+      "players": {
+        "ID673540": {
+          "person": { "id": 673540, "fullName": "Kodai Senga" },
+          "stats": {
+            "pitching": {
+              "inningsPitched": "5.0",
+              "numberOfPitches": 87,
+              "pitchesThrown": 87,
+              "strikes": 58,
+              "strikeOuts": 7,
+              "baseOnBalls": 2,
+              "earnedRuns": 1,
+              "era": "1.80"
+            }
+          },
+          "seasonStats": {
+            "pitching": {
+              "gamesStarted": 28,
+              "wins": 14,
+              "losses": 6,
+              "era": "2.98",
+              "whip": "1.04",
+              "inningsPitched": "181.2",
+              "strikeOuts": 219,
+              "baseOnBalls": 51,
+              "strikeoutsPer9Inn": "10.8",
+              "walksPer9Inn": "2.5"
+            }
+          }
+        }
+      }
+    }
+  },
+  "info": [
+    { "label": "T", "value": "2:49" },
+    { "label": "Venue", "value": "Citi Field" }
+  ]
+}

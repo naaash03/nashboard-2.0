@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PlayerYearStats = {
@@ -80,6 +80,15 @@ function to12h(value: string): string {
 }
 
 export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
+  const currentYear = new Date().getFullYear();
+  const yearOptions = useMemo(() => {
+    const years: number[] = [];
+    for (let year = currentYear; year >= 2020; year -= 1) {
+      years.push(year);
+    }
+    return years;
+  }, [currentYear]);
+
   const config = props.config as {
     tabMode?: "player" | "team";
     playerId?: string;
@@ -92,10 +101,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
   const [playerId, setPlayerId] = useState<string>(config.playerId ?? "");
   const [playerName, setPlayerName] = useState<string>(config.playerName ?? "");
   const [teamKey, setTeamKey] = useState<string>(config.teamKey ?? "");
-  const [season, setSeason] = useState<number>(config.season ?? new Date().getFullYear());
+  const [season, setSeason] = useState<number>(config.season ?? currentYear);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<PlayerSearchResult[]>([]);
-
   const [playerStats, setPlayerStats] = useState<PlayerSeasonStats | null>(null);
   const [teamStats, setTeamStats] = useState<TeamSeasonStats | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
@@ -121,8 +129,8 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
         if (!res.ok) throw new Error(json.error ?? "Failed to load player stats");
         setPlayerStats(json.data ?? null);
         setMeta(json.meta ?? null);
-      } catch (err) {
-        setWarning(String(err));
+      } catch (error) {
+        setWarning(String(error));
       } finally {
         setLoading(false);
       }
@@ -131,12 +139,12 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
   );
 
   const loadTeamStats = useCallback(
-    async (key: string, yr: number) => {
+    async (key: string, year: number) => {
       setLoading(true);
       setWarning(null);
       try {
         const res = await fetch(
-          `/api/widgets/mlb-season-stats?mode=team&teamKey=${encodeURIComponent(key)}&season=${yr}&dataMode=${props.dataMode}`,
+          `/api/widgets/mlb-season-stats?mode=team&teamKey=${encodeURIComponent(key)}&season=${year}&dataMode=${props.dataMode}`,
           { cache: "no-store" },
         );
         const json = (await res.json()) as {
@@ -147,8 +155,8 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
         if (!res.ok) throw new Error(json.error ?? "Failed to load team stats");
         setTeamStats(json.data ?? null);
         setMeta(json.meta ?? null);
-      } catch (err) {
-        setWarning(String(err));
+      } catch (error) {
+        setWarning(String(error));
       } finally {
         setLoading(false);
       }
@@ -168,7 +176,6 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
     }
   }, [tabMode, teamKey, season, loadTeamStats, props.refreshTick]);
 
-  // Player search
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
@@ -185,9 +192,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
         const json = (await res.json()) as { data?: PlayerSearchResult[] };
         if (!cancelled) setSearchResults(json.data ?? []);
       } catch {
-        // Swallow search errors
+        // Ignore search errors.
       }
-    }, 300);
+    }, 250);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -207,18 +214,8 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
     void persistConfig({ playerId: result.playerId, playerName: result.fullName });
   }
 
-  // Get last 3 hitting seasons (most recent first)
-  const recentHitting = [...(playerStats?.hitting ?? [])]
-    .sort((a, b) => b.season - a.season)
-    .slice(0, 3);
-
-  // Get last 3 pitching seasons (most recent first)
-  const recentPitching = [...(playerStats?.pitching ?? [])]
-    .sort((a, b) => b.season - a.season)
-    .slice(0, 3);
-
-  const hasPitching = recentPitching.length > 0;
-  const hasHitting = recentHitting.length > 0;
+  const selectedHitting = (playerStats?.hitting ?? []).find((row) => row.season === season) ?? null;
+  const selectedPitching = (playerStats?.pitching ?? []).find((row) => row.season === season) ?? null;
 
   return (
     <div className="space-y-2 text-xs">
@@ -237,7 +234,6 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
-      {/* Tab toggle */}
       <div className="flex gap-1">
         <button
           type="button"
@@ -273,42 +269,63 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
 
       {warning && <p className="text-amber-300">{warning}</p>}
 
-      {/* Player Tab */}
       {tabMode === "player" && (
         <div className="space-y-2">
-          <div className="relative">
-            <input
-              className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
-              placeholder="Search player name..."
-              value={searchQuery || playerName}
+          <div className="relative flex gap-2">
+            <div className="relative flex-1">
+              <input
+                className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+                placeholder="Search player name..."
+                value={searchQuery || playerName}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPlayerName("");
+                }}
+              />
+              {searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded border border-neutral-700 bg-neutral-900 shadow-lg">
+                  {searchResults.slice(0, 6).map((result) => (
+                    <button
+                      key={result.playerId}
+                      type="button"
+                      className="block w-full px-2 py-1 text-left hover:bg-neutral-800"
+                      onClick={() => selectPlayer(result)}
+                    >
+                      {result.fullName}
+                      {result.teamKey ? ` · ${result.teamKey}` : ""}
+                      {result.position ? ` · ${result.position}` : ""}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <select
+              className="w-28 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+              value={season}
               onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPlayerName("");
+                const nextSeason = Number.parseInt(e.target.value, 10) || currentYear;
+                setSeason(nextSeason);
+                void persistConfig({ season: nextSeason });
               }}
-            />
-            {searchResults.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full rounded border border-neutral-700 bg-neutral-900 shadow-lg">
-                {searchResults.slice(0, 6).map((r) => (
-                  <button
-                    key={r.playerId}
-                    type="button"
-                    className="block w-full px-2 py-1 text-left hover:bg-neutral-800"
-                    onClick={() => selectPlayer(r)}
-                  >
-                    {r.fullName}
-                    {r.teamKey ? ` · ${r.teamKey}` : ""}
-                    {r.position ? ` · ${r.position}` : ""}
-                  </button>
-                ))}
-              </div>
-            )}
+              disabled={props.locked}
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {loading && <p className="text-neutral-400">Loading stats...</p>}
+          {loading && <p className="text-neutral-400">Loading player stats...</p>}
 
           {playerStats && !loading && (
             <div className="space-y-2">
-              {hasHitting && (
+              <p className="text-neutral-400">
+                Showing {season} stats for {playerName || playerStats.playerName || playerStats.playerId}
+              </p>
+
+              {selectedHitting && (
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Hitting</p>
                   <table className="w-full border-collapse">
@@ -328,30 +345,25 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentHitting.map((row) => (
-                        <tr key={row.season} className="border-t border-neutral-800">
-                          <td className="py-0.5">{row.season}</td>
-                          <td className="py-0.5 text-right text-neutral-400">{row.gamesPlayed ?? "-"}</td>
-                          <td className="py-0.5 text-right">{row.avg ?? "-"}</td>
-                          <td className="py-0.5 text-right">{row.hr ?? "-"}</td>
-                          <td className="py-0.5 text-right">{row.rbi ?? "-"}</td>
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.obp ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.slg ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.ops ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.baseOnBallsHitting ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.strikeOutsHitting ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.stolenBases ?? "-"}</td>}
-                        </tr>
-                      ))}
+                      <tr className="border-t border-neutral-800">
+                        <td className="py-0.5">{selectedHitting.season}</td>
+                        <td className="py-0.5 text-right text-neutral-400">{selectedHitting.gamesPlayed ?? "-"}</td>
+                        <td className="py-0.5 text-right">{selectedHitting.avg ?? "-"}</td>
+                        <td className="py-0.5 text-right">{selectedHitting.hr ?? "-"}</td>
+                        <td className="py-0.5 text-right">{selectedHitting.rbi ?? "-"}</td>
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.obp ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.slg ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.ops ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.baseOnBallsHitting ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.strikeOutsHitting ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.stolenBases ?? "-"}</td>}
+                      </tr>
                     </tbody>
                   </table>
-                  {advanced && (
-                    <p className="text-[10px] text-neutral-600">Note: WAR, wRC+, OPS+ not available in free MLB Stats API</p>
-                  )}
                 </div>
               )}
 
-              {hasPitching && (
+              {selectedPitching && (
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Pitching</p>
                   <table className="w-full border-collapse">
@@ -369,33 +381,30 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentPitching.map((row) => (
-                        <tr key={row.season} className="border-t border-neutral-800">
-                          <td className="py-0.5">{row.season}</td>
-                          <td className="py-0.5 text-right text-neutral-400">{row.gamesPlayed ?? "-"}</td>
-                          <td className="py-0.5 text-right">{row.era ?? "-"}</td>
-                          <td className="py-0.5 text-right">{row.strikeOuts ?? "-"}</td>
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.wins ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.losses ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.whip ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.inningsPitched ?? "-"}</td>}
-                          {advanced && <td className="py-0.5 text-right text-neutral-400">{row.gamesStarted ?? "-"}</td>}
-                        </tr>
-                      ))}
+                      <tr className="border-t border-neutral-800">
+                        <td className="py-0.5">{selectedPitching.season}</td>
+                        <td className="py-0.5 text-right text-neutral-400">{selectedPitching.gamesPlayed ?? "-"}</td>
+                        <td className="py-0.5 text-right">{selectedPitching.era ?? "-"}</td>
+                        <td className="py-0.5 text-right">{selectedPitching.strikeOuts ?? "-"}</td>
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.wins ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.losses ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.whip ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.inningsPitched ?? "-"}</td>}
+                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.gamesStarted ?? "-"}</td>}
+                      </tr>
                     </tbody>
                   </table>
                 </div>
               )}
 
-              {!hasHitting && !hasPitching && (
-                <p className="text-neutral-400">No stats found for this player.</p>
+              {!selectedHitting && !selectedPitching && (
+                <p className="text-neutral-400">No stats found for {season}. Pick another year.</p>
               )}
             </div>
           )}
         </div>
       )}
 
-      {/* Team Tab */}
       {tabMode === "team" && (
         <div className="space-y-2">
           <div className="flex gap-2">
@@ -405,13 +414,22 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
               value={teamKey}
               onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
             />
-            <input
-              className="w-16 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
-              placeholder="Year"
-              type="number"
+            <select
+              className="w-28 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
               value={season}
-              onChange={(e) => setSeason(parseInt(e.target.value, 10) || new Date().getFullYear())}
-            />
+              onChange={(e) => {
+                const nextSeason = Number.parseInt(e.target.value, 10) || currentYear;
+                setSeason(nextSeason);
+                void persistConfig({ season: nextSeason });
+              }}
+              disabled={props.locked}
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
             <button
               className="rounded border border-neutral-700 px-2 py-1"
               type="button"
@@ -421,7 +439,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
               }}
               disabled={props.locked}
             >
-              Go
+              View
             </button>
           </div>
 
@@ -434,14 +452,12 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
               </p>
               <p className="text-neutral-400">
                 {teamStats.record.wins}-{teamStats.record.losses} ({teamStats.record.pct})
-                {teamStats.record.divisionRank !== undefined
-                  ? ` · Div Rank: ${teamStats.record.divisionRank}`
-                  : ""}
+                {teamStats.record.divisionRank !== undefined ? ` · Div Rank: ${teamStats.record.divisionRank}` : ""}
                 {teamStats.record.gamesBack ? ` · GB: ${teamStats.record.gamesBack}` : ""}
               </p>
 
-              <div className="rounded border border-neutral-800 bg-neutral-950 p-2 space-y-1">
-                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Hitting</p>
+              <div className="space-y-1 rounded border border-neutral-800 bg-neutral-950 p-2">
+                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Team Snapshot</p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                   <span>AVG: <span className="text-white">{teamStats.hitting.avg ?? "-"}</span></span>
                   <span>ERA: <span className="text-white">{teamStats.pitching.era ?? "-"}</span></span>
@@ -463,8 +479,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
       )}
 
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
-        {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
       <button
         type="button"

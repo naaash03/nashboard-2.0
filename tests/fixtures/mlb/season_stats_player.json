@@ -1,10 +1,82 @@
-{
+﻿{
   "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
   "stats": [
     {
       "type": { "displayName": "yearByYear" },
       "group": { "displayName": "hitting" },
       "splits": [
+        {
+          "season": "2020",
+          "stat": {
+            "gamesPlayed": 47,
+            "atBats": 177,
+            "hits": 50,
+            "homeRuns": 11,
+            "rbi": 32,
+            "avg": ".282",
+            "obp": ".364",
+            "slg": ".518",
+            "ops": ".882",
+            "strikeOuts": 43,
+            "baseOnBalls": 19,
+            "stolenBases": 2,
+            "babip": ".301"
+          }
+        },
+        {
+          "season": "2021",
+          "stat": {
+            "gamesPlayed": 153,
+            "atBats": 597,
+            "hits": 162,
+            "homeRuns": 35,
+            "rbi": 102,
+            "avg": ".271",
+            "obp": ".352",
+            "slg": ".523",
+            "ops": ".875",
+            "strikeOuts": 150,
+            "baseOnBalls": 63,
+            "stolenBases": 3,
+            "babip": ".289"
+          }
+        },
+        {
+          "season": "2022",
+          "stat": {
+            "gamesPlayed": 160,
+            "atBats": 602,
+            "hits": 168,
+            "homeRuns": 40,
+            "rbi": 131,
+            "avg": ".279",
+            "obp": ".362",
+            "slg": ".547",
+            "ops": ".909",
+            "strikeOuts": 172,
+            "baseOnBalls": 67,
+            "stolenBases": 5,
+            "babip": ".295"
+          }
+        },
+        {
+          "season": "2023",
+          "stat": {
+            "gamesPlayed": 154,
+            "atBats": 568,
+            "hits": 156,
+            "homeRuns": 46,
+            "rbi": 118,
+            "avg": ".275",
+            "obp": ".348",
+            "slg": ".566",
+            "ops": ".914",
+            "strikeOuts": 151,
+            "baseOnBalls": 71,
+            "stolenBases": 4,
+            "babip": ".287"
+          }
+        },
         {
           "season": "2024",
           "stat": {
