@@ -1,0 +1,100 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P. Use subject to the terms set forth in http://gdx.mlb.com/components/copyright.txt",
+  "totalItems": 3,
+  "totalEvents": 0,
+  "totalGames": 3,
+  "totalGamesInProgress": 0,
+  "dates": [
+    {
+      "date": "2026-03-26",
+      "totalItems": 3,
+      "totalEvents": 0,
+      "totalGames": 3,
+      "totalGamesInProgress": 0,
+      "games": [
+        {
+          "gamePk": 823649,
+          "gameDate": "2026-03-26T17:15:00Z",
+          "officialDate": "2026-03-26",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 134, "name": "Pittsburgh Pirates" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "content": { "description": "Mets Home Opener" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 1,
+          "scheduledInnings": 9
+        },
+        {
+          "gamePk": 823651,
+          "gameDate": "2026-03-26T17:05:00Z",
+          "officialDate": "2026-03-26",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 111, "name": "Boston Red Sox" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            },
+            "home": {
+              "team": { "id": 147, "name": "New York Yankees" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            }
+          },
+          "venue": { "id": 3313, "name": "Yankee Stadium" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 1,
+          "scheduledInnings": 9
+        },
+        {
+          "gamePk": 823655,
+          "gameDate": "2026-03-26T22:10:00Z",
+          "officialDate": "2026-03-26",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 109, "name": "Arizona Diamondbacks" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            }
+          },
+          "venue": { "id": 22, "name": "Dodger Stadium" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 1,
+          "scheduledInnings": 9
+        }
+      ]
+    }
+  ]
+}

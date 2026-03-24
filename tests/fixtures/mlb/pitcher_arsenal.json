@@ -1,0 +1,55 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "stats": [
+    {
+      "type": { "displayName": "pitchArsenal" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "stat": {
+            "pitchType": { "code": "FF", "description": "4-Seam Fastball" },
+            "percentage": 0.421,
+            "averageSpeed": 96.8,
+            "averageSpin": 2347,
+            "averageVerticalBreak": 14.2,
+            "averageHorizontalBreak": -9.1,
+            "totalPitches": 891
+          }
+        },
+        {
+          "stat": {
+            "pitchType": { "code": "GS", "description": "Ghost Splitter" },
+            "percentage": 0.258,
+            "averageSpeed": 87.4,
+            "averageSpin": 1102,
+            "averageVerticalBreak": 3.1,
+            "averageHorizontalBreak": -7.8,
+            "totalPitches": 546
+          }
+        },
+        {
+          "stat": {
+            "pitchType": { "code": "SL", "description": "Slider" },
+            "percentage": 0.197,
+            "averageSpeed": 88.2,
+            "averageSpin": 2614,
+            "averageVerticalBreak": 1.4,
+            "averageHorizontalBreak": -3.9,
+            "totalPitches": 417
+          }
+        },
+        {
+          "stat": {
+            "pitchType": { "code": "CU", "description": "Curveball" },
+            "percentage": 0.124,
+            "averageSpeed": 78.9,
+            "averageSpin": 2498,
+            "averageVerticalBreak": -7.2,
+            "averageHorizontalBreak": 6.3,
+            "totalPitches": 263
+          }
+        }
+      ]
+    }
+  ]
+}

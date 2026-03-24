@@ -1,0 +1,145 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "totalItems": 4,
+  "totalEvents": 0,
+  "totalGames": 4,
+  "totalGamesInProgress": 0,
+  "dates": [
+    {
+      "date": "2026-03-26",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823649,
+          "gameDate": "2026-03-26T17:15:00Z",
+          "officialDate": "2026-03-26",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 134, "name": "Pittsburgh Pirates" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }
+            }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 1,
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-27",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823650,
+          "gameDate": "2026-03-27T17:15:00Z",
+          "officialDate": "2026-03-27",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 134, "name": "Pittsburgh Pirates" },
+              "leagueRecord": { "wins": 0, "losses": 1, "pct": ".000" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 1, "losses": 0, "pct": "1.000" }
+            }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 2,
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-28",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823652,
+          "gameDate": "2026-03-28T16:10:00Z",
+          "officialDate": "2026-03-28",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 134, "name": "Pittsburgh Pirates" },
+              "leagueRecord": { "wins": 0, "losses": 2, "pct": ".000" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }
+            }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 3,
+          "scheduledInnings": 9
+        }
+      ]
+    },
+    {
+      "date": "2026-03-31",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823660,
+          "gameDate": "2026-03-31T22:40:00Z",
+          "officialDate": "2026-03-31",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }
+            }
+          },
+          "venue": { "id": 22, "name": "Dodger Stadium" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 1,
+          "scheduledInnings": 9
+        }
+      ]
+    }
+  ]
+}

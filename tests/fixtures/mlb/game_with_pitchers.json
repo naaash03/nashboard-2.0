@@ -1,0 +1,51 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "totalItems": 1,
+  "totalGames": 1,
+  "dates": [
+    {
+      "date": "2026-03-26",
+      "totalItems": 1,
+      "totalGames": 1,
+      "games": [
+        {
+          "gamePk": 823649,
+          "gameDate": "2026-03-26T17:15:00Z",
+          "officialDate": "2026-03-26",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "S",
+            "detailedState": "Scheduled",
+            "statusCode": "S",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 134, "name": "Pittsburgh Pirates" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" },
+              "probablePitcher": {
+                "id": 669456,
+                "fullName": "Mitch Keller",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" },
+              "probablePitcher": {
+                "id": 665487,
+                "fullName": "Kodai Senga",
+                "pitchHand": { "code": "R", "description": "Right" }
+              }
+            }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "seriesDescription": "Regular Season",
+          "gamesInSeries": 3,
+          "seriesGameNumber": 1,
+          "scheduledInnings": 9
+        }
+      ]
+    }
+  ]
+}

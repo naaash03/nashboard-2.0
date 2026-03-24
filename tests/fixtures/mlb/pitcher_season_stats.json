@@ -1,0 +1,29 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "stats": [
+    {
+      "type": { "displayName": "season" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "season": "2026",
+          "stat": {
+            "gamesPlayed": 28,
+            "gamesStarted": 28,
+            "wins": 14,
+            "losses": 6,
+            "era": "2.98",
+            "whip": "1.04",
+            "inningsPitched": "181.2",
+            "strikeOuts": 219,
+            "baseOnBalls": 51,
+            "homeRuns": 17,
+            "hits": 138,
+            "saves": 0,
+            "saveOpportunities": 0
+          }
+        }
+      ]
+    }
+  ]
+}

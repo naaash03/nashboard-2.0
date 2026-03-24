@@ -1,0 +1,64 @@
+{
+  "people": [
+    {
+      "id": 665487,
+      "fullName": "Kodai Senga",
+      "firstName": "Kodai",
+      "lastName": "Senga",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "1", "name": "Pitcher", "type": "Pitcher", "abbreviation": "P" },
+      "pitchHand": { "code": "R", "description": "Right" },
+      "batSide": { "code": "R", "description": "Right" },
+      "jerseyNumber": "34",
+      "active": true
+    },
+    {
+      "id": 660271,
+      "fullName": "Juan Soto",
+      "firstName": "Juan",
+      "lastName": "Soto",
+      "currentTeam": { "id": 121, "name": "New York Mets" },
+      "primaryPosition": { "code": "9", "name": "Right Fielder", "type": "Outfielder", "abbreviation": "RF" },
+      "pitchHand": { "code": "L", "description": "Left" },
+      "batSide": { "code": "L", "description": "Left" },
+      "jerseyNumber": "22",
+      "active": true
+    },
+    {
+      "id": 592518,
+      "fullName": "Freddie Freeman",
+      "firstName": "Freddie",
+      "lastName": "Freeman",
+      "currentTeam": { "id": 119, "name": "Los Angeles Dodgers" },
+      "primaryPosition": { "code": "3", "name": "First Baseman", "type": "Infielder", "abbreviation": "1B" },
+      "pitchHand": { "code": "R", "description": "Right" },
+      "batSide": { "code": "L", "description": "Left" },
+      "jerseyNumber": "5",
+      "active": true
+    },
+    {
+      "id": 695579,
+      "fullName": "Paul Skenes",
+      "firstName": "Paul",
+      "lastName": "Skenes",
+      "currentTeam": { "id": 134, "name": "Pittsburgh Pirates" },
+      "primaryPosition": { "code": "1", "name": "Pitcher", "type": "Pitcher", "abbreviation": "P" },
+      "pitchHand": { "code": "R", "description": "Right" },
+      "batSide": { "code": "L", "description": "Left" },
+      "jerseyNumber": "30",
+      "active": true
+    },
+    {
+      "id": 677951,
+      "fullName": "Shohei Ohtani",
+      "firstName": "Shohei",
+      "lastName": "Ohtani",
+      "currentTeam": { "id": 119, "name": "Los Angeles Dodgers" },
+      "primaryPosition": { "code": "10", "name": "Designated Hitter", "type": "Hitter", "abbreviation": "DH" },
+      "pitchHand": { "code": "L", "description": "Left" },
+      "batSide": { "code": "L", "description": "Left" },
+      "jerseyNumber": "17",
+      "active": true
+    }
+  ]
+}
