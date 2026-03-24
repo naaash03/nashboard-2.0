@@ -1,22 +1,14 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { WIDGET_DEFINITIONS } from "@/lib/widgets/registry";
 
-export async function GET(req: NextRequest) {
-  const sportParam = (req.nextUrl.searchParams.get("sport") ?? "NFL").toUpperCase();
-  const sport = ["NFL", "NBA", "MLB", "UTILITIES"].includes(sportParam) ? sportParam : "NFL";
-
-  const widgets = WIDGET_DEFINITIONS.filter((definition) => {
-    if (definition.sportCategory === "UTILITIES") return true;
-    return definition.sportCategory === sport;
-  });
-
+export async function GET() {
   const categories = {
-    NFL: widgets.filter((w) => w.sportCategory === "NFL"),
-    MLB: widgets.filter((w) => w.sportCategory === "MLB"),
-    NBA: widgets.filter((w) => w.sportCategory === "NBA"),
-    Utilities: widgets.filter((w) => w.sportCategory === "UTILITIES"),
+    NFL: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "NFL"),
+    MLB: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "MLB"),
+    NBA: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "NBA"),
+    Utilities: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "UTILITIES"),
   };
 
-  return NextResponse.json({ widgets, categories });
+  return NextResponse.json({ widgets: WIDGET_DEFINITIONS, categories });
 }
 

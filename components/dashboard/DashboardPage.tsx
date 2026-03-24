@@ -8,7 +8,10 @@ import PlayerCardWidget from "@/components/widgets/PlayerCardWidget";
 import WatchlistWidget from "@/components/widgets/WatchlistWidget";
 import RbVsDlineWidget from "@/components/widgets/RbVsDlineWidget";
 import DataHealthWidget from "@/components/widgets/DataHealthWidget";
-import MlbPlaceholderWidget from "@/components/widgets/MlbPlaceholderWidget";
+import MlbNext7GamesWidget from "@/components/widgets/MlbNext7GamesWidget";
+import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidget";
+import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
+import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -64,8 +67,10 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   watchlist: (props) => <WatchlistWidget {...props} />,
   rb_vs_dline: (props) => <RbVsDlineWidget {...props} />,
   data_health: (props) => <DataHealthWidget {...props} />,
-  mlb_next_7_games: (props) => <MlbPlaceholderWidget {...props} kind="next7" />,
-  mlb_pitcher_arsenal: (props) => <MlbPlaceholderWidget {...props} kind="arsenal" />,
+  mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
+  mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
+  mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
+  mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
 };
 
 function to12h(value: string): string {
