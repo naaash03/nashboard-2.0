@@ -1,0 +1,52 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "stats": [
+    {
+      "type": { "displayName": "yearByYear" },
+      "group": { "displayName": "hitting" },
+      "splits": [
+        {
+          "season": "2024",
+          "stat": {
+            "gamesPlayed": 152,
+            "atBats": 534,
+            "hits": 161,
+            "homeRuns": 41,
+            "rbi": 109,
+            "avg": ".302",
+            "obp": ".419",
+            "slg": ".569",
+            "ops": ".988",
+            "strikeOuts": 125,
+            "baseOnBalls": 94,
+            "stolenBases": 12,
+            "babip": ".322"
+          }
+        },
+        {
+          "season": "2025",
+          "stat": {
+            "gamesPlayed": 158,
+            "atBats": 548,
+            "hits": 174,
+            "homeRuns": 38,
+            "rbi": 115,
+            "avg": ".317",
+            "obp": ".432",
+            "slg": ".571",
+            "ops": "1.003",
+            "strikeOuts": 118,
+            "baseOnBalls": 99,
+            "stolenBases": 8,
+            "babip": ".338"
+          }
+        }
+      ]
+    },
+    {
+      "type": { "displayName": "yearByYear" },
+      "group": { "displayName": "pitching" },
+      "splits": []
+    }
+  ]
+}

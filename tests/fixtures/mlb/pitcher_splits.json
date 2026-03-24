@@ -1,0 +1,31 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "stats": [
+    {
+      "type": { "displayName": "statSplits" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "split": { "code": "vl", "description": "vs Left" },
+          "stat": {
+            "era": "2.41",
+            "whip": "0.98",
+            "avg": ".218",
+            "ops": ".621",
+            "battersFaced": 142
+          }
+        },
+        {
+          "split": { "code": "vr", "description": "vs Right" },
+          "stat": {
+            "era": "3.44",
+            "whip": "1.09",
+            "avg": ".251",
+            "ops": ".712",
+            "battersFaced": 198
+          }
+        }
+      ]
+    }
+  ]
+}

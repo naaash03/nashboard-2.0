@@ -1,0 +1,58 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "totalItems": 3,
+  "totalGames": 3,
+  "dates": [
+    {
+      "date": "2026-03-22",
+      "games": [
+        {
+          "gamePk": 823640,
+          "gameDate": "2026-03-22T17:05:00Z",
+          "officialDate": "2026-03-22",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 144, "name": "Atlanta Braves" }, "leagueRecord": { "wins": 2, "losses": 1, "pct": ".667" }, "score": 3 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 3, "losses": 0, "pct": "1.000" }, "score": 7 }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "seriesDescription": "Regular Season"
+        }
+      ]
+    },
+    {
+      "date": "2026-03-21",
+      "games": [
+        {
+          "gamePk": 823638,
+          "gameDate": "2026-03-21T17:05:00Z",
+          "officialDate": "2026-03-21",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 144, "name": "Atlanta Braves" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 5 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 2 }
+          },
+          "venue": { "id": 3289, "name": "Citi Field" },
+          "seriesDescription": "Regular Season"
+        }
+      ]
+    },
+    {
+      "date": "2026-03-20",
+      "games": [
+        {
+          "gamePk": 823635,
+          "gameDate": "2026-03-20T18:10:00Z",
+          "officialDate": "2026-03-20",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 4 },
+            "home": { "team": { "id": 120, "name": "Washington Nationals" }, "leagueRecord": { "wins": 0, "losses": 2, "pct": ".000" }, "score": 1 }
+          },
+          "venue": { "id": 3309, "name": "Nationals Park" },
+          "seriesDescription": "Regular Season"
+        }
+      ]
+    }
+  ]
+}

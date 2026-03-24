@@ -1,0 +1,35 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "stats": [
+    {
+      "type": { "displayName": "gameLog" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "date": "2026-03-22",
+          "stat": {
+            "inningsPitched": "1.0",
+            "numberOfPitches": 18,
+            "strikeOuts": 2,
+            "baseOnBalls": 0,
+            "hits": 0,
+            "earnedRuns": 0,
+            "era": "0.00"
+          }
+        },
+        {
+          "date": "2026-03-20",
+          "stat": {
+            "inningsPitched": "0.2",
+            "numberOfPitches": 22,
+            "strikeOuts": 1,
+            "baseOnBalls": 1,
+            "hits": 1,
+            "earnedRuns": 0,
+            "era": "0.00"
+          }
+        }
+      ]
+    }
+  ]
+}

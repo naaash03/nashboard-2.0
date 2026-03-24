@@ -1,0 +1,60 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "stats": [
+    {
+      "type": { "displayName": "season" },
+      "group": { "displayName": "hitting" },
+      "splits": [
+        {
+          "team": { "id": 121, "name": "New York Mets" },
+          "stat": {
+            "gamesPlayed": 3,
+            "avg": ".281",
+            "obp": ".358",
+            "slg": ".471",
+            "ops": ".829",
+            "runs": 13,
+            "homeRuns": 3,
+            "strikeOuts": 27,
+            "baseOnBalls": 11
+          }
+        }
+      ]
+    },
+    {
+      "type": { "displayName": "season" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "team": { "id": 121, "name": "New York Mets" },
+          "stat": {
+            "era": "2.67",
+            "whip": "1.07",
+            "strikeOuts": 29,
+            "runs": 5,
+            "saves": 0,
+            "blownSaves": 0
+          }
+        }
+      ]
+    }
+  ],
+  "standings": {
+    "records": [
+      {
+        "standingsType": "regularSeason",
+        "division": { "id": 204, "name": "National League East" },
+        "teamRecords": [
+          {
+            "team": { "id": 121, "name": "New York Mets" },
+            "wins": 2,
+            "losses": 0,
+            "pct": "1.000",
+            "divisionRank": "1",
+            "gamesBack": "-"
+          }
+        ]
+      }
+    ]
+  }
+}

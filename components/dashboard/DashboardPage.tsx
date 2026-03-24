@@ -12,6 +12,11 @@ import MlbNext7GamesWidget from "@/components/widgets/MlbNext7GamesWidget";
 import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidget";
 import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
 import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
+import MlbSeasonStatsWidget from "@/components/widgets/MlbSeasonStatsWidget";
+import MlbPlatoonAdvantageWidget from "@/components/widgets/MlbPlatoonAdvantageWidget";
+import MlbRecentFormWidget from "@/components/widgets/MlbRecentFormWidget";
+import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidget";
+import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -71,6 +76,11 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
   mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
   mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
+  mlb_season_stats: (props) => <MlbSeasonStatsWidget {...props} />,
+  mlb_platoon_advantage: (props) => <MlbPlatoonAdvantageWidget {...props} />,
+  mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
+  mlb_bullpen_fatigue: (props) => <MlbBullpenFatigueWidget {...props} />,
+  mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
 };
 
 function to12h(value: string): string {

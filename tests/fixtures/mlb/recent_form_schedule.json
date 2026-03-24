@@ -1,0 +1,111 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "totalItems": 5,
+  "dates": [
+    {
+      "date": "2026-03-22",
+      "games": [
+        {
+          "gamePk": 823640,
+          "gameDate": "2026-03-22T17:05:00Z",
+          "officialDate": "2026-03-22",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 144, "name": "Atlanta Braves" }, "leagueRecord": { "wins": 2, "losses": 1, "pct": ".667" }, "score": 3 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 3, "losses": 0, "pct": "1.000" }, "score": 7 }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 3, "hits": 7, "errors": 0 },
+              "home": { "runs": 7, "hits": 12, "errors": 0 }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-21",
+      "games": [
+        {
+          "gamePk": 823638,
+          "gameDate": "2026-03-21T17:05:00Z",
+          "officialDate": "2026-03-21",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 144, "name": "Atlanta Braves" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 5 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 2 }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 5, "hits": 10, "errors": 1 },
+              "home": { "runs": 2, "hits": 6, "errors": 0 }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-20",
+      "games": [
+        {
+          "gamePk": 823635,
+          "gameDate": "2026-03-20T18:10:00Z",
+          "officialDate": "2026-03-20",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 2, "losses": 0, "pct": "1.000" }, "score": 4 },
+            "home": { "team": { "id": 120, "name": "Washington Nationals" }, "leagueRecord": { "wins": 0, "losses": 2, "pct": ".000" }, "score": 1 }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 4, "hits": 9, "errors": 0 },
+              "home": { "runs": 1, "hits": 4, "errors": 2 }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-18",
+      "games": [
+        {
+          "gamePk": 823630,
+          "gameDate": "2026-03-18T17:05:00Z",
+          "officialDate": "2026-03-18",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 143, "name": "Philadelphia Phillies" }, "leagueRecord": { "wins": 1, "losses": 0, "pct": "1.000" }, "score": 2 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 1, "losses": 0, "pct": "1.000" }, "score": 5 }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 2, "hits": 6, "errors": 0 },
+              "home": { "runs": 5, "hits": 11, "errors": 0 }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-17",
+      "games": [
+        {
+          "gamePk": 823628,
+          "gameDate": "2026-03-17T17:05:00Z",
+          "officialDate": "2026-03-17",
+          "status": { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "startTimeTBD": false },
+          "teams": {
+            "away": { "team": { "id": 143, "name": "Philadelphia Phillies" }, "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }, "score": 1 },
+            "home": { "team": { "id": 121, "name": "New York Mets" }, "leagueRecord": { "wins": 0, "losses": 0, "pct": ".000" }, "score": 3 }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 1, "hits": 5, "errors": 0 },
+              "home": { "runs": 3, "hits": 8, "errors": 0 }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

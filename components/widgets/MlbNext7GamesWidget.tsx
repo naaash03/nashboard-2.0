@@ -21,10 +21,38 @@ type NextGamesData = {
   games: GameEntry[];
 };
 
+type RecentResult = {
+  gamePk: number;
+  date: string;
+  opponent: string;
+  opponentKey: string;
+  homeAway: "home" | "away";
+  result: "W" | "L" | null;
+  teamScore: number | null;
+  opponentScore: number | null;
+  status: string;
+};
+
+type RecentResultsData = {
+  teamKey: string;
+  teamName: string;
+  results: RecentResult[];
+};
+
 function to12h(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
+}
+
+function formatRecentResult(r: RecentResult): string {
+  const wl = r.result ?? "—";
+  const score =
+    r.teamScore !== null && r.opponentScore !== null
+      ? `${r.teamScore}-${r.opponentScore}`
+      : "—";
+  const loc = r.homeAway === "home" ? "vs" : "@";
+  return `${wl} ${score} ${loc} ${r.opponentKey}`;
 }
 
 export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
@@ -32,6 +60,7 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
   const [data, setData] = useState<NextGamesData | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [recentResults, setRecentResults] = useState<RecentResultsData | null>(null);
 
   const load = useCallback(
     async (key: string) => {
@@ -70,6 +99,29 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
       cancelled = true;
     };
   }, [teamKey, load, props.refreshTick]);
+
+  useEffect(() => {
+    if (!teamKey) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/widgets/mlb-recent-results?teamKey=${encodeURIComponent(teamKey)}&limit=3&dataMode=${props.dataMode}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const json = (await res.json()) as { data?: RecentResultsData | null };
+        if (!cancelled) {
+          setRecentResults(json.data ?? null);
+        }
+      } catch {
+        // Recent results are supplemental — swallow errors
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamKey, props.dataMode, props.refreshTick]);
 
   async function applyTeam() {
     await props.onPersist({ config: { ...props.config, teamKey } });
@@ -111,6 +163,31 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
 
       {!teamKey && <p className="text-neutral-400">Enter a team abbreviation to start.</p>}
       {warning && <p className="text-amber-300">{warning}</p>}
+
+      {recentResults && recentResults.results.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-wide text-neutral-500">Recent Results</p>
+          {recentResults.results.map((r) => (
+            <div
+              key={r.gamePk}
+              className="flex items-center justify-between rounded border border-neutral-800 bg-neutral-950 p-1.5"
+            >
+              <span
+                className={
+                  r.result === "W"
+                    ? "font-medium text-emerald-400"
+                    : r.result === "L"
+                    ? "font-medium text-red-400"
+                    : "text-neutral-400"
+                }
+              >
+                {formatRecentResult(r)}
+              </span>
+              <span className="text-neutral-500">{r.date}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {data && (
         <div className="space-y-1">
