@@ -61,7 +61,7 @@ export default function TonightsSlateWidget(props: WidgetCommonProps) {
 
   const load = useCallback(async (): Promise<SlateResponse> => {
     const mode = props.mode.toLowerCase();
-    const endpointUrl = `/api/widgets/tonights-slate?sport=NFL&mode=${mode}&dataMode=${props.dataMode}`;
+    const endpointUrl = `/api/widgets/tonights-slate?sport=NFL&mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(endpointUrl);
     const res = await fetch(endpointUrl, { cache: "no-store" });
     const json = (await res.json()) as SlateResponse;
@@ -69,7 +69,7 @@ export default function TonightsSlateWidget(props: WidgetCommonProps) {
       throw new Error(json.error ?? "Failed to load slate");
     }
     return json;
-  }, [props.mode, props.dataMode]);
+  }, [props.dataMode, props.mode, props.refreshTick]);
 
   useEffect(() => {
     let cancelled = false;

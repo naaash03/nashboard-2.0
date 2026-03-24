@@ -1,0 +1,164 @@
+﻿{
+  "dates": [
+    {
+      "date": "2026-03-02",
+      "games": [
+        {
+          "gamePk": 900001,
+          "gameDate": "2026-03-02T23:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "Kodai Senga" }
+            },
+            "home": {
+              "team": { "id": 117, "name": "Houston Astros" },
+              "probablePitcher": { "fullName": "Framber Valdez" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-03",
+      "games": [
+        {
+          "gamePk": 900002,
+          "gameDate": "2026-03-03T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 135, "name": "San Diego Padres" },
+              "probablePitcher": { "fullName": "Joe Musgrove" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "Tylor Megill" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-04",
+      "games": [
+        {
+          "gamePk": 900003,
+          "gameDate": "2026-03-04T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "David Peterson" }
+            },
+            "home": {
+              "team": { "id": 143, "name": "Philadelphia Phillies" },
+              "probablePitcher": { "fullName": "Zack Wheeler" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-05",
+      "games": [
+        {
+          "gamePk": 900004,
+          "gameDate": "2026-03-05T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "Jose Quintana" }
+            },
+            "home": {
+              "team": { "id": 144, "name": "Atlanta Braves" },
+              "probablePitcher": { "fullName": "Chris Sale" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-06",
+      "games": [
+        {
+          "gamePk": 900005,
+          "gameDate": "2026-03-06T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 111, "name": "Boston Red Sox" },
+              "probablePitcher": { "fullName": "Brayan Bello" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "Sean Manaea" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-07",
+      "games": [
+        {
+          "gamePk": 900006,
+          "gameDate": "2026-03-07T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "Kodai Senga" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "probablePitcher": { "fullName": "Yoshinobu Yamamoto" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-08",
+      "games": [
+        {
+          "gamePk": 900007,
+          "gameDate": "2026-03-08T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 137, "name": "San Francisco Giants" },
+              "probablePitcher": { "fullName": "Logan Webb" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "fullName": "Tylor Megill" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-09",
+      "games": [
+        {
+          "gamePk": 900008,
+          "gameDate": "2026-03-09T18:10:00Z",
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "id": 1001, "fullName": "David Peterson" }
+            },
+            "home": {
+              "team": { "id": 147, "name": "New York Yankees" },
+              "probablePitcher": { "id": 1002, "fullName": "Gerrit Cole" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

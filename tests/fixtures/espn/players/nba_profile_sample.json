@@ -1,0 +1,14 @@
+﻿{
+  "athlete": {
+    "id": "1966",
+    "fullName": "LeBron James",
+    "displayName": "LeBron James",
+    "team": { "displayName": "Los Angeles Lakers", "abbreviation": "LAL" },
+    "position": { "abbreviation": "F" },
+    "headshot": { "href": "https://a.espncdn.com/i/headshots/nba/players/full/1966.png" },
+    "jersey": "23",
+    "age": 41,
+    "displayHeight": "6' 9\"",
+    "displayWeight": "250 lbs"
+  }
+}

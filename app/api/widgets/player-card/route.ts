@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { getPlayer } from "@/lib/providers/espn/nfl";
+import { normalizePlayerFromEspn } from "@/lib/sports/adapters";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { shapePlayerCard } from "@/lib/templates/playerCard";
 
 export async function GET(req: Request) {
@@ -8,6 +10,7 @@ export async function GET(req: Request) {
   const sport = (searchParams.get("sport") ?? "NFL").toUpperCase();
   const playerId = (searchParams.get("playerId") ?? "").trim();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (sport !== "NFL") {
@@ -19,7 +22,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    const response = await getPlayer(playerId, resolvedDataMode);
+    const response = await getPlayer(playerId, resolvedDataMode, cacheBust);
+    const contract = toWidgetPayload({
+      data: response.player ? { player: normalizePlayerFromEspn(response.player, "NFL") } : null,
+      error: response.player ? null : (response.meta.warning ?? "No player data returned from provider."),
+      meta: response.meta,
+      primaryProvider: "apiSports",
+    });
     if (!response.player) {
       return NextResponse.json({
         data: null,
@@ -27,12 +36,14 @@ export async function GET(req: Request) {
           ...response.meta,
           warning: response.meta.warning ?? "No player data returned from ESPN.",
         },
+        contract,
       }, { status: 200 });
     }
 
     return NextResponse.json({
       data: shapePlayerCard(response.player, mode),
       meta: response.meta,
+      contract,
     });
   } catch (error) {
     return NextResponse.json({ error: `Failed to load player card: ${String(error)}` }, { status: 502 });

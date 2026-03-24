@@ -1,0 +1,27 @@
+﻿{
+  "count": 2,
+  "items": [
+    {
+      "id": "20",
+      "displayName": "New York Jets",
+      "type": "team",
+      "sport": "football",
+      "league": "nfl",
+      "abbreviation": "NYJ",
+      "logos": [
+        { "href": "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png" }
+      ]
+    },
+    {
+      "id": "17",
+      "displayName": "New England Patriots",
+      "type": "team",
+      "sport": "football",
+      "league": "nfl",
+      "abbreviation": "NE",
+      "logos": [
+        { "href": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png" }
+      ]
+    }
+  ]
+}

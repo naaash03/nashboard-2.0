@@ -1,0 +1,19 @@
+{
+  "sport": "mlb",
+  "playerId": "40286",
+  "fullName": "Juan Soto",
+  "teamAbbrev": "NYM",
+  "teamName": "New York Mets",
+  "live": null,
+  "season": {
+    "headline": "AVG .300 · HR 12",
+    "metrics": [
+      { "key": "avg", "label": "AVG", "value": ".300" },
+      { "key": "hr", "label": "HR", "value": "12" }
+    ],
+    "source": "derived"
+  },
+  "recent": null,
+  "injury": null,
+  "metaNotes": ["API-Sports season insights were incomplete for this player."]
+}

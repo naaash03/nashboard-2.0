@@ -1,0 +1,249 @@
+{
+  "dates": [
+    {
+      "date": "2026-03-01",
+      "games": [
+        {
+          "gamePk": 960001,
+          "gameDate": "2026-03-01T18:10:00Z",
+          "officialDate": "2026-03-01",
+          "gameType": "S",
+          "seriesDescription": "Spring Training",
+          "seriesGameNumber": 1,
+          "gamesInSeries": 2,
+          "status": { "abstractGameState": "Final", "detailedState": "Final" },
+          "venue": { "name": "Clover Park" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "score": 5,
+              "probablePitcher": { "id": 2001, "fullName": "David Peterson" }
+            },
+            "home": {
+              "team": { "id": 146, "name": "Miami Marlins" },
+              "score": 3,
+              "probablePitcher": { "id": 2002, "fullName": "Eury Perez" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-02",
+      "games": [
+        {
+          "gamePk": 960002,
+          "gameDate": "2026-03-02T18:10:00Z",
+          "officialDate": "2026-03-02",
+          "gameType": "S",
+          "seriesDescription": "Spring Training",
+          "seriesGameNumber": 2,
+          "gamesInSeries": 2,
+          "status": { "abstractGameState": "Final", "detailedState": "Final" },
+          "venue": { "name": "Clover Park" },
+          "teams": {
+            "away": {
+              "team": { "id": 146, "name": "Miami Marlins" },
+              "score": 4,
+              "probablePitcher": { "id": 2003, "fullName": "Trevor Rogers" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "score": 2,
+              "probablePitcher": { "id": 2004, "fullName": "Jose Butto" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-04",
+      "games": [
+        {
+          "gamePk": 960010,
+          "gameDate": "2026-03-04T23:10:00Z",
+          "officialDate": "2026-03-04",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 1,
+          "gamesInSeries": 3,
+          "status": { "abstractGameState": "Final", "detailedState": "Final" },
+          "venue": { "name": "Citi Field" },
+          "teams": {
+            "away": {
+              "team": { "id": 144, "name": "Atlanta Braves" },
+              "score": 3,
+              "probablePitcher": { "id": 1005, "fullName": "Spencer Schwellenbach" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "score": 6,
+              "probablePitcher": { "id": 1006, "fullName": "Kodai Senga" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-05",
+      "games": [
+        {
+          "gamePk": 960011,
+          "gameDate": "2026-03-05T23:10:00Z",
+          "officialDate": "2026-03-05",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 2,
+          "gamesInSeries": 3,
+          "status": { "abstractGameState": "Final", "detailedState": "Final" },
+          "venue": { "name": "Citi Field" },
+          "teams": {
+            "away": {
+              "team": { "id": 144, "name": "Atlanta Braves" },
+              "score": 5,
+              "probablePitcher": { "id": 1007, "fullName": "Chris Sale" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "score": 2,
+              "probablePitcher": { "id": 1008, "fullName": "Tylor Megill" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-09",
+      "games": [
+        {
+          "gamePk": 960012,
+          "gameDate": "2026-03-09T23:10:00Z",
+          "officialDate": "2026-03-09",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 3,
+          "gamesInSeries": 3,
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "venue": { "name": "Citi Field" },
+          "teams": {
+            "away": {
+              "team": { "id": 144, "name": "Atlanta Braves" },
+              "probablePitcher": { "id": 1009, "fullName": "Max Fried" }
+            },
+            "home": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "id": 1010, "fullName": "David Peterson" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-11",
+      "games": [
+        {
+          "gamePk": 960020,
+          "gameDate": "2026-03-11T23:10:00Z",
+          "officialDate": "2026-03-11",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 1,
+          "gamesInSeries": 2,
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "venue": { "name": "Citizens Bank Park" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "id": 1011, "fullName": "Kodai Senga" }
+            },
+            "home": {
+              "team": { "id": 143, "name": "Philadelphia Phillies" },
+              "probablePitcher": { "id": 1012, "fullName": "Zack Wheeler" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-12",
+      "games": [
+        {
+          "gamePk": 960021,
+          "gameDate": "2026-03-12T23:10:00Z",
+          "officialDate": "2026-03-12",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 2,
+          "gamesInSeries": 2,
+          "status": { "abstractGameState": "Preview", "detailedState": "Scheduled" },
+          "venue": { "name": "Citizens Bank Park" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "id": 1013, "fullName": "Jose Quintana" }
+            },
+            "home": {
+              "team": { "id": 143, "name": "Philadelphia Phillies" },
+              "probablePitcher": { "id": 1014, "fullName": "Aaron Nola" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-15",
+      "games": [
+        {
+          "gamePk": 960030,
+          "gameDate": "2026-03-15T17:10:00Z",
+          "officialDate": "2026-03-15",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 1,
+          "gamesInSeries": 2,
+          "doubleHeader": "Y",
+          "gameNumber": 1,
+          "status": { "abstractGameState": "Final", "detailedState": "Final" },
+          "venue": { "name": "Yankee Stadium" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "score": 4,
+              "probablePitcher": { "id": 1015, "fullName": "Sean Manaea" }
+            },
+            "home": {
+              "team": { "id": 147, "name": "New York Yankees" },
+              "score": 7,
+              "probablePitcher": { "id": 1016, "fullName": "Gerrit Cole" }
+            }
+          }
+        },
+        {
+          "gamePk": 960031,
+          "gameDate": "2026-03-15T23:10:00Z",
+          "officialDate": "2026-03-15",
+          "gameType": "R",
+          "seriesDescription": "Regular Season",
+          "seriesGameNumber": 2,
+          "gamesInSeries": 2,
+          "doubleHeader": "Y",
+          "gameNumber": 2,
+          "rescheduleDate": "2026-03-16T23:10:00Z",
+          "rescheduledFromDate": "2026-03-15",
+          "status": { "abstractGameState": "Postponed", "detailedState": "Postponed" },
+          "venue": { "name": "Yankee Stadium" },
+          "teams": {
+            "away": {
+              "team": { "id": 121, "name": "New York Mets" },
+              "probablePitcher": { "id": 1017, "fullName": "Luis Severino" }
+            },
+            "home": {
+              "team": { "id": 147, "name": "New York Yankees" },
+              "probablePitcher": { "id": 1018, "fullName": "Nestor Cortes" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,6 @@
-﻿export type WidgetMode = "BEGINNER" | "ADVANCED";
+import type { DataMode, DataModeSource } from "@/lib/dataMode";
+
+export type WidgetMode = "BEGINNER" | "ADVANCED";
 
 export type WidgetMeta = {
   sourceUsed: string;
@@ -6,6 +8,12 @@ export type WidgetMeta = {
   warnings?: string[];
   warning?: string;
   requestId?: string;
+  endpointUrl?: string;
+  upstreamStatus?: number;
+  upstreamMessage?: string;
+  cacheHit?: boolean;
+  cacheAgeSeconds?: number;
+  dataMode?: DataMode;
 };
 
 export type WidgetCommonProps = {
@@ -19,8 +27,7 @@ export type WidgetCommonProps = {
   onPersist: (next: { mode?: WidgetMode; config?: Record<string, unknown>; playerId?: string }) => Promise<void>;
   onReportBug: (bundle: Record<string, unknown>) => void;
   refreshTick: number;
-  dataMode: "live" | "fixture";
-  onDataModeChange: (next: "live" | "fixture") => Promise<void>;
+  dataMode: DataMode;
+  preferenceDataMode: DataMode;
+  dataModeSource: DataModeSource;
 };
-
-

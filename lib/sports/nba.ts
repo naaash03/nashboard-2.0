@@ -131,7 +131,7 @@ const buildEmptyApiResult = (message: string): SlateFetchResult => ({
 
 export async function fetchTonightNbaSlate(): Promise<SlateFetchResult> {
   const baseUrl =
-    process.env.SPORTS_API_NBA_BASE_URL ?? "https://v2.nba.api-sports.io";
+    process.env.SPORTS_API_NBA_BASE_URL ?? "https://v1.basketball.api-sports.io";
 
   let headers: HeadersInit;
   try {
@@ -248,4 +248,3 @@ export async function fetchTonightNbaSlate(): Promise<SlateFetchResult> {
     );
   }
 }
-

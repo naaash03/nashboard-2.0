@@ -1,5 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth";
+import { resolveCanonicalTeam } from "@/lib/sports/mappings/teamMap";
+import { resolveWatchlistData } from "@/lib/sports/resolvers";
 
 function missingDbResponse() {
   return NextResponse.json({ error: "DATABASE_URL is not configured." }, { status: 500 });
@@ -13,7 +15,11 @@ export async function GET() {
   const { prisma } = await import("@/lib/db/prisma");
   const viewer = await getViewer();
   if (!viewer.userId) {
-    return NextResponse.json({ items: [], guest: true });
+    return NextResponse.json({
+      items: [],
+      guest: true,
+      contract: resolveWatchlistData({ league: "NFL", items: [] }),
+    });
   }
 
   const items = await prisma.watchlistTeam.findMany({
@@ -21,7 +27,10 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    items,
+    contract: resolveWatchlistData({ league: "NFL", items }),
+  });
 }
 
 export async function POST(req: Request) {
@@ -35,7 +44,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sign in to save watchlist teams" }, { status: 401 });
   }
 
-  const body = (await req.json()) as { teamKey?: string; teamName?: string; sport?: string };
+  const body = (await req.json()) as {
+    teamKey?: string;
+    teamName?: string;
+    sport?: string;
+    apiSportsTeamId?: string;
+    espnTeamId?: string;
+  };
   if (!body.teamKey || !body.teamName) {
     return NextResponse.json({ error: "teamKey and teamName are required" }, { status: 400 });
   }
@@ -58,9 +73,19 @@ export async function POST(req: Request) {
       sport: "NFL",
       teamKey: body.teamKey,
       teamName: body.teamName,
+      apiSportsTeamId: typeof body.apiSportsTeamId === "string" ? body.apiSportsTeamId : null,
+      espnTeamId: typeof body.espnTeamId === "string" ? body.espnTeamId : null,
     },
   });
 
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json({
+    ...created,
+    canonicalTeam: resolveCanonicalTeam({
+      league: "NFL",
+      abbreviation: created.teamKey,
+      name: created.teamName,
+      apiSportsTeamId: created.apiSportsTeamId ?? undefined,
+      espnTeamId: created.espnTeamId ?? undefined,
+    }),
+  }, { status: 201 });
 }
-

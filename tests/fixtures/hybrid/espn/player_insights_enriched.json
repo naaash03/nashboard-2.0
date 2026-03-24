@@ -1,0 +1,47 @@
+{
+  "sport": "mlb",
+  "playerId": "40286",
+  "fullName": "Juan Soto",
+  "teamAbbrev": "NYM",
+  "teamName": "New York Mets",
+  "live": {
+    "sport": "mlb",
+    "teamKey": "NYM",
+    "hasGameToday": true,
+    "state": "in",
+    "opponent": "ATL",
+    "homeAway": "home",
+    "displayClock": "Top 6th",
+    "score": { "team": 3, "opp": 2 },
+    "eventId": "401001"
+  },
+  "season": {
+    "headline": "AVG .308 · OBP .412 · SLG .552 · OPS .964 · HR 35 · RBI 109",
+    "metrics": [
+      { "key": "avg", "label": "AVG", "value": ".308" },
+      { "key": "obp", "label": "OBP", "value": ".412" },
+      { "key": "slg", "label": "SLG", "value": ".552" },
+      { "key": "ops", "label": "OPS", "value": ".964" },
+      { "key": "hr", "label": "HR", "value": "35" },
+      { "key": "rbi", "label": "RBI", "value": "109" }
+    ],
+    "source": "derived",
+    "sampleSize": 10
+  },
+  "recent": {
+    "headline": "Last 5: AVG .333 · HR 2 · RBI 7",
+    "games": [
+      { "date": "2026-03-01", "opponent": "ATL", "result": "W", "line": "2-4 · HR · 3 RBI" },
+      { "date": "2026-02-28", "opponent": "ATL", "result": "W", "line": "1-3 · RBI" },
+      { "date": "2026-02-27", "opponent": "PHI", "result": "L", "line": "2-5 · RBI" },
+      { "date": "2026-02-25", "opponent": "PHI", "result": "W", "line": "1-4" },
+      { "date": "2026-02-23", "opponent": "MIA", "result": "W", "line": "2-4 · HR · 2 RBI" }
+    ],
+    "source": "derived"
+  },
+  "injury": {
+    "status": "Active",
+    "detail": "No reported injury"
+  },
+  "metaNotes": ["Derived from ESPN game logs."]
+}

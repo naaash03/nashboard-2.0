@@ -1,0 +1,21 @@
+{
+  "response": [
+    {
+      "statistics": [
+        {
+          "games": {
+            "position": "RF"
+          },
+          "batting": {
+            "at_bats": 520,
+            "hits": 160,
+            "base_on_balls": 95,
+            "home_runs": 35,
+            "runs_batted_in": 105,
+            "total_bases": 310
+          }
+        }
+      ]
+    }
+  ]
+}

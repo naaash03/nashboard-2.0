@@ -1,0 +1,65 @@
+{
+  "response": [
+    {
+      "id": 991001,
+      "date": {
+        "start": "2026-03-02T23:10:00.000Z"
+      },
+      "status": {
+        "short": "FT",
+        "long": "Final"
+      },
+      "teams": {
+        "home": {
+          "id": 5,
+          "code": "NYM",
+          "name": "New York Mets"
+        },
+        "away": {
+          "id": 15,
+          "code": "ATL",
+          "name": "Atlanta Braves"
+        }
+      },
+      "scores": {
+        "home": {
+          "total": 6
+        },
+        "away": {
+          "total": 4
+        }
+      }
+    },
+    {
+      "id": 991002,
+      "date": {
+        "start": "2026-03-04T00:10:00.000Z"
+      },
+      "status": {
+        "short": "NS",
+        "long": "Scheduled 7:10 PM ET"
+      },
+      "teams": {
+        "home": {
+          "id": 15,
+          "code": "ATL",
+          "name": "Atlanta Braves"
+        },
+        "away": {
+          "id": 5,
+          "code": "NYM",
+          "name": "New York Mets"
+        }
+      },
+      "scores": {
+        "home": {
+          "total": 0
+        },
+        "away": {
+          "total": 0
+        }
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,24 @@
+{
+  "sport": "nba",
+  "teams": [
+    {
+      "teamKey": "LAL",
+      "teamName": "Los Angeles Lakers",
+      "status": {
+        "sport": "nba",
+        "teamKey": "LAL",
+        "hasGameToday": true,
+        "state": "in",
+        "opponent": "BOS",
+        "homeAway": "home",
+        "displayClock": "Q3 08:21",
+        "score": { "team": 88, "opp": 83 },
+        "eventId": "401234"
+      },
+      "nextGame": null,
+      "record": { "wins": 40, "losses": 28, "pct": "0.588", "streak": "W2", "last10": "7-3" },
+      "standings": { "rank": "4", "conference": "West" },
+      "lastGame": { "when": "2026-03-01T00:00:00Z", "vs": "GSW", "result": "W", "score": "122-114" }
+    }
+  ]
+}

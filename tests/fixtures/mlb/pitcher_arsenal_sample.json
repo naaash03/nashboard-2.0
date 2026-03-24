@@ -1,0 +1,42 @@
+﻿{
+  "people": [
+    {
+      "id": 669203,
+      "fullName": "Corbin Burnes",
+      "stats": [
+        {
+          "splits": [
+            {
+              "stat": {
+                "percentage": 0.302,
+                "averageSpeed": 95.1,
+                "type": { "code": "FF", "description": "Four-Seam Fastball" }
+              }
+            },
+            {
+              "stat": {
+                "percentage": 0.219,
+                "averageSpeed": 88.7,
+                "type": { "code": "CT", "description": "Cutter" }
+              }
+            },
+            {
+              "stat": {
+                "percentage": 0.181,
+                "averageSpeed": 82.1,
+                "type": { "code": "CU", "description": "Curveball" }
+              }
+            },
+            {
+              "stat": {
+                "percentage": 0.167,
+                "averageSpeed": 86.4,
+                "type": { "code": "CH", "description": "Changeup" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

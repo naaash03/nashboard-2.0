@@ -1,0 +1,24 @@
+{
+  "response": [
+    {
+      "player": {
+        "id": "40286",
+        "name": "Juan Soto",
+        "photo": "https://a.espncdn.com/i/headshots/mlb/players/full/40286.png"
+      },
+      "team": {
+        "name": "New York Mets",
+        "code": "NYM",
+        "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png"
+      },
+      "statistics": [
+        {
+          "games": {
+            "position": "RF",
+            "number": "22"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { resolveDataModeFromRequest } from "@/lib/config/env";
+import { resolveTeamsSearch } from "@/lib/providers";
+import { normalizeTeamSearchSport } from "@/lib/providers/espn/teamDirectory";
+import { normalizeTeamFromApiSports, normalizeTeamFromEspn } from "@/lib/sports/adapters";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
+import type { Meta } from "@/lib/providers/types";
+import type { Envelope, TeamSearchResult } from "@/lib/types/players";
+
+function fallbackMeta(dataMode: "auto" | "live" | "fixture", warning: string): Meta {
+  return {
+    sourceUsed: dataMode === "fixture" ? "fixture" : "apiSports",
+    updatedAt: new Date().toISOString(),
+    requestId: randomUUID(),
+    warning,
+    dataMode,
+  };
+}
+
+function errorStatus(code?: string): number {
+  if (code === "MISSING_QUERY") {
+    return 400;
+  }
+  return 502;
+}
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const sport = normalizeTeamSearchSport(searchParams.get("sport"));
+  const query = (searchParams.get("q") ?? "").trim();
+  const parsedLimit = Number.parseInt(searchParams.get("limit") ?? "8", 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(8, parsedLimit)) : 8;
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
+  const { resolvedDataMode } = resolveDataModeFromRequest(req);
+
+  if (!query) {
+    const meta = fallbackMeta(resolvedDataMode, "q is required");
+    const envelope: Envelope<TeamSearchResult[]> = {
+      data: null,
+      meta,
+      error: {
+        message: "q is required",
+        code: "MISSING_QUERY",
+      },
+    };
+    const contract = toWidgetPayload({
+      data: null,
+      error: "q is required",
+      meta,
+      primaryProvider: "apiSports",
+    });
+    return NextResponse.json({ ...envelope, contract }, { status: 400 });
+  }
+
+  try {
+    const envelope = await resolveTeamsSearch(sport, query, limit, {
+      dataMode: resolvedDataMode,
+      cacheBust,
+    });
+    const league = sport.toUpperCase();
+    const provider = envelope.meta.sourceUsed === "apiSports" ? "apiSports" : "espn";
+    const canonicalRows = (envelope.data ?? []).map((row) => (
+      provider === "apiSports"
+        ? normalizeTeamFromApiSports(row, league)
+        : normalizeTeamFromEspn(row, league)
+    ));
+    const contract = toWidgetPayload({
+      data: canonicalRows,
+      error: envelope.error?.message ?? null,
+      meta: envelope.meta,
+      primaryProvider: "apiSports",
+    });
+    if (envelope.error) {
+      return NextResponse.json({ ...envelope, contract }, { status: errorStatus(envelope.error.code) });
+    }
+    return NextResponse.json({ ...envelope, contract });
+  } catch (error) {
+    const message = `Unexpected error in teams search route: ${String(error)}`;
+    const meta = fallbackMeta(resolvedDataMode, message);
+    const envelope: Envelope<TeamSearchResult[]> = {
+      data: null,
+      meta,
+      error: {
+        message,
+        code: "ROUTE_UNHANDLED",
+      },
+    };
+    const contract = toWidgetPayload({
+      data: null,
+      error: message,
+      meta,
+      primaryProvider: "apiSports",
+    });
+    return NextResponse.json({ ...envelope, contract }, { status: 500 });
+  }
+}

@@ -1,0 +1,40 @@
+﻿{
+  "children": [
+    {
+      "name": "Eastern Conference",
+      "abbreviation": "East",
+      "standings": {
+        "entries": [
+          { "team": { "abbreviation": "BOS", "displayName": "Boston Celtics" }, "stats": [{ "name": "wins", "value": 46 }, { "name": "losses", "value": 16 }, { "name": "winPercent", "value": 0.742, "displayValue": ".742" }] },
+          { "team": { "abbreviation": "MIL", "displayName": "Milwaukee Bucks" }, "stats": [{ "name": "wins", "value": 43 }, { "name": "losses", "value": 19 }, { "name": "winPercent", "value": 0.694, "displayValue": ".694" }] },
+          { "team": { "abbreviation": "CLE", "displayName": "Cleveland Cavaliers" }, "stats": [{ "name": "wins", "value": 41 }, { "name": "losses", "value": 21 }, { "name": "winPercent", "value": 0.661, "displayValue": ".661" }] },
+          { "team": { "abbreviation": "NY", "displayName": "New York Knicks" }, "stats": [{ "name": "wins", "value": 39 }, { "name": "losses", "value": 23 }, { "name": "winPercent", "value": 0.629, "displayValue": ".629" }] },
+          { "team": { "abbreviation": "MIA", "displayName": "Miami Heat" }, "stats": [{ "name": "wins", "value": 36 }, { "name": "losses", "value": 26 }, { "name": "winPercent", "value": 0.581, "displayValue": ".581" }] },
+          { "team": { "abbreviation": "ORL", "displayName": "Orlando Magic" }, "stats": [{ "name": "wins", "value": 34 }, { "name": "losses", "value": 28 }, { "name": "winPercent", "value": 0.548, "displayValue": ".548" }] },
+          { "team": { "abbreviation": "PHI", "displayName": "Philadelphia 76ers" }, "stats": [{ "name": "wins", "value": 33 }, { "name": "losses", "value": 29 }, { "name": "winPercent", "value": 0.532, "displayValue": ".532" }] },
+          { "team": { "abbreviation": "IND", "displayName": "Indiana Pacers" }, "stats": [{ "name": "wins", "value": 31 }, { "name": "losses", "value": 31 }, { "name": "winPercent", "value": 0.500, "displayValue": ".500" }] },
+          { "team": { "abbreviation": "CHI", "displayName": "Chicago Bulls" }, "stats": [{ "name": "wins", "value": 29 }, { "name": "losses", "value": 33 }, { "name": "winPercent", "value": 0.468, "displayValue": ".468" }] },
+          { "team": { "abbreviation": "ATL", "displayName": "Atlanta Hawks" }, "stats": [{ "name": "wins", "value": 28 }, { "name": "losses", "value": 34 }, { "name": "winPercent", "value": 0.452, "displayValue": ".452" }] }
+        ]
+      }
+    },
+    {
+      "name": "Western Conference",
+      "abbreviation": "West",
+      "standings": {
+        "entries": [
+          { "team": { "abbreviation": "DEN", "displayName": "Denver Nuggets" }, "stats": [{ "name": "wins", "value": 44 }, { "name": "losses", "value": 18 }, { "name": "winPercent", "value": 0.710, "displayValue": ".710" }] },
+          { "team": { "abbreviation": "MIN", "displayName": "Minnesota Timberwolves" }, "stats": [{ "name": "wins", "value": 43 }, { "name": "losses", "value": 19 }, { "name": "winPercent", "value": 0.694, "displayValue": ".694" }] },
+          { "team": { "abbreviation": "OKC", "displayName": "Oklahoma City Thunder" }, "stats": [{ "name": "wins", "value": 42 }, { "name": "losses", "value": 20 }, { "name": "winPercent", "value": 0.677, "displayValue": ".677" }] },
+          { "team": { "abbreviation": "LAC", "displayName": "LA Clippers" }, "stats": [{ "name": "wins", "value": 40 }, { "name": "losses", "value": 22 }, { "name": "winPercent", "value": 0.645, "displayValue": ".645" }] },
+          { "team": { "abbreviation": "LAL", "displayName": "Los Angeles Lakers" }, "stats": [{ "name": "wins", "value": 39 }, { "name": "losses", "value": 23 }, { "name": "winPercent", "value": 0.629, "displayValue": ".629" }] },
+          { "team": { "abbreviation": "PHX", "displayName": "Phoenix Suns" }, "stats": [{ "name": "wins", "value": 37 }, { "name": "losses", "value": 25 }, { "name": "winPercent", "value": 0.597, "displayValue": ".597" }] },
+          { "team": { "abbreviation": "SAC", "displayName": "Sacramento Kings" }, "stats": [{ "name": "wins", "value": 35 }, { "name": "losses", "value": 27 }, { "name": "winPercent", "value": 0.565, "displayValue": ".565" }] },
+          { "team": { "abbreviation": "NO", "displayName": "New Orleans Pelicans" }, "stats": [{ "name": "wins", "value": 34 }, { "name": "losses", "value": 28 }, { "name": "winPercent", "value": 0.548, "displayValue": ".548" }] },
+          { "team": { "abbreviation": "DAL", "displayName": "Dallas Mavericks" }, "stats": [{ "name": "wins", "value": 33 }, { "name": "losses", "value": 29 }, { "name": "winPercent", "value": 0.532, "displayValue": ".532" }] },
+          { "team": { "abbreviation": "GS", "displayName": "Golden State Warriors" }, "stats": [{ "name": "wins", "value": 34 }, { "name": "losses", "value": 28 }, { "name": "winPercent", "value": 0.548, "displayValue": ".548" }] }
+        ]
+      }
+    }
+  ]
+}

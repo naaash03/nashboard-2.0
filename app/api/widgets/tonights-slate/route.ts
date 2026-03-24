@@ -1,13 +1,15 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { getMostRecentSlateBefore, getNextLeagueSlateAfter, getScoreboard } from "@/lib/providers/espn/nfl";
+import { normalizeGameFromEspn } from "@/lib/sports/adapters";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { shapeTonightsSlate } from "@/lib/templates/tonightsSlate";
 import type { Meta } from "@/lib/providers/types";
 
 type SlateState = "today" | "next_slate" | "schedule_not_posted";
 
-function buildDiagnostics(meta: Meta | null, fallbackMode: "live" | "fixture") {
+function buildDiagnostics(meta: Meta | null, fallbackMode: "auto" | "live" | "fixture") {
   return {
     endpointUrl: meta?.endpointUrl ?? null,
     upstreamStatus: meta?.upstreamStatus ?? null,
@@ -19,16 +21,31 @@ function buildDiagnostics(meta: Meta | null, fallbackMode: "live" | "fixture") {
   };
 }
 
+function canonicalGamesFromSlate(games: Array<{ id: string; date: string; status: string; homeTeam: { key: string; name: string }; awayTeam: { key: string; name: string } }>) {
+  return games.map((game) => normalizeGameFromEspn({
+    id: game.id,
+    date: game.date,
+    status: { type: { description: game.status, state: game.status } },
+    competitions: [{
+      competitors: [
+        { homeAway: "home", team: { abbreviation: game.homeTeam.key, displayName: game.homeTeam.name } },
+        { homeAway: "away", team: { abbreviation: game.awayTeam.key, displayName: game.awayTeam.name } },
+      ],
+    }],
+  }, "NFL"));
+}
+
 function responsePayload(args: {
   state: SlateState;
   dateUsed: string;
   nextDate?: string | null;
   games: ReturnType<typeof shapeTonightsSlate>;
+  canonicalGames: ReturnType<typeof canonicalGamesFromSlate>;
   historical?: { date: string; games: ReturnType<typeof shapeTonightsSlate> } | null;
   userFacingMessage: string;
   meta: Meta;
 }) {
-  const { state, dateUsed, nextDate = null, games, historical = null, userFacingMessage, meta } = args;
+  const { state, dateUsed, nextDate = null, games, canonicalGames, historical = null, userFacingMessage, meta } = args;
   return {
     data: {
       state,
@@ -39,6 +56,11 @@ function responsePayload(args: {
       userFacingMessage,
     },
     meta,
+    contract: toWidgetPayload({
+      data: canonicalGames,
+      meta,
+      primaryProvider: "espn",
+    }),
     diagnostics: buildDiagnostics(meta, meta.dataMode ?? "live"),
   };
 }
@@ -47,6 +69,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const sport = (searchParams.get("sport") ?? "NFL").toUpperCase();
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
   const date = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
 
@@ -55,24 +78,26 @@ export async function GET(req: Request) {
   }
 
   try {
-    const todaySlate = await getScoreboard(date, resolvedDataMode);
+    const todaySlate = await getScoreboard(date, resolvedDataMode, cacheBust);
     if (todaySlate.games.length > 0) {
       return NextResponse.json(responsePayload({
         state: "today",
         dateUsed: date,
         games: shapeTonightsSlate(todaySlate.games, mode),
+        canonicalGames: canonicalGamesFromSlate(todaySlate.games),
         userFacingMessage: "Showing today's NFL slate.",
         meta: todaySlate.meta,
       }));
     }
 
-    const nextSlate = await getNextLeagueSlateAfter(date, resolvedDataMode, 21);
+    const nextSlate = await getNextLeagueSlateAfter(date, resolvedDataMode, 21, cacheBust);
     if (nextSlate.games.length > 0 && nextSlate.nextDateISO) {
       return NextResponse.json(responsePayload({
         state: "next_slate",
         dateUsed: date,
         nextDate: nextSlate.nextDateISO,
         games: shapeTonightsSlate(nextSlate.games, mode),
+        canonicalGames: canonicalGamesFromSlate(nextSlate.games),
         userFacingMessage: `No games were scheduled on ${date}. Showing the next slate on ${nextSlate.nextDateISO}.`,
         meta: {
           ...nextSlate.meta,
@@ -81,18 +106,19 @@ export async function GET(req: Request) {
       }));
     }
 
-    const historical = await getMostRecentSlateBefore(date, resolvedDataMode, 60);
+    const historical = await getMostRecentSlateBefore(date, resolvedDataMode, 60, cacheBust);
     const scheduleMessage = "Next season schedule has not been posted by the league yet.";
     return NextResponse.json(responsePayload({
       state: "schedule_not_posted",
       dateUsed: date,
       nextDate: null,
       games: [],
+      canonicalGames: [],
       historical: historical.dateISO
         ? {
-            date: historical.dateISO,
-            games: shapeTonightsSlate(historical.games, mode),
-          }
+          date: historical.dateISO,
+          games: shapeTonightsSlate(historical.games, mode),
+        }
         : null,
       userFacingMessage: historical.dateISO
         ? `${scheduleMessage} Showing the most recent slate from ${historical.dateISO} for context.`
@@ -104,6 +130,14 @@ export async function GET(req: Request) {
     }));
   } catch (error) {
     const message = `Failed to load tonight's slate: ${String(error)}`;
+    const meta: Meta = {
+      sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
+      updatedAt: new Date().toISOString(),
+      requestId: randomUUID(),
+      warning: message,
+      dataMode: resolvedDataMode,
+    };
+
     return NextResponse.json({
       error: message,
       data: {
@@ -114,6 +148,12 @@ export async function GET(req: Request) {
         historical: null,
         userFacingMessage: message,
       },
+      contract: toWidgetPayload({
+        data: [],
+        error: message,
+        meta,
+        primaryProvider: "espn",
+      }),
       diagnostics: buildDiagnostics(null, resolvedDataMode),
     }, { status: 502 });
   }
