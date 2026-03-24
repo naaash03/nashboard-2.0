@@ -1,0 +1,248 @@
+{
+  "people": [
+    {
+      "id": 1001,
+      "fullName": "David Peterson",
+      "pitchHand": {
+        "code": "L",
+        "description": "Left"
+      },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2026",
+              "stat": {
+                "wins": 0,
+                "losses": 0,
+                "era": "4.50",
+                "whip": "1.50",
+                "inningsPitched": "4.0",
+                "strikeOuts": 4,
+                "baseOnBalls": 3,
+                "homeRuns": 1,
+                "avg": ".286",
+                "strikeoutsPer9Inn": "9.0",
+                "walksPer9Inn": "6.8",
+                "homeRunsPer9": "2.3",
+                "hits": 6
+              }
+            },
+            {
+              "season": "2025",
+              "stat": {
+                "wins": 11,
+                "losses": 7,
+                "era": "3.41",
+                "whip": "1.19",
+                "inningsPitched": "147.2",
+                "strikeOuts": 163,
+                "baseOnBalls": 48,
+                "homeRuns": 16,
+                "avg": ".231",
+                "strikeoutsPer9Inn": "9.9",
+                "walksPer9Inn": "2.9",
+                "homeRunsPer9": "1.0",
+                "hits": 132
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2026",
+              "date": "2026-03-05",
+              "opponent": { "abbreviation": "ATL", "name": "Atlanta Braves" },
+              "stat": { "inningsPitched": "2.0", "earnedRuns": 1, "strikeOuts": 2 }
+            },
+            {
+              "season": "2026",
+              "date": "2026-02-28",
+              "opponent": { "abbreviation": "PHI", "name": "Philadelphia Phillies" },
+              "stat": { "inningsPitched": "2.0", "earnedRuns": 1, "strikeOuts": 2 }
+            },
+            {
+              "season": "2025",
+              "date": "2025-09-18",
+              "opponent": { "abbreviation": "ATL", "name": "Atlanta Braves" },
+              "stat": { "inningsPitched": "6.0", "earnedRuns": 2, "strikeOuts": 7 }
+            },
+            {
+              "season": "2025",
+              "date": "2025-09-11",
+              "opponent": { "abbreviation": "PHI", "name": "Philadelphia Phillies" },
+              "stat": { "inningsPitched": "6.1", "earnedRuns": 1, "strikeOuts": 8 }
+            },
+            {
+              "season": "2025",
+              "date": "2025-09-04",
+              "opponent": { "abbreviation": "LAD", "name": "Los Angeles Dodgers" },
+              "stat": { "inningsPitched": "5.2", "earnedRuns": 3, "strikeOuts": 6 }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "homeAndAway" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2025",
+              "split": { "code": "h", "description": "Home" },
+              "isHome": true,
+              "stat": { "era": "3.10", "whip": "1.12", "avg": ".220" }
+            },
+            {
+              "season": "2025",
+              "split": { "code": "a", "description": "Away" },
+              "isHome": false,
+              "stat": { "era": "3.67", "whip": "1.27", "avg": ".241" }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "statSplits" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2025",
+              "split": { "code": "vl", "description": "vs LHH" },
+              "stat": { "avg": ".218", "strikeoutsPer9Inn": "9.4", "walksPer9Inn": "2.7" }
+            },
+            {
+              "season": "2025",
+              "split": { "code": "vr", "description": "vs RHH" },
+              "stat": { "avg": ".239", "strikeoutsPer9Inn": "10.2", "walksPer9Inn": "3.0" }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1002,
+      "fullName": "Gerrit Cole",
+      "pitchHand": {
+        "code": "R",
+        "description": "Right"
+      },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2026",
+              "stat": {
+                "wins": 0,
+                "losses": 0,
+                "era": "3.86",
+                "whip": "1.39",
+                "inningsPitched": "4.2",
+                "strikeOuts": 6,
+                "baseOnBalls": 2,
+                "homeRuns": 1,
+                "avg": ".258",
+                "strikeoutsPer9Inn": "11.6",
+                "walksPer9Inn": "3.9",
+                "homeRunsPer9": "1.9",
+                "hits": 8
+              }
+            },
+            {
+              "season": "2025",
+              "stat": {
+                "wins": 14,
+                "losses": 5,
+                "era": "2.96",
+                "whip": "1.05",
+                "inningsPitched": "171.1",
+                "strikeOuts": 201,
+                "baseOnBalls": 42,
+                "homeRuns": 18,
+                "avg": ".213",
+                "strikeoutsPer9Inn": "10.6",
+                "walksPer9Inn": "2.2",
+                "homeRunsPer9": "0.9",
+                "hits": 141
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2026",
+              "date": "2026-03-06",
+              "opponent": { "abbreviation": "BOS", "name": "Boston Red Sox" },
+              "stat": { "inningsPitched": "2.1", "earnedRuns": 1, "strikeOuts": 4 }
+            },
+            {
+              "season": "2026",
+              "date": "2026-02-27",
+              "opponent": { "abbreviation": "TOR", "name": "Toronto Blue Jays" },
+              "stat": { "inningsPitched": "2.1", "earnedRuns": 1, "strikeOuts": 2 }
+            },
+            {
+              "season": "2025",
+              "date": "2025-09-20",
+              "opponent": { "abbreviation": "BOS", "name": "Boston Red Sox" },
+              "stat": { "inningsPitched": "7.0", "earnedRuns": 1, "strikeOuts": 10 }
+            },
+            {
+              "season": "2025",
+              "date": "2025-09-13",
+              "opponent": { "abbreviation": "TOR", "name": "Toronto Blue Jays" },
+              "stat": { "inningsPitched": "6.2", "earnedRuns": 2, "strikeOuts": 8 }
+            },
+            {
+              "season": "2025",
+              "date": "2025-09-06",
+              "opponent": { "abbreviation": "TB", "name": "Tampa Bay Rays" },
+              "stat": { "inningsPitched": "6.0", "earnedRuns": 2, "strikeOuts": 9 }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "homeAndAway" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2025",
+              "split": { "code": "h", "description": "Home" },
+              "isHome": true,
+              "stat": { "era": "2.64", "whip": "1.01", "avg": ".206" }
+            },
+            {
+              "season": "2025",
+              "split": { "code": "a", "description": "Away" },
+              "isHome": false,
+              "stat": { "era": "3.27", "whip": "1.11", "avg": ".221" }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "statSplits" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "season": "2025",
+              "split": { "code": "vl", "description": "vs LHH" },
+              "stat": { "avg": ".205", "strikeoutsPer9Inn": "10.1", "walksPer9Inn": "2.0" }
+            },
+            {
+              "season": "2025",
+              "split": { "code": "vr", "description": "vs RHH" },
+              "stat": { "avg": ".220", "strikeoutsPer9Inn": "11.0", "walksPer9Inn": "2.3" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -55,11 +55,9 @@ describe("widgets routes visible output guarantees", () => {
     expect(Object.prototype.hasOwnProperty.call(body.diagnostics, "upstreamMessage")).toBe(true);
   });
 
-  it("widget route reads cookie dataMode when query param is absent", async () => {
+  it("widget route reads preferenceMode when explicit dataMode is absent", async () => {
     const mod = await import("@/app/api/widgets/tonights-slate/route");
-    const res = await mod.GET(new Request("http://localhost/api/widgets/tonights-slate?sport=NFL&mode=beginner", {
-      headers: { cookie: "nashboard_dataMode=fixture" },
-    }));
+    const res = await mod.GET(new Request("http://localhost/api/widgets/tonights-slate?sport=NFL&mode=beginner&preferenceMode=fixture"));
     const body = await res.json();
 
     expect(res.status).toBe(200);

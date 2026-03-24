@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿import "server-only";
 import { randomUUID } from "node:crypto";
 import { fetchMlbJson, resolveDataMode } from "@/lib/providers/mlb/client";
@@ -2700,3 +2701,24 @@ export const mlbProviderStub = mlbProvider;
 
 
 
+=======
+export { getMlbTeamSeasonScheduleWithProbables, getMlbUpcomingScheduleWithProbables, mlbProvider } from "@/lib/providers/mlb/provider";
+export { resolveMlbPitcherComparisonStats } from "@/lib/providers/mlb/pitcherComparison";
+export type {
+  MlbProvider,
+  MlbNextGame,
+  MlbNextGames,
+  MlbScheduledGame,
+  MlbScheduledProbableStarter,
+  MlbScheduledTeam,
+  MlbArsenalPitch,
+  PitcherArsenal,
+} from "@/lib/providers/mlb/provider";
+export type {
+  MlbPitcherComparisonCard,
+  MlbPitcherLastStart,
+  MlbPitcherStatBasis,
+  ResolveMlbPitcherComparisonStatsArgs,
+  ResolveMlbPitcherComparisonStatsResult,
+} from "@/lib/providers/mlb/pitcherComparison";
+>>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03

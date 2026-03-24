@@ -1,0 +1,76 @@
+{
+  "response": [
+    {
+      "id": "901001",
+      "date": {
+        "start": "2026-03-09T23:10:00.000Z"
+      },
+      "status": {
+        "short": "NS",
+        "long": "Scheduled"
+      },
+      "venue": {
+        "name": "Citi Field"
+      },
+      "teams": {
+        "away": {
+          "id": "999",
+          "code": "ATL",
+          "name": "Atlanta Braves",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/atl.png",
+          "probable_pitcher": {
+            "id": "1001",
+            "fullName": "Spencer Strider",
+            "record": "2-1",
+            "era": "2.95",
+            "whip": "1.02",
+            "hand": "R",
+            "photo": "https://a.espncdn.com/i/headshots/mlb/players/full/1001.png"
+          }
+        },
+        "home": {
+          "id": "22",
+          "code": "NYM",
+          "name": "New York Mets",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png",
+          "probable_pitcher": {
+            "id": "1002",
+            "fullName": "Kodai Senga",
+            "record": "3-0",
+            "era": "2.10",
+            "whip": "1.00",
+            "hand": "R",
+            "photo": "https://a.espncdn.com/i/headshots/mlb/players/full/1002.png"
+          }
+        }
+      }
+    },
+    {
+      "id": "901002",
+      "date": {
+        "start": "2026-03-11T23:10:00.000Z"
+      },
+      "status": {
+        "short": "NS",
+        "long": "Scheduled"
+      },
+      "venue": {
+        "name": "Citizens Bank Park"
+      },
+      "teams": {
+        "away": {
+          "id": "22",
+          "code": "NYM",
+          "name": "New York Mets",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png"
+        },
+        "home": {
+          "id": "1005",
+          "code": "PHI",
+          "name": "Philadelphia Phillies",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/phi.png"
+        }
+      }
+    }
+  ]
+}

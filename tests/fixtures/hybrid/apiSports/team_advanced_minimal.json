@@ -1,0 +1,19 @@
+{
+  "sport": "nba",
+  "teams": [
+    {
+      "teamKey": "LAL",
+      "teamName": "Los Angeles Lakers",
+      "status": {
+        "sport": "nba",
+        "teamKey": "LAL",
+        "hasGameToday": false
+      },
+      "nextGame": null,
+      "record": { "wins": 40, "losses": 28, "pct": "0.588" },
+      "standings": null,
+      "lastGame": null,
+      "metaNotes": ["API-Sports minimal payload"]
+    }
+  ]
+}

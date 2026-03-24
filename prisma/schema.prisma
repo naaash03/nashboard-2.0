@@ -137,6 +137,8 @@ model WatchlistTeam {
   sport     Sport    @default(NFL)
   teamKey   String
   teamName  String
+  apiSportsTeamId String?
+  espnTeamId      String?
   createdAt DateTime @default(now())
 
   @@unique([userId, sport, teamKey])

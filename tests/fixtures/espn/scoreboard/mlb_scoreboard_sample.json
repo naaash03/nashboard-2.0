@@ -1,0 +1,68 @@
+{
+  "events": [
+    {
+      "id": "401700001",
+      "competitions": [
+        {
+          "status": {
+            "type": {
+              "state": "in",
+              "detail": "Top 7th",
+              "shortDetail": "Top 7th"
+            }
+          },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "score": "3",
+              "team": {
+                "abbreviation": "NYM",
+                "displayName": "New York Mets"
+              }
+            },
+            {
+              "homeAway": "home",
+              "score": "2",
+              "team": {
+                "abbreviation": "ATL",
+                "displayName": "Atlanta Braves"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401700002",
+      "competitions": [
+        {
+          "status": {
+            "type": {
+              "state": "pre",
+              "detail": "7:10 PM ET",
+              "shortDetail": "7:10 PM ET"
+            }
+          },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "score": "0",
+              "team": {
+                "abbreviation": "LAD",
+                "displayName": "Los Angeles Dodgers"
+              }
+            },
+            {
+              "homeAway": "home",
+              "score": "0",
+              "team": {
+                "abbreviation": "SD",
+                "displayName": "San Diego Padres"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+﻿{
+  "athlete": {
+    "id": "40286",
+    "fullName": "Juan Soto",
+    "displayName": "Juan Soto",
+    "team": { "displayName": "New York Mets", "abbreviation": "NYM" },
+    "position": { "abbreviation": "RF" },
+    "headshot": { "href": "https://a.espncdn.com/i/headshots/mlb/players/full/40286.png" },
+    "jersey": "22",
+    "age": 27,
+    "displayHeight": "6' 2\"",
+    "displayWeight": "224 lbs"
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "events": [
+    {
+      "id": "901001",
+      "date": "2026-03-09T23:10:00.000Z",
+      "competitions": [
+        {
+          "id": "901001",
+          "date": "2026-03-09T23:10:00.000Z",
+          "venue": {
+            "fullName": "Citi Field"
+          },
+          "status": {
+            "type": {
+              "state": "pre",
+              "name": "STATUS_SCHEDULED",
+              "detail": "7:10 PM ET",
+              "shortDetail": "7:10 PM ET"
+            }
+          },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "team": {
+                "abbreviation": "ATL",
+                "displayName": "Atlanta Braves",
+                "logos": [
+                  {
+                    "href": "https://a.espncdn.com/i/teamlogos/mlb/500/atl.png"
+                  }
+                ]
+              },
+              "probables": [
+                {
+                  "record": "2-1",
+                  "athlete": {
+                    "id": "1001",
+                    "displayName": "Spencer Strider",
+                    "headshot": {
+                      "href": "https://a.espncdn.com/i/headshots/mlb/players/full/1001.png"
+                    },
+                    "throws": "R"
+                  },
+                  "statistics": [
+                    {
+                      "displayName": "ERA",
+                      "displayValue": "2.95"
+                    },
+                    {
+                      "displayName": "WHIP",
+                      "displayValue": "1.02"
+                    },
+                    {
+                      "displayName": "K",
+                      "displayValue": "32"
+                    },
+                    {
+                      "displayName": "IP",
+                      "displayValue": "21.0"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "homeAway": "home",
+              "team": {
+                "abbreviation": "NYM",
+                "displayName": "New York Mets",
+                "logos": [
+                  {
+                    "href": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png"
+                  }
+                ]
+              },
+              "probables": [
+                {
+                  "record": "3-0",
+                  "athlete": {
+                    "id": "1002",
+                    "displayName": "Kodai Senga",
+                    "headshot": {
+                      "href": "https://a.espncdn.com/i/headshots/mlb/players/full/1002.png"
+                    },
+                    "throws": "R"
+                  },
+                  "statistics": [
+                    {
+                      "displayName": "ERA",
+                      "displayValue": "2.10"
+                    },
+                    {
+                      "displayName": "WHIP",
+                      "displayValue": "1.00"
+                    },
+                    {
+                      "displayName": "K",
+                      "displayValue": "29"
+                    },
+                    {
+                      "displayName": "IP",
+                      "displayValue": "23.0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

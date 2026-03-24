@@ -1,5 +1,261 @@
 ﻿# FIX REPORT
 
+## Changelog (2026-03-03)
+- API-Sports hosts + provider IDs + schedule window/timezone:
+  - API-Sports host routing now uses sport-correct bases:
+    - NBA: https://v1.basketball.api-sports.io
+    - MLB: https://v1.baseball.api-sports.io
+    - NFL: https://v1.american-football.api-sports.io
+  - Added host normalization in lib/providers/apiSports/config.ts so legacy NBA host values are auto-upgraded to the basketball host.
+  - Team search rows now include provider IDs when available:
+    - apiSportsTeamId
+    - espnTeamId
+  - Watchlist now persists provider IDs in widget config (teamProviderIds) and performs best-effort backfill for old entries.
+  - /api/teams/advanced now accepts teamRefs and prefers provider IDs over abbreviation-only lookups.
+  - API-Sports team advanced now uses a buffered ET schedule window (today-3 to today+7) to compute:
+    - recent final game
+    - next scheduled game
+    - today/live context
+  - Data Health now reports timezone and schedule window diagnostics and explicitly notes the switch away from today-only logic.
+
+- Validation checklist:
+  - Knicks/NBA and similar short keys resolve through provider IDs when available.
+  - Teams Advanced surfaces last/next game from the buffered ET window.
+  - Data Health shows timezone and schedule window values.
+  - Hybrid precedence remains unchanged: API-Sports -> ESPN -> Fixture.
+## Changelog (2026-03-03)
+- Advanced widgets restore pass (hybrid enrichment):
+  - Regression checklist from pre-hybrid rich Advanced state (`f1dac12` and earlier):
+    - Player Card Advanced must keep all 4 sections visible: Live Context, Season Highlights, Recent Games, Status/Injury.
+    - Player Card Advanced should render compact section-level notes instead of collapsing into a mostly empty card.
+    - Watchlist Players Advanced should expose more than one summary line when richer insights are available.
+    - Team Advanced should include game context + standings/record enrichment, not just bare record rows.
+  - Stable advanced data contract updates:
+    - Extended `lib/types/playerInsights.ts` with section-level optional notes (`season.notes`, `recent.notes`) while preserving compatibility.
+  - Field-level hybrid enrichment logic in `lib/providers/index.ts`:
+    - API-Sports remains primary in AUTO mode.
+    - Added section-aware completeness checks for profile, insights advanced, and team advanced.
+    - If API-Sports is incomplete, ESPN is called and merged per-section (richer season/recent/live selection).
+    - If API-Sports + ESPN still leave Advanced sections incomplete, AUTO uses fixture tertiary fallback (`sourceUsed: "fixture"`).
+  - UI restore/polish:
+    - Player Card Advanced now always renders section shells with compact “Not available from provider” notes for missing sections.
+    - Watchlist Players Advanced rows now include a lightweight Details accordion (season metrics + recent lines + notes).
+  - New deterministic hybrid fixtures:
+    - `tests/fixtures/hybrid/apiSports/player_insights_minimal.json`
+    - `tests/fixtures/hybrid/espn/player_insights_enriched.json`
+    - `tests/fixtures/hybrid/merged/player_insights_expected.json`
+    - `tests/fixtures/hybrid/apiSports/team_advanced_minimal.json`
+    - `tests/fixtures/hybrid/espn/team_advanced_enriched.json`
+    - `tests/fixtures/hybrid/merged/team_advanced_expected.json`
+  - Enrichment coverage tests:
+    - `tests/providers/hybrid-provider-router.test.ts` validates API-Sports-only, ESPN-enriched, and fixture fallback paths.
+    - `tests/player-card-widget.test.ts` validates Advanced section shells remain visible for partial payloads.
+
+
+## Changelog (2026-03-03)
+- Hybrid provider architecture (AUTO mode):
+  - Added provider router in `lib/providers/index.ts` with deterministic source order:
+    1) API-Sports (primary live)
+    2) ESPN (secondary live fallback/hydration)
+    3) Fixture (tertiary fallback)
+  - Routes now use the hybrid resolver:
+    - `GET /api/players/search`
+    - `GET /api/players/profile`
+    - `GET /api/players/insights`
+    - `GET /api/players/insights/batch`
+    - `GET /api/teams/search`
+    - `GET /api/teams/advanced`
+  - Standard meta now includes hybrid diagnostics:
+    - `sourceUsed`
+    - `attemptedSources[]`
+    - `hydrationUsed`
+    - `dataModeEffective`
+    - `warnings[]` / `warning`
+
+- API-Sports provider modules:
+  - Added `lib/providers/apiSports/*`:
+    - `client.ts`, `config.ts`, `playerDirectory.ts`, `playerInsights.ts`, `teamDirectory.ts`, `teamAdvanced.ts`
+  - Uses existing env keys with compatibility resolution:
+    - API key: `API_SPORTS_KEY` (fallback `SPORTS_API_KEY`)
+    - base URLs: `MLB_API_BASE_URL|NFL_API_BASE_URL|NBA_API_BASE_URL` with fallback to `SPORTS_API_*_BASE_URL`
+  - Added cacheBust-aware fetch behavior with in-memory cache bypass.
+  - Added endpoint health snapshots for diagnostics (`getApiSportsHealthSnapshot`).
+
+- Fixture safety net for API-Sports:
+  - Added minimal MLB fixtures under `tests/fixtures/apiSports/mlb/`:
+    - `players_search_sample.json`
+    - `player_profile_sample.json`
+    - `player_insights_sample.json`
+    - `teams_search_sample.json`
+    - `team_advanced_sample.json`
+
+- Data Health diagnostics updates:
+  - `GET /api/health/data` now reports both providers:
+    - `status.apiSports`
+    - `status.espn`
+    - nested endpoint diagnostics in `endpoints.apiSports` and `endpoints.espn`
+  - Probe path now exercises both providers and surfaces effective source/mode from hybrid resolution.
+  - `DataHealthWidget` now displays API-Sports + ESPN health and keeps diagnostics collapsible by default.
+
+- Misc widget UI polish:
+  - Watchlist Teams rows no longer expose raw team key in main row/suggestion text (cleaner user-facing display).
+
+- AUTO mode behavior summary:
+  - AUTO is still default.
+  - If API-Sports is complete, response returns API-Sports.
+  - If API-Sports is partial, ESPN is used to fill gaps when possible.
+  - If both live sources are insufficient, fixture fallback is returned.
+  - `meta.notes` / warnings explain fallback or hydration decisions.
+
+## Changelog (2026-03-02)
+- Auto default reliability + fallback hydration:
+  - Added/updated unified resolver in `lib/dataMode.ts` (single source of truth).
+  - Effective mode precedence is now:
+    1) explicit query `dataMode` (`auto|live|fixture`)
+    2) persisted preference mode (`preferenceMode`, read from `/api/preferences/data-mode`)
+    3) fallback `auto`
+  - Removed all Dev Fixture Override code paths from runtime UI.
+  - `/api/preferences/data-mode` now supports and defaults to `auto`.
+  - `DataHealthWidget` now shows:
+    - persisted preference mode
+    - effective mode/source for the health request
+    - whether AUTO hydration/fallback occurred
+  - Preference API:
+    - `GET /api/preferences/data-mode` returns persisted `mode` (`auto|live|fixture`)
+    - `PUT /api/preferences/data-mode` accepts `{ "mode": "auto" | "live" | "fixture" }`
+  - AUTO behavior:
+    - live-first for player/team endpoints
+    - fallback to fixture when live is incomplete or fails
+    - hydration merges fixture fields into live payloads when possible
+    - metadata warnings/notes annotate AUTO fallback/hydration decisions
+  - Refresh All continues to send `cacheBust=<refreshTick>` through widget and provider requests.
+
+- Misc widgets reliability + UX hardening:
+  - Added team typeahead endpoint:
+    - `GET /api/teams/search?sport=nfl|mlb|nba&q=...&limit=8&dataMode=live|fixture&cacheBust=...`
+    - normalized response rows: `{ teamKey, displayName, league, logo? }`
+  - Watchlist Teams now uses search/typeahead (same style as Player Card) instead of manual team key entry.
+  - Team Enter behavior is now safe:
+    - adds only on exact match (team name/key) or keyboard-highlighted suggestion
+    - no top-result implicit add fallback.
+  - Player Card search/input safety:
+    - when typed text no longer matches the current selected player, selection is cleared and persisted for that sport
+    - prevents stale/wrong player card render while typing a new player.
+  - Player/Team advanced derivation notes are surfaced as structured `metaNotes[]` in insights payloads.
+
+- Production reliability pass (LIVE mode + refresh discipline):
+  - Unified ESPN player data access now prioritizes stable endpoints:
+    - player search: `https://site.web.api.espn.com/apis/common/v3/search`
+    - core athlete profile: `https://sports.core.api.espn.com/v2/sports/<sport>/leagues/<league>/athletes/<id>`
+    - athlete gamelog: `https://site.web.api.espn.com/apis/common/v3/sports/<sport>/<league>/athletes/<id>/gamelog`
+    - scoreboard: `https://site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard`
+  - Deprecated league athlete search endpoints are no longer primary for MLB/NBA.
+  - Search fallback behavior is non-fatal: upstream search errors now return empty results with `meta.warning`, not route-level 500s.
+  - Player Insights derivation expanded:
+    - MLB pitchers: ERA / WHIP / K/9 derived from gamelog when needed.
+    - MLB hitters: AVG / OBP / SLG / OPS / HR / RBI derived from gamelog fields when available.
+    - NBA: PPG / RPG / APG + TS% when `PTS/FGA/FTA` inputs are available; otherwise TS% is omitted with a note.
+  - Live profile hydration strengthened:
+    - player profile resolution now prioritizes core athlete + common athlete endpoints
+    - site athlete 404s are treated as non-fatal and surfaced as notes
+    - advanced sections render compactly and avoid empty boxes when data is missing.
+  - Refresh All now actively busts cache:
+    - widget requests append `cacheBust=<refreshTick>`
+    - provider fetch layer bypasses in-memory/persistent cache when `cacheBust` is present
+    - metadata reflects fresh fetch (`cacheHit=false`) on cache-busted requests, so updated timestamps move immediately after refresh.
+  - Player Card Enter-selection safety fix:
+    - suggestions remain visible while typing
+    - Enter selects only an exact normalized name match
+    - no top-result auto-select fallback
+    - inline hint shown when user must click a suggestion (`Select a player from the list.`).
+
+- Advanced mode for Misc widgets:
+  - Player Card Advanced now pulls /api/players/insights and renders mobile-friendly accordion sections for:
+    - Live context
+    - Season highlights
+    - Recent games (last 5)
+    - Injury/status
+  - Watchlist Teams Advanced now pulls /api/teams/advanced and adds per-team details for:
+    - Next game
+    - Record/streak/last 10 (when available)
+    - Standings rank (when available)
+    - Detailed live state
+  - Watchlist Players Advanced now pulls /api/players/insights/batch once per sport/list change and shows:
+    - Quick stat summary
+    - Last game line
+    - Team live game context
+- New advanced APIs (standard envelope: { data, meta, error? }):
+  - GET /api/players/insights?sport=nfl|mlb|nba&playerId=...&mode=beginner|advanced&dataMode=live|fixture
+  - GET /api/players/insights/batch?sport=nfl|mlb|nba&playerIds=...&mode=advanced&dataMode=live|fixture
+  - GET /api/teams/advanced?sport=nfl|mlb|nba&teamKeys=...&mode=beginner|advanced&dataMode=live|fixture
+- Safe-mode data strategy and derived stats:
+  - Uses reliable ESPN profile + scoreboard + standings + gamelog endpoints first.
+  - If season aggregates are missing, derives highlights from recent games:
+    - NBA: PPG/RPG/APG
+    - NFL: passing/rushing/receiving per-game summaries
+    - MLB pitcher: ERA/WHIP/K9
+    - MLB hitter: AVG/OPS/HR/RBI when sufficient fields exist
+  - If upstream data is partial, returns graceful null sections with meta.warning and metaNotes instead of failing the full payload.
+- Fixture mode notes:
+  - New gamelog fixtures added under tests/fixtures/espn/gamelog/.
+  - Advanced team status/standings in fixture mode use existing scoreboard + standings fixtures.
+
+## Changelog (2026-03-01)
+- Widget category refactor:
+  - `player_card` and `watchlist` moved to `UTILITIES` for metadata/category grouping.
+  - Widget Library display label now shows `Misc` while internal category key remains `Utilities`.
+- MLB widgets (live + fixture):
+  - Added real MLB provider stack (`lib/providers/mlb/client.ts`, `teamMap.ts`, `provider.ts`) backed by MLB Stats API (`https://statsapi.mlb.com/api/v1`).
+  - Added `MLB Next 7 Games` and `MLB Pitcher Arsenal` routes + UI widgets with persistent config, metadata footer, and report-bug bundle payloads.
+  - Added MLB fixtures under `tests/fixtures/mlb/` and widget route tests under `tests/widgets/`.
+- NBA widgets (live ESPN + fixture):
+  - Added ESPN NBA provider (`lib/providers/espn/nba.ts`) using scoreboard + standings endpoints.
+  - Added `NBA Tonight's Slate` and `NBA Standings Snapshot` routes + UI widgets with persistent config and standardized envelope metadata.
+  - Added NBA fixtures under `tests/fixtures/espn/nba/` and route tests under `tests/widgets/`.
+- Fixture mode usage:
+  - Set `NASHBOARD_DATA_MODE=fixture` to force fixture responses.
+  - Run all tests with `npm test`.
+- Player directory + sport switcher (NFL/MLB/NBA):
+  - Added unified ESPN player provider and APIs:
+    - `GET /api/players/search?sport=nfl|mlb|nba&q=...&dataMode=live|fixture`
+    - `GET /api/players/profile?sport=nfl|mlb|nba&playerId=...&dataMode=live|fixture`
+  - Both routes now return standardized envelopes:
+    - success: `{ data, meta, error?: undefined }`
+    - error: `{ data: null, meta, error: { message, code } }`
+  - Added fixture payloads under `tests/fixtures/espn/players/` for NFL/MLB/NBA search + profile.
+  - `Player Card` now supports sport tabs and persists `config.sportKey` + selected player per sport.
+  - `Watchlist` now supports `Teams` and `Players` modes; players mode includes sport tabs and persists `config.playerWatchlist` (`nfl`/`mlb`/`nba`, limit 10 per sport).
+- Misc widgets hardening (layout + watchlist status):
+  - Added shared `TabsRow` and standardized tab spacing in `Player Card` and `Watchlist` to prevent cramped/jumbled rows in small widget widths.
+  - `Watchlist` Teams mode now has league tabs (`NFL/MLB/NBA`) and per-sport persistence via:
+    - `config.teamWatchlist = { nfl: string[], mlb: string[], nba: string[] }`
+    - Backward-compatible migration: legacy `config.watchlist.teams` is treated as NFL and copied into `teamWatchlist.nfl` on load.
+  - Added ESPN team status provider + routes:
+    - `GET /api/teams/status?sport=nfl|mlb|nba&teamKey=...&dataMode=live|fixture`
+    - `GET /api/teams/status/batch?sport=nfl|mlb|nba&teamKeys=NYM,LAD,...&dataMode=live|fixture`
+  - Teams mode now uses the batch endpoint for one-call status hydration and shows `LIVE`, `Today`, `Final`, or `No game today` per team row.
+  - Added scoreboard fixtures for deterministic status responses in fixture mode:
+    - `tests/fixtures/espn/scoreboard/mlb_scoreboard_sample.json`
+    - `tests/fixtures/espn/scoreboard/nba_scoreboard_sample.json`
+- Polish pass (fetch discipline + loop prevention):
+  - Player Card:
+    - Added `useDebouncedValue` (300ms) and query-key guards so search runs only after debounce and only for new `{sport, query, dataMode}` combinations.
+    - Added abortable search/profile fetches to prevent stale state updates when input changes quickly.
+    - Added profile fetch tuple guard (`sport + playerId + dataMode`) to prevent duplicate profile requests during config persistence updates.
+    - Profile metadata (`Updated / Source`) now renders only after a successful profile fetch.
+  - Watchlist:
+    - Team status batch calls now use a stable request key (`sport + sorted team keys + dataMode`) and a 30s TTL policy.
+    - Polling runs every 30s only while Teams mode is active and the active sport has at least one watched team.
+    - Team status fetches no longer run on unrelated widget config patches.
+    - Quick player profile panel now skips redundant refetch for the same `{sport, playerId, dataMode}` selection.
+  - RB vs D-Line:
+    - Split input state from applied state: typing no longer triggers API calls.
+    - Fetch now runs only when user clicks `Set` or presses Enter with a valid key.
+    - Validation enforces `2-4` uppercase letters (`^[A-Z]{2,4}$`) with inline feedback.
+  - ESPN unified player provider:
+    - MLB/NBA search now short-circuits directly to ESPN common search (`/apis/common/v3/search`) to avoid known 404-prone league athlete search endpoints.
+    - Search results are explicitly capped to route/provider limit (`max 8`).
+
 ## What Changed
 - Guest watchlist correctness:
   - Added `lib/guest/watchlist.ts` session-only store with add/remove/load and max-5 enforcement.
@@ -10,19 +266,18 @@
 - Global fixture mode consistency:
   - Added request resolver in `lib/config/env.ts` with precedence:
     1) query `dataMode`
-    2) cookie `nashboard_dataMode`
-    3) env `NASHBOARD_DATA_MODE`
-    4) default `live`
-  - Dashboard now writes `nashboard_dataMode` cookie (`Path=/; SameSite=Lax`) whenever mode changes.
-  - Health and widget routes now consume resolved mode so direct `/api/health/data?probe=1` reflects cookie-selected fixture mode.
+    2) persisted preference mode from `/api/preferences/data-mode`
+    3) default `auto`
+  - Removed runtime dev override/session-storage data mode path.
+  - Health and widget routes now consume resolved mode so direct `/api/health/data?probe=1` reflects live/fixture outcome under AUTO.
 - LAN dev-origin warning fix:
   - Updated `next.config.ts` `allowedDevOrigins` with:
     - `localhost:3000`
     - `127.0.0.1:3000`
     - `192.168.220.1:3000`
 - Data visibility + diagnostics upgrades:
-  - Added explicit `dataMode=live|fixture` plumbing across widget APIs and frontend calls.
-  - Added persisted `Dev Fixture Data` toggle (session in guest mode; server preference in signed-in mode via `/api/preferences/data-mode`).
+  - Added explicit `dataMode=auto|live|fixture` plumbing across widget APIs and frontend calls.
+  - Added `auto` data mode with live-first fallback/hydration in providers used by Player Card and Watchlist.
   - Upgraded ESPN client metadata and endpoint observability (endpoint URL, upstream status/message, source mode, cache diagnostics).
   - Upgraded Data Health endpoint/widget:
     - separate statuses for DB (`configured`/`unconfigured`), ESPN (`ok`/`error`/`timeout`/`blocked`/`empty`), Fixture (`enabled`/`disabled`)
@@ -149,5 +404,11 @@
 - [x] Data health endpoint
 - [x] Vitest fixture-mode tests for required offseason/stability cases
 - [x] MLB scaffolding widget slots + provider stub
+
+
+
+
+
+
 
 

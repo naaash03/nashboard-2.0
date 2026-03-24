@@ -10,6 +10,7 @@ import RbVsDlineWidget from "@/components/widgets/RbVsDlineWidget";
 import DataHealthWidget from "@/components/widgets/DataHealthWidget";
 import MlbNext7GamesWidget from "@/components/widgets/MlbNext7GamesWidget";
 import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidget";
+<<<<<<< HEAD
 import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
 import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
 import MlbSeasonStatsWidget from "@/components/widgets/MlbSeasonStatsWidget";
@@ -17,6 +18,12 @@ import MlbPlatoonAdvantageWidget from "@/components/widgets/MlbPlatoonAdvantageW
 import MlbRecentFormWidget from "@/components/widgets/MlbRecentFormWidget";
 import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidget";
 import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
+=======
+import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
+import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
+import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
+import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
+>>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -28,7 +35,7 @@ import {
   updateLayout,
   type GuestWidgetInstance,
 } from "@/lib/guest/guestDashboard";
-import { getGuestDataMode, setGuestDataMode } from "@/lib/guest/devDataMode";
+import { resolveDataMode, type DataMode } from "@/lib/dataMode";
 
 type Sport = "NFL" | "NBA" | "MLB";
 
@@ -74,6 +81,7 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   data_health: (props) => <DataHealthWidget {...props} />,
   mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
+<<<<<<< HEAD
   mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
   mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
   mlb_season_stats: (props) => <MlbSeasonStatsWidget {...props} />,
@@ -81,6 +89,12 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
   mlb_bullpen_fatigue: (props) => <MlbBullpenFatigueWidget {...props} />,
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
+=======
+  "mlb-starting-pitcher-matchup": (props) => <MlbStartingPitcherMatchupWidget {...props} />,
+  "mlb-series-tracker": (props) => <MlbSeriesTrackerWidget {...props} />,
+  nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
+  nba_standings: (props) => <NbaStandingsWidget {...props} />,
+>>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
 };
 
 function to12h(value: string): string {
@@ -103,13 +117,21 @@ export default function DashboardPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [dataMode, setDataMode] = useState<"live" | "fixture">("live");
+  const [preferenceDataMode, setPreferenceDataMode] = useState<DataMode>("auto");
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [bugBundle, setBugBundle] = useState<Record<string, unknown> | null>(null);
   const [refreshAt, setRefreshAt] = useState(0);
   const loadRequestRef = useRef(0);
 
   const isGuestMode = mode !== "signed_in";
+  const modeResolution = useMemo(
+    () => resolveDataMode({
+      preferenceDataMode,
+      fallbackDataMode: "auto",
+    }),
+    [preferenceDataMode],
+  );
+  const dataMode = modeResolution.resolvedDataMode;
 
   const sortedWidgets = useMemo(
     () => [...widgets].sort((a, b) => a.y - b.y || a.x - b.x),
@@ -126,7 +148,7 @@ export default function DashboardPage({
       shareToken: null,
     });
     setWidgets(guest.widgets);
-    setDataMode(getGuestDataMode());
+    setPreferenceDataMode("auto");
     setLoading(false);
   }, []);
 
@@ -150,8 +172,8 @@ export default function DashboardPage({
       setWidgets((payload.widgets ?? []).map((widget) => ({ ...widget, config: widget.config ?? {} })));
       const pref = await fetch("/api/preferences/data-mode", { cache: "no-store" })
         .then((res) => res.json())
-        .catch(() => ({ mode: "live" }));
-      setDataMode(pref.mode === "fixture" ? "fixture" : "live");
+        .catch(() => ({ mode: "auto" }));
+      setPreferenceDataMode(pref.mode === "fixture" || pref.mode === "live" || pref.mode === "auto" ? pref.mode : "auto");
     } catch (loadError) {
       setError(String(loadError));
     } finally {
@@ -387,23 +409,6 @@ export default function DashboardPage({
     setRefreshTick((current) => current + 1);
   }, [refreshAt]);
 
-  const onDataModeChange = useCallback(async (next: "live" | "fixture") => {
-    setDataMode(next);
-    document.cookie = `nashboard_dataMode=${next}; Path=/; SameSite=Lax`;
-    if (isGuestMode || !dbConfigured) {
-      setGuestDataMode(next);
-      setRefreshTick((current) => current + 1);
-      return;
-    }
-
-    await fetch("/api/preferences/data-mode", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: next }),
-    }).catch(() => undefined);
-    setRefreshTick((current) => current + 1);
-  }, [dbConfigured, isGuestMode]);
-
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.hidden) return;
@@ -423,19 +428,20 @@ export default function DashboardPage({
     };
   }, [refreshAll]);
 
-  useEffect(() => {
-    document.cookie = `nashboard_dataMode=${dataMode}; Path=/; SameSite=Lax`;
-  }, [dataMode]);
-
   const copyBugBundle = async () => {
     if (!bugBundle) return;
-    const health = await fetch("/api/health/data", { cache: "no-store" })
+    const health = await fetch(
+      `/api/health/data?dataMode=${dataMode}&preferenceMode=${preferenceDataMode}`,
+      { cache: "no-store" },
+    )
       .then((res) => res.json())
       .catch(() => null);
     const bundle = {
       ...bugBundle,
       appInfo: {
-        mode: health?.resolvedDataMode ?? health?.providerMode ?? "unknown",
+        preferenceMode: preferenceDataMode,
+        mode: health?.resolvedDataMode ?? dataMode,
+        modeSource: health?.resolutionSource ?? modeResolution.source,
         user: isGuestMode ? "guest" : dashboard?.id,
       },
     };
@@ -568,7 +574,8 @@ export default function DashboardPage({
                     dbConfigured={dbConfigured}
                     refreshTick={refreshTick}
                     dataMode={dataMode}
-                    onDataModeChange={onDataModeChange}
+                    preferenceDataMode={preferenceDataMode}
+                    dataModeSource={modeResolution.source}
                     onPersist={(next) => persistWidget(widget.id, next)}
                     onReportBug={(bundle) => {
                       const parsed = bundle as ReportBugPayload;
