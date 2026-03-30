@@ -17,6 +17,7 @@ import MlbPlatoonAdvantageWidget from "@/components/widgets/MlbPlatoonAdvantageW
 import MlbRecentFormWidget from "@/components/widgets/MlbRecentFormWidget";
 import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidget";
 import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
+import MlbPitcherVsProjectedLineupWidget from "@/components/widgets/MlbPitcherVsProjectedLineupWidget";
 import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
 import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
 import TopBarAuth from "@/components/TopBarAuth";
@@ -83,6 +84,7 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
   mlb_bullpen_fatigue: (props) => <MlbBullpenFatigueWidget {...props} />,
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
+  mlb_pitcher_vs_projected_lineup: (props) => <MlbPitcherVsProjectedLineupWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
 };

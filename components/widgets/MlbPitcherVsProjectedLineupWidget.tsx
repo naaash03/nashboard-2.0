@@ -177,9 +177,11 @@ export function buildPitcherVsLineupPitcherStatLine(
 }
 
 export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonProps) {
+  const advanced = props.mode === "ADVANCED";
   const [teamQuery, setTeamQuery] = useState("");
   const [activeTeamKey, setActiveTeamKey] = useState<string>(String(props.config.teamKey ?? "NYM").toUpperCase());
   const [selectedGameId, setSelectedGameId] = useState<string>(String(props.config.gameId ?? ""));
+  const [selectedPitcherId, setSelectedPitcherId] = useState<string>(String(props.config.selectedPitcherId ?? ""));
   const [data, setData] = useState<MlbPitcherVsProjectedLineupUi | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -202,6 +204,13 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
     }
   }, [props.config.gameId, selectedGameId]);
 
+  useEffect(() => {
+    const configPitcherId = String(props.config.selectedPitcherId ?? "");
+    if (configPitcherId !== selectedPitcherId) {
+      setSelectedPitcherId(configPitcherId);
+    }
+  }, [props.config.selectedPitcherId, selectedPitcherId]);
+
   const matchingTeams = useMemo(() => {
     const q = teamQuery.trim().toLowerCase();
     if (!q) return MLB_TEAM_OPTIONS.slice(0, 6);
@@ -220,6 +229,9 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
     });
     if (selectedGameId) {
       params.set("gameId", selectedGameId);
+    }
+    if (advanced && selectedPitcherId) {
+      params.set("selectedPitcherId", selectedPitcherId);
     }
     const url = `/api/widgets/mlb-pitcher-vs-projected-lineup?${params.toString()}`;
     setEndpoint(url);
@@ -240,7 +252,7 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
     } finally {
       setLoading(false);
     }
-  }, [activeTeamKey, selectedGameId, props.mode, props.dataMode, props.refreshTick]);
+  }, [activeTeamKey, advanced, selectedGameId, selectedPitcherId, props.mode, props.dataMode, props.refreshTick]);
 
   useEffect(() => {
     void load();
@@ -251,12 +263,14 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
     const option = findTeamByKey(nextTeamKey);
     setActiveTeamKey(nextTeamKey);
     setSelectedGameId("");
+    setSelectedPitcherId("");
     setTeamQuery(option ? `${option.name} (${option.key})` : nextTeamKey);
     await props.onPersist({
       config: {
         ...props.config,
         teamKey: nextTeamKey,
         gameId: "",
+        selectedPitcherId: "",
       },
     });
   };
@@ -273,18 +287,34 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
 
   const onGameChange = async (nextGameId: string) => {
     setSelectedGameId(nextGameId);
+    setSelectedPitcherId("");
     await props.onPersist({
       config: {
         ...props.config,
         teamKey: activeTeamKey,
         gameId: nextGameId,
+        selectedPitcherId: "",
       },
     });
   };
 
-  const advanced = props.mode === "ADVANCED";
+  const onPitcherChange = async (nextPitcherId: string) => {
+    setSelectedPitcherId(nextPitcherId);
+    await props.onPersist({
+      config: {
+        ...props.config,
+        teamKey: activeTeamKey,
+        gameId: selectedGameId || data?.game.gameId || "",
+        selectedPitcherId: nextPitcherId,
+      },
+    });
+  };
+
   const stateNotice = buildPitcherVsProjectedLineupStateNotice({ loading, error, data });
   const pitcherStatLine = buildPitcherVsLineupPitcherStatLine(data?.pitcherSummary ?? null);
+  const selectedPitcherValue = data?.pitcherSelection?.options.some((option) => option.value === selectedPitcherId)
+    ? selectedPitcherId
+    : (data?.pitcherSelection?.optionValue ?? "");
 
   return (
     <div className="space-y-3 text-xs">
@@ -354,6 +384,24 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
         </label>
       ) : null}
 
+      {advanced && data?.pitcherSelection && data.pitcherSelection.options.length > 0 ? (
+        <label className="block">
+          <span className="mb-1 block text-neutral-400">Pitcher</span>
+          <select
+            className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+            value={selectedPitcherValue}
+            onChange={(event) => void onPitcherChange(event.target.value)}
+            disabled={props.locked}
+          >
+            {data.pitcherSelection.options.map((option) => (
+              <option key={option.value || "probable-starter"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
       {stateNotice ? (
         <div className={`rounded border p-3 ${stateNoticeStyles(stateNotice.tone)}`}>
           <p className="font-medium text-neutral-100">{stateNotice.title}</p>
@@ -406,6 +454,14 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
             </div>
           </div>
 
+          {advanced && data.pitcherSelection ? (
+            <div className="rounded border border-neutral-700 bg-neutral-950 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-neutral-500">Selection context</p>
+              <p className="mt-2 font-medium text-neutral-100">{data.pitcherSelection.label}</p>
+              <p className="mt-1 text-[11px] text-neutral-400">{data.pitcherSelection.detail}</p>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <div className="rounded border border-neutral-700 bg-neutral-950 p-3">
               <p className="text-[10px] uppercase tracking-wide text-neutral-500">
@@ -414,6 +470,11 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
               {data.pitcherSummary ? (
                 <div className="mt-2 space-y-1.5 text-neutral-200">
                   <p className="font-medium text-neutral-100">{data.pitcherSummary.fullName}</p>
+                  {advanced && data.pitcherSelection ? (
+                    <p className="text-[11px] text-neutral-500">
+                      {data.pitcherSelection.selectedPitcherRole === "bullpen" ? "Custom bullpen option" : "Projected starter baseline"}
+                    </p>
+                  ) : null}
                   <p className="text-[11px] text-neutral-400">
                     {formatHandedness(data.pitcherSummary.handedness)
                       ? `Throws ${formatHandedness(data.pitcherSummary.handedness)}`
@@ -544,6 +605,8 @@ export default function MlbPitcherVsProjectedLineupWidget(props: WidgetCommonPro
           meta,
           teamKey: activeTeamKey,
           gameId: selectedGameId || data?.game.gameId,
+          selectedPitcherId: data?.pitcherSelection?.optionValue ?? selectedPitcherId,
+          pitcherSelection: data?.pitcherSelection,
           state: data?.state,
           notes: data?.notes,
         })}

@@ -80,6 +80,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultSize: { w: 1, h: 1 },
   },
   {
+    key: "mlb_pitcher_vs_projected_lineup",
+    name: "Pitcher vs Projected Lineup",
+    description: "Rule-based matchup read on how favorable a probable starter looks against the opponent's expected lineup.",
+    sportCategory: "MLB",
+    defaultSize: { w: 1, h: 1 },
+    stability: "experimental",
+    audience: "mixed",
+  },
+  {
     key: "mlb_season_stats",
     name: "Season Stats Explorer",
     description: "Year-by-year hitting or pitching stats for a player, or team stats for a season.",
@@ -160,4 +169,3 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     audience: "advanced",
   },
 ];
-

@@ -1,5 +1,6 @@
 ﻿import { randomUUID } from "node:crypto";
 import { fetchMlbJson, getMlbDataMode } from "@/lib/providers/mlb/client";
+import { resolveMlbPitcherComparisonStats } from "@/lib/providers/mlb/pitcherComparison";
 import { MLB_TEAM_OPTIONS, resolveMlbTeam } from "@/lib/providers/mlb/teamMap";
 import type { Meta, Mode } from "@/lib/providers/types";
 
@@ -205,6 +206,109 @@ export type MlbRecentForm = {
   primaryGameTypeLabel: string;
 };
 
+export type MlbPitcherVsProjectedLineupVerdict =
+  | "Good strikeout spot"
+  | "Slight pitcher edge"
+  | "Neutral matchup"
+  | "Contact-risk matchup"
+  | "Dangerous lineup spot";
+
+export type MlbPitcherVsProjectedLineupConfidence = "High" | "Medium" | "Low";
+
+export type MlbProjectedLineupProfile = {
+  teamKey: string;
+  teamName: string;
+  lineupHandedness: "left" | "right" | "balanced" | "unknown";
+  lineupSummary: string;
+  sampleSize: number;
+  leftHandedHitters: number;
+  rightHandedHitters: number;
+  switchHitters: number;
+  source: "active_roster";
+  projectedLineupLabel: string;
+};
+
+export type MlbPitcherVsProjectedLineupComponent = {
+  key:
+    | "handedness"
+    | "strikeoutSkill"
+    | "control"
+    | "recentForm"
+    | "opponentContact";
+  label: string;
+  delta: number;
+  direction: "pitcher" | "hitter" | "neutral";
+  summary: string;
+  valueLabel?: string;
+};
+
+export type MlbPitcherVsProjectedLineupPitcherOption = {
+  value: string;
+  playerId?: string;
+  fullName: string;
+  role: "starter" | "bullpen";
+  label: string;
+  isProbableStarter: boolean;
+  availabilityLabel?: string;
+};
+
+export type MlbPitcherVsProjectedLineupSelection = {
+  label: "Probable starter baseline" | "Custom advanced pitcher selection";
+  detail: string;
+  optionValue: string;
+  selectedPitcherId?: string;
+  selectedPitcherName: string;
+  selectedPitcherRole: "starter" | "bullpen";
+  probableStarterId?: string;
+  probableStarterName: string;
+  options: MlbPitcherVsProjectedLineupPitcherOption[];
+};
+
+export type MlbPitcherVsProjectedLineup = {
+  teamKey: string;
+  teamName: string;
+  game: {
+    gameId: string;
+    gameDate: string;
+    officialDate?: string;
+    opponentKey: string;
+    opponentName: string;
+    homeAway: "home" | "away";
+    venue?: string;
+    probableStarterPosted: boolean;
+  };
+  verdict?: MlbPitcherVsProjectedLineupVerdict;
+  matchupScore?: number;
+  confidenceLabel?: MlbPitcherVsProjectedLineupConfidence;
+  reasons: string[];
+  componentBreakdown: MlbPitcherVsProjectedLineupComponent[];
+  pitcherSummary: {
+    playerId?: string;
+    fullName: string;
+    handedness?: string;
+    record?: string;
+    era?: number;
+    kPer9?: number;
+    bbPer9?: number;
+    recentFormEra?: number;
+    statsBasisLabel?: string;
+    confidenceNote?: string;
+  } | null;
+  lineupSummary: {
+    teamKey: string;
+    teamName: string;
+    projectedLineupLabel: string;
+    handednessSummary: string;
+    contactSummary?: string;
+    recentContext?: string;
+  };
+  assumptionsNote: string;
+  selectableGames: Array<{ gameId: string; label: string }>;
+  pitcherSelection?: MlbPitcherVsProjectedLineupSelection;
+  state: "success" | "partial";
+  notes?: string[];
+};
+
 export type MlbPitcherAvailability = {
   playerId: string;
   fullName: string;
@@ -283,6 +387,16 @@ export interface MlbProvider {
   getRecentResults(teamKey: string, limit?: number, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: MlbRecentResults | null; meta: Meta }>;
   getPlayerSeasonStats(playerId: string, dataMode?: ModeArg): Promise<{ data: MlbPlayerSeasonStats | null; meta: Meta }>;
   getTeamSeasonStats(teamKey: string, season: number, dataMode?: ModeArg): Promise<{ data: MlbTeamSeasonStatsData | null; meta: Meta }>;
+  getPitcherVsProjectedLineup(
+    teamKey: string,
+    options?: {
+      gameId?: string;
+      selectedPitcherId?: string;
+      includePitcherOptions?: boolean;
+      dataMode?: ModeArg;
+      cacheBust?: CacheBustArg;
+    },
+  ): Promise<{ data: MlbPitcherVsProjectedLineup | null; meta: Meta }>;
   getPlatoonAdvantage(teamKey: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: MlbPlatoonAdvantage | null; meta: Meta }>;
   getRecentForm(teamKey: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: MlbRecentForm | null; meta: Meta }>;
   getBullpenFatigue(teamKey: string, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ data: MlbBullpenFatigue | null; meta: Meta }>;
@@ -866,7 +980,10 @@ async function fetchTeamLineupHandedness(
   teamId: number,
   dataMode: "live" | "fixture",
   cacheBust?: CacheBustArg,
-): Promise<{ lineupHandedness: "left" | "right" | "balanced" | "unknown"; lineupSummary: string }> {
+): Promise<MlbProjectedLineupProfile> {
+  const teamOption = MLB_TEAM_OPTIONS.find((option) => option.id === teamId);
+  const fallbackTeamKey = teamOption?.key ?? "TBD";
+  const fallbackTeamName = teamOption?.name ?? "Unknown Team";
   try {
     const rosterResult = await fetchMlbJson<MlbRosterResponse>({
       endpoint: `/teams/${teamId}/roster`,
@@ -884,8 +1001,16 @@ async function fetchTeamLineupHandedness(
 
     if (hitterIds.length === 0) {
       return {
+        teamKey: fallbackTeamKey,
+        teamName: fallbackTeamName,
         lineupHandedness: "unknown",
         lineupSummary: "The active lineup hand split could not be determined from the active roster.",
+        sampleSize: 0,
+        leftHandedHitters: 0,
+        rightHandedHitters: 0,
+        switchHitters: 0,
+        source: "active_roster",
+        projectedLineupLabel: "Active-roster approximation",
       };
     }
 
@@ -910,10 +1035,35 @@ async function fetchTeamLineupHandedness(
       else if (person.batSide?.code === "S") switchHitters += 1;
     }
 
-    if (left === 0 && right === 0 && switchHitters === 0) {
+    const resolvedHitters = left + right + switchHitters;
+
+    if (resolvedHitters === 0) {
       return {
+        teamKey: fallbackTeamKey,
+        teamName: fallbackTeamName,
         lineupHandedness: "unknown",
         lineupSummary: "Batside data is not available for enough hitters to rate the lineup tendency.",
+        sampleSize: 0,
+        leftHandedHitters: 0,
+        rightHandedHitters: 0,
+        switchHitters: 0,
+        source: "active_roster",
+        projectedLineupLabel: "Active-roster approximation",
+      };
+    }
+
+    if (resolvedHitters < 6) {
+      return {
+        teamKey: fallbackTeamKey,
+        teamName: fallbackTeamName,
+        lineupHandedness: "unknown",
+        lineupSummary: `Only ${resolvedHitters} active hitters had batside data, so lineup tendency is being treated as approximate.`,
+        sampleSize: resolvedHitters,
+        leftHandedHitters: left,
+        rightHandedHitters: right,
+        switchHitters,
+        source: "active_roster",
+        projectedLineupLabel: "Active-roster approximation",
       };
     }
 
@@ -923,13 +1073,29 @@ async function fetchTeamLineupHandedness(
       Math.abs(adjustedLeft - adjustedRight) <= 1 ? "balanced" : adjustedRight > adjustedLeft ? "right" : "left";
 
     return {
+      teamKey: fallbackTeamKey,
+      teamName: fallbackTeamName,
       lineupHandedness,
-      lineupSummary: `${hitterIds.length} active hitters checked: ${left} left-handed, ${right} right-handed, ${switchHitters} switch-hitters.`,
+      lineupSummary: `${resolvedHitters} active hitters with batside data: ${left} left-handed, ${right} right-handed, ${switchHitters} switch-hitters.`,
+      sampleSize: resolvedHitters,
+      leftHandedHitters: left,
+      rightHandedHitters: right,
+      switchHitters,
+      source: "active_roster",
+      projectedLineupLabel: "Active-roster approximation",
     };
   } catch {
     return {
+      teamKey: fallbackTeamKey,
+      teamName: fallbackTeamName,
       lineupHandedness: "unknown",
       lineupSummary: "The lineup-handedness estimate is unavailable right now.",
+      sampleSize: 0,
+      leftHandedHitters: 0,
+      rightHandedHitters: 0,
+      switchHitters: 0,
+      source: "active_roster",
+      projectedLineupLabel: "Active-roster approximation",
     };
   }
 }
@@ -967,6 +1133,247 @@ function summarizeHandednessMatchup(
     summary: `${pitcherName} is ${pitcherHand}HP. ${lineupTeamKey}'s lineup trends ${lineupHandedness}-handed. Slight ${sameSide ? "pitcher" : "hitter"} advantage.`,
     reasoning: lineupSummary,
   };
+}
+
+function parseNumericStat(value: string | number | undefined | null): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function readSummaryMetric(
+  summary: Record<string, string | number> | undefined,
+  key: string,
+): number | undefined {
+  if (!summary) {
+    return undefined;
+  }
+  return parseNumericStat(summary[key]);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundNumber(value: number, digits = 1): number {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function normalizePitcherHand(value?: string): "L" | "R" | undefined {
+  const normalized = (value ?? "").trim().toUpperCase();
+  if (normalized.startsWith("L")) return "L";
+  if (normalized.startsWith("R")) return "R";
+  return undefined;
+}
+
+function componentDirection(delta: number): "pitcher" | "hitter" | "neutral" {
+  if (delta > 0.25) return "pitcher";
+  if (delta < -0.25) return "hitter";
+  return "neutral";
+}
+
+function recentFormEraFromStarts(
+  starts: Array<{ innings?: string; earnedRuns?: number | string }> | undefined,
+): number | undefined {
+  if (!starts || starts.length === 0) {
+    return undefined;
+  }
+
+  let innings = 0;
+  let earnedRuns = 0;
+  for (const start of starts) {
+    const inningsValue = inningsToNumber(start.innings);
+    const runsValue = parseNumericStat(start.earnedRuns);
+    if (inningsValue === undefined || runsValue === undefined) {
+      continue;
+    }
+    innings += inningsValue;
+    earnedRuns += runsValue;
+  }
+
+  if (innings <= 0) {
+    return undefined;
+  }
+
+  return roundNumber((earnedRuns * 9) / innings, 2);
+}
+
+function scheduleLabel(game: MlbScheduledGame): string {
+  const parsed = new Date(game.gameDate);
+  const dateLabel = Number.isNaN(parsed.getTime())
+    ? game.gameDate
+    : parsed.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  return `${dateLabel} - ${game.awayTeam.key} at ${game.homeTeam.key}`;
+}
+
+function combineWarnings(values: Array<string | undefined | null>): string | undefined {
+  const uniqueWarnings = [...new Set(values.filter((value): value is string => Boolean(value && value.trim().length > 0)))];
+  return uniqueWarnings.length > 0 ? uniqueWarnings.join(" ") : undefined;
+}
+
+function fatigueLabel(fatigue: MlbPitcherAvailability["fatigue"]): string {
+  return fatigue.charAt(0).toUpperCase() + fatigue.slice(1);
+}
+
+function buildPitcherVsProjectedLineupPitcherOptions(args: {
+  probableStarter: { playerId?: string; fullName: string };
+  bullpen?: MlbBullpenFatigue | null;
+}): MlbPitcherVsProjectedLineupPitcherOption[] {
+  const options: MlbPitcherVsProjectedLineupPitcherOption[] = [
+    {
+      value: "",
+      playerId: args.probableStarter.playerId,
+      fullName: args.probableStarter.fullName,
+      role: "starter",
+      label: `${args.probableStarter.fullName} | Probable starter`,
+      isProbableStarter: true,
+    },
+  ];
+
+  for (const reliever of args.bullpen?.relievers ?? []) {
+    if (reliever.playerId === args.probableStarter.playerId) {
+      continue;
+    }
+
+    const availabilityLabel = fatigueLabel(reliever.fatigue);
+    options.push({
+      value: reliever.playerId,
+      playerId: reliever.playerId,
+      fullName: reliever.fullName,
+      role: "bullpen",
+      label: `${reliever.fullName} | Bullpen (${availabilityLabel})`,
+      isProbableStarter: false,
+      availabilityLabel,
+    });
+  }
+
+  return options;
+}
+
+function buildPitcherVsProjectedLineupSelection(args: {
+  probableStarter: { playerId?: string; fullName: string };
+  selectedPitcher: { playerId?: string; fullName: string; role: "starter" | "bullpen" };
+  selectedOption?: MlbPitcherVsProjectedLineupPitcherOption;
+  options: MlbPitcherVsProjectedLineupPitcherOption[];
+}): MlbPitcherVsProjectedLineupSelection {
+  const customSelection = args.selectedPitcher.role === "bullpen";
+  const bullpenStatus = args.selectedOption?.availabilityLabel ? ` Bullpen status: ${args.selectedOption.availabilityLabel}.` : "";
+
+  return {
+    label: customSelection ? "Custom advanced pitcher selection" : "Probable starter baseline",
+    detail: customSelection
+      ? `Using ${args.selectedPitcher.fullName} instead of probable starter ${args.probableStarter.fullName}.${bullpenStatus}`
+      : `Using ${args.probableStarter.fullName} as the listed probable starter for this game.`,
+    optionValue: customSelection ? args.selectedPitcher.playerId ?? "" : "",
+    selectedPitcherId: args.selectedPitcher.playerId,
+    selectedPitcherName: args.selectedPitcher.fullName,
+    selectedPitcherRole: args.selectedPitcher.role,
+    probableStarterId: args.probableStarter.playerId,
+    probableStarterName: args.probableStarter.fullName,
+    options: args.options,
+  };
+}
+
+function buildPitcherVsProjectedLineupReasons(
+  rankedReasons: Array<{ reason: string; weight: number }>,
+  fallback: string[],
+): string[] {
+  const reasons: string[] = [];
+  const defaultFillers = [
+    "Several matchup inputs are still approximate, so this read stays cautious.",
+    "This score leans on a small set of reliable inputs right now.",
+    "Use the official lineup later for a cleaner matchup read.",
+  ];
+  const pushUnique = (value?: string | null) => {
+    const normalized = value?.trim();
+    if (!normalized || reasons.includes(normalized)) return;
+    reasons.push(normalized);
+  };
+
+  for (const entry of [...rankedReasons].sort((left, right) => right.weight - left.weight)) {
+    if (entry.weight <= 0) continue;
+    pushUnique(entry.reason);
+    if (reasons.length === 3) {
+      return reasons;
+    }
+  }
+
+  for (const entry of fallback) {
+    pushUnique(entry);
+    if (reasons.length === 3) {
+      return reasons;
+    }
+  }
+
+  for (const filler of defaultFillers) {
+    pushUnique(filler);
+    if (reasons.length === 3) {
+      return reasons;
+    }
+  }
+
+  return reasons.slice(0, 3);
+}
+
+function scoreScaleFromCoverage(knownFactorCount: number): number {
+  if (knownFactorCount >= 5) return 1;
+  if (knownFactorCount === 4) return 0.9;
+  if (knownFactorCount === 3) return 0.75;
+  if (knownFactorCount === 2) return 0.55;
+  if (knownFactorCount === 1) return 0.35;
+  return 0;
+}
+
+function pitcherSampleScale(statsBasisLabel?: string): number {
+  const normalized = (statsBasisLabel ?? "").toLowerCase();
+  if (normalized.includes("spring")) return 0.75;
+  if (normalized.includes("limited")) return 0.55;
+  return 1;
+}
+
+function confidenceLabelFromInputs(args: {
+  probableStarterPosted: boolean;
+  statsBasisLabel?: string;
+  lineupKnown: boolean;
+  lineupSampleSize: number;
+  opponentStatsKnown: boolean;
+  recentStartsKnown: boolean;
+  approximateLineup: boolean;
+}): MlbPitcherVsProjectedLineupConfidence {
+  let score = 0;
+  if (args.probableStarterPosted) score += 2;
+  if ((args.statsBasisLabel ?? "").toLowerCase().includes("regular season")) score += 2;
+  else if ((args.statsBasisLabel ?? "").toLowerCase().includes("spring")) score += 1;
+  if (args.lineupKnown && args.lineupSampleSize >= 8) score += 1;
+  if (args.opponentStatsKnown) score += 1;
+  if (args.recentStartsKnown) score += 1;
+  if (args.approximateLineup) score = Math.max(0, Math.min(score - 1, 5));
+
+  if (score >= 6) return "High";
+  if (score >= 3) return "Medium";
+  return "Low";
+}
+
+function verdictFromScore(score: number): MlbPitcherVsProjectedLineupVerdict {
+  if (score >= 69) return "Good strikeout spot";
+  if (score >= 56) return "Slight pitcher edge";
+  if (score >= 45) return "Neutral matchup";
+  if (score >= 35) return "Contact-risk matchup";
+  return "Dangerous lineup spot";
 }
 
 async function fetchBoxscore(
@@ -1526,6 +1933,452 @@ export const mlbProvider: MlbProvider = {
     }
   },
 
+  async getPitcherVsProjectedLineup(
+    teamKey: string,
+    options?: {
+      gameId?: string;
+      selectedPitcherId?: string;
+      includePitcherOptions?: boolean;
+      dataMode?: ModeArg;
+      cacheBust?: CacheBustArg;
+    },
+  ) {
+    const resolved = getMlbDataMode(options?.dataMode);
+    const team = resolveMlbTeam(teamKey);
+    if (!team) {
+      return {
+        data: null,
+        meta: fallbackMeta(resolved, `Unknown MLB team key: ${teamKey.toUpperCase()}`),
+      };
+    }
+
+    const schedule = await getMlbUpcomingScheduleWithProbables(teamKey, resolved, options?.cacheBust);
+    const games = schedule.data?.games ?? [];
+    if (games.length === 0) {
+      return {
+        data: null,
+        meta: {
+          ...schedule.meta,
+          warning: schedule.meta.warning ?? "No upcoming games found for the selected team.",
+        },
+      };
+    }
+
+    const selectedGame = games.find((game) => String(game.gamePk ?? "") === String(options?.gameId ?? ""))
+      ?? games[0];
+    const selectableGames = games.slice(0, 8).map((game) => ({
+      gameId: String(game.gamePk ?? `${game.awayTeam.key}-${game.homeTeam.key}-${game.gameDate}`),
+      label: scheduleLabel(game),
+    }));
+
+    const isHome = selectedGame.homeTeam.id === team.id || selectedGame.homeTeam.key === team.key;
+    const starterSide = isHome ? selectedGame.homeTeam : selectedGame.awayTeam;
+    const opponentSide = isHome ? selectedGame.awayTeam : selectedGame.homeTeam;
+    const probableStarter = starterSide.probableStarter;
+    const requestedPitcherId = options?.selectedPitcherId?.trim() || undefined;
+    const includePitcherOptions = options?.includePitcherOptions || Boolean(requestedPitcherId);
+    const selectedSeason = (() => {
+      const basis = new Date(selectedGame.officialDate ?? selectedGame.gameDate);
+      return Number.isNaN(basis.getTime()) ? new Date().getUTCFullYear() : basis.getUTCFullYear();
+    })();
+
+    const unknownLineup: MlbProjectedLineupProfile = {
+      teamKey: opponentSide.key,
+      teamName: opponentSide.name,
+      lineupHandedness: "unknown",
+      lineupSummary: "The projected lineup estimate is unavailable right now.",
+      sampleSize: 0,
+      leftHandedHitters: 0,
+      rightHandedHitters: 0,
+      switchHitters: 0,
+      source: "active_roster",
+      projectedLineupLabel: "Active-roster approximation",
+    };
+
+    const [lineupProfile, opponentSeasonResult] = await Promise.all([
+      opponentSide.id ? fetchTeamLineupHandedness(opponentSide.id, resolved, options?.cacheBust) : Promise.resolve(unknownLineup),
+      mlbProvider.getTeamSeasonStats(opponentSide.key, selectedSeason, resolved),
+    ]);
+
+    const opponentSeason = opponentSeasonResult.data;
+    const opponentGames = (opponentSeason?.record.wins ?? 0) + (opponentSeason?.record.losses ?? 0);
+    const hitterStrikeoutsPerGame = opponentGames > 0 && opponentSeason?.hitting.strikeOuts !== undefined
+      ? opponentSeason.hitting.strikeOuts / opponentGames
+      : undefined;
+    const opponentAvg = parseNumericStat(opponentSeason?.hitting.avg);
+    const opponentTendencyKnown = opponentAvg !== undefined || hitterStrikeoutsPerGame !== undefined;
+
+    const contactSummary = [
+      opponentAvg !== undefined ? `AVG ${opponentAvg.toFixed(3)}` : null,
+      hitterStrikeoutsPerGame !== undefined ? `K/G ${roundNumber(hitterStrikeoutsPerGame, 1).toFixed(1)}` : null,
+    ].filter((value): value is string => Boolean(value)).join(" | ");
+
+    const assumptionsNote = "Assumption: this uses the opponent's active non-pitcher roster as an approximate lineup, not a confirmed batting order. Handedness and lineup-tendency notes should be treated more cautiously until the official lineup is posted.";
+
+    if (!probableStarter?.fullName) {
+      const partialReasons = buildPitcherVsProjectedLineupReasons(
+        [],
+        [
+          "Probable starter has not been posted yet.",
+          lineupProfile.lineupHandedness === "balanced"
+            ? `${opponentSide.key}'s projected hitter mix looks balanced.`
+            : lineupProfile.lineupHandedness === "left" || lineupProfile.lineupHandedness === "right"
+            ? `${opponentSide.key}'s projected hitter mix leans ${lineupProfile.lineupHandedness}-handed.`
+            : `${opponentSide.key}'s projected hitter mix is still approximate.`,
+          contactSummary
+            ? `${opponentSide.key}'s team tendency so far: ${contactSummary}.`
+            : `${opponentSide.key}'s contact and strikeout tendency is still limited.`,
+        ],
+      );
+
+      return {
+        data: {
+          teamKey: team.key,
+          teamName: team.name,
+          game: {
+            gameId: String(selectedGame.gamePk ?? ""),
+            gameDate: selectedGame.gameDate,
+            officialDate: selectedGame.officialDate,
+            opponentKey: opponentSide.key,
+            opponentName: opponentSide.name,
+            homeAway: isHome ? "home" : "away",
+            venue: selectedGame.venue,
+            probableStarterPosted: false,
+          },
+          reasons: partialReasons,
+          componentBreakdown: [],
+          pitcherSummary: null,
+          lineupSummary: {
+            teamKey: opponentSide.key,
+            teamName: opponentSide.name,
+            projectedLineupLabel: lineupProfile.projectedLineupLabel,
+            handednessSummary: lineupProfile.lineupSummary,
+            contactSummary: contactSummary || undefined,
+          },
+          assumptionsNote,
+          selectableGames,
+          state: "partial",
+          notes: [
+            "Probable starter not posted yet.",
+            "Projected lineup uses an active-roster approximation.",
+            !opponentTendencyKnown ? "Opponent team contact and strikeout inputs are partial." : "",
+          ].filter(Boolean),
+        },
+        meta: {
+          ...schedule.meta,
+          warning: combineWarnings([
+            schedule.meta.warning,
+            opponentSeasonResult.meta.warning,
+            "Probable starter not posted yet.",
+          ]),
+        },
+      };
+    }
+
+    const bullpenResult = includePitcherOptions
+      ? await mlbProvider.getBullpenFatigue(team.key, resolved, options?.cacheBust)
+      : null;
+    const pitcherOptions = includePitcherOptions
+      ? buildPitcherVsProjectedLineupPitcherOptions({
+          probableStarter: {
+            playerId: probableStarter.playerId,
+            fullName: probableStarter.fullName,
+          },
+          bullpen: bullpenResult?.data ?? null,
+        })
+      : [];
+    const selectedOption = requestedPitcherId
+      ? pitcherOptions.find((option) => option.value === requestedPitcherId)
+      : undefined;
+    const selectedPitcher = selectedOption && !selectedOption.isProbableStarter
+      ? {
+          playerId: selectedOption.playerId,
+          fullName: selectedOption.fullName,
+          role: selectedOption.role,
+        }
+      : {
+          playerId: probableStarter.playerId,
+          fullName: probableStarter.fullName,
+          role: "starter" as const,
+        };
+    const isBullpenSelection = selectedPitcher.role === "bullpen";
+    const pitcherSelection = includePitcherOptions
+      ? buildPitcherVsProjectedLineupSelection({
+          probableStarter: {
+            playerId: probableStarter.playerId,
+            fullName: probableStarter.fullName,
+          },
+          selectedPitcher,
+          selectedOption,
+          options: pitcherOptions,
+        })
+      : undefined;
+
+    const pitcherResult = await resolveMlbPitcherComparisonStats({
+      playerId: selectedPitcher.playerId,
+      fallbackName: selectedPitcher.fullName,
+      selectedGameTime: selectedGame.gameDate,
+      dataMode: resolved,
+      cacheBust: options?.cacheBust ?? undefined,
+    });
+    const pitcherCard = pitcherResult.card;
+    const displayPitcherName = pitcherCard?.fullName ?? selectedPitcher.fullName;
+    const pitcherHand = normalizePitcherHand(pitcherCard?.handedness);
+    const lineupKnown = lineupProfile.lineupHandedness !== "unknown";
+    const starterSampleFactor = pitcherSampleScale(pitcherCard?.statsBasisLabel);
+
+    let handednessDelta = 0;
+    let handednessSummary = `${lineupProfile.projectedLineupLabel}: ${lineupProfile.lineupSummary}`;
+    let handednessReason = `${opponentSide.key}'s projected hitter mix is still approximate, so the handedness read is limited.`;
+    if (pitcherHand && lineupKnown) {
+      if (lineupProfile.lineupHandedness === "balanced") {
+        handednessSummary = `${displayPitcherName} is ${pitcherHand}HP, but ${opponentSide.key}'s active-hitter mix looks balanced. No strong handedness lean.`;
+        handednessReason = `${opponentSide.key}'s projected hitter mix looks balanced, so handedness is mostly neutral.`;
+      } else {
+        const sameSide =
+          (pitcherHand === "R" && lineupProfile.lineupHandedness === "right")
+          || (pitcherHand === "L" && lineupProfile.lineupHandedness === "left");
+        const expectedSplit = lineupProfile.lineupHandedness === "right"
+          ? pitcherCard?.handednessSplits?.vsRight
+          : pitcherCard?.handednessSplits?.vsLeft;
+        const oppositeSplit = lineupProfile.lineupHandedness === "right"
+          ? pitcherCard?.handednessSplits?.vsLeft
+          : pitcherCard?.handednessSplits?.vsRight;
+        const expectedAvg = readSummaryMetric(expectedSplit, "Opp AVG");
+        const oppositeAvg = readSummaryMetric(oppositeSplit, "Opp AVG");
+        const splitDelta = expectedAvg !== undefined && oppositeAvg !== undefined
+          ? clamp((oppositeAvg - expectedAvg) * 80, -7, 7) * starterSampleFactor
+          : 0;
+        handednessDelta = clamp((sameSide ? 3 : -3) + splitDelta, -10, 10);
+        handednessSummary = expectedAvg !== undefined && oppositeAvg !== undefined
+          ? `${displayPitcherName} is ${pitcherHand}HP, and ${opponentSide.key}'s active-hitter mix trends ${lineupProfile.lineupHandedness}. Opp AVG is ${expectedAvg.toFixed(3)} against that side versus ${oppositeAvg.toFixed(3)} against the opposite side.`
+          : `${displayPitcherName} is ${pitcherHand}HP, and ${opponentSide.key}'s active-hitter mix trends ${lineupProfile.lineupHandedness}, which creates a ${sameSide ? "slight pitcher-friendly" : "slight hitter-friendly"} look.`;
+        handednessReason = sameSide
+          ? `${displayPitcherName} gets a slight handedness edge against this projected ${lineupProfile.lineupHandedness}-leaning mix.`
+          : `${opponentSide.key}'s projected ${lineupProfile.lineupHandedness}-leaning mix is a tougher handedness fit.`;
+      }
+    }
+
+    const opponentStrikeoutDelta = hitterStrikeoutsPerGame !== undefined ? clamp((hitterStrikeoutsPerGame - 8.7) * 1.1, -6, 6) : 0;
+    const pitcherK9 = parseNumericStat(pitcherCard?.kPer9);
+    const strikeoutDelta = clamp(
+      (pitcherK9 !== undefined ? clamp((pitcherK9 - 8.7) * 2.1, -10, 10) * starterSampleFactor : 0)
+      + opponentStrikeoutDelta,
+      -14,
+      14,
+    );
+    const strikeoutSummary = pitcherK9 !== undefined && hitterStrikeoutsPerGame !== undefined
+      ? `${displayPitcherName} carries ${pitcherK9.toFixed(1)} K/9, while ${opponentSide.key} strike out ${roundNumber(hitterStrikeoutsPerGame, 1).toFixed(1)} times per game.`
+      : pitcherK9 !== undefined
+      ? `${displayPitcherName} carries ${pitcherK9.toFixed(1)} K/9.`
+      : hitterStrikeoutsPerGame !== undefined
+      ? `${opponentSide.key} strike out ${roundNumber(hitterStrikeoutsPerGame, 1).toFixed(1)} times per game.`
+      : "Strikeout-rate context is limited for this matchup.";
+    const strikeoutReason = pitcherK9 !== undefined && hitterStrikeoutsPerGame !== undefined
+      ? `${displayPitcherName} has ${pitcherK9.toFixed(1)} K/9, and ${opponentSide.key} strike out ${roundNumber(hitterStrikeoutsPerGame, 1).toFixed(1)} times per game.`
+      : pitcherK9 !== undefined
+      ? `${displayPitcherName} brings ${pitcherK9.toFixed(1)} K/9 into this matchup.`
+      : hitterStrikeoutsPerGame !== undefined
+      ? `${opponentSide.key} strike out ${roundNumber(hitterStrikeoutsPerGame, 1).toFixed(1)} times per game.`
+      : "Strikeout tendency is still unclear.";
+
+    const pitcherBb9 = parseNumericStat(pitcherCard?.bbPer9);
+    const controlDelta = pitcherBb9 !== undefined
+      ? clamp((3.2 - pitcherBb9) * 3.5, -10, 10) * starterSampleFactor
+      : 0;
+    const controlSummary = pitcherBb9 !== undefined
+      ? `${displayPitcherName} is at ${pitcherBb9.toFixed(1)} BB/9, which ${pitcherBb9 <= 2.6 ? "supports cleaner innings" : pitcherBb9 >= 3.8 ? "adds free-pass risk" : "is close to neutral"}.`
+      : `Walk-rate context is limited for this ${isBullpenSelection ? "pitcher" : "starter"}.`;
+    const controlReason = pitcherBb9 !== undefined
+      ? pitcherBb9 <= 2.6
+        ? `${displayPitcherName} keeps walks in check at ${pitcherBb9.toFixed(1)} BB/9.`
+        : pitcherBb9 >= 3.8
+        ? `${displayPitcherName}'s ${pitcherBb9.toFixed(1)} BB/9 adds some walk risk.`
+        : `${displayPitcherName}'s ${pitcherBb9.toFixed(1)} BB/9 is close to neutral.`
+      : "Walk-rate context is limited.";
+
+    const recentEra = recentFormEraFromStarts(pitcherCard?.last3Starts);
+    const recentBasisScale = (pitcherCard?.statsBasisLabel ?? "").toLowerCase().includes("spring") ? 0.7 : starterSampleFactor;
+    const recentFormDelta = recentEra !== undefined
+      ? clamp((4.1 - recentEra) * 3 * recentBasisScale, -12, 12)
+      : 0;
+    const recentFormSummary = recentEra !== undefined
+      ? `${displayPitcherName} has a ${recentEra.toFixed(2)} ERA over the last three logged starts${recentBasisScale < 1 ? " with spring-sample caution" : ""}.`
+      : isBullpenSelection
+      ? "Starter-style recent-form data is limited for this bullpen option."
+      : "Recent-start form is limited or unavailable.";
+    const recentFormReason = recentEra !== undefined
+      ? recentBasisScale < 1
+        ? `Last three starts: ${recentEra.toFixed(2)} ERA, but that recent sample is still thin.`
+        : `Last three starts: ${recentEra.toFixed(2)} ERA.`
+      : isBullpenSelection
+      ? "Bullpen selection does not have a starter-style recent-form sample, so this factor stays closer to neutral."
+      : "Recent-start form is limited, so this read stays closer to neutral.";
+
+    const opponentContactDelta = clamp(
+      (opponentAvg !== undefined ? clamp((0.250 - opponentAvg) * 120, -6, 6) : 0)
+      + (hitterStrikeoutsPerGame !== undefined ? clamp((hitterStrikeoutsPerGame - 8.7) * 0.9, -4, 4) : 0),
+      -10,
+      10,
+    );
+    const opponentContactSummary = contactSummary
+      ? `${opponentSide.key}'s team tendency so far: ${contactSummary}.`
+      : "Opponent contact and strikeout tendency is limited right now.";
+    const opponentContactReason = contactSummary
+      ? `${opponentSide.key}'s team tendency so far is ${contactSummary}.`
+      : "Opponent contact and strikeout tendency is still limited.";
+
+    const componentBreakdown: MlbPitcherVsProjectedLineupComponent[] = [
+      {
+        key: "handedness",
+        label: "Handedness fit",
+        delta: roundNumber(handednessDelta, 1),
+        direction: componentDirection(handednessDelta),
+        summary: handednessSummary,
+        valueLabel: pitcherHand ? `${pitcherHand}HP vs ${lineupProfile.lineupHandedness} mix` : undefined,
+      },
+      {
+        key: "strikeoutSkill",
+        label: "Strikeout outlook",
+        delta: roundNumber(strikeoutDelta, 1),
+        direction: componentDirection(strikeoutDelta),
+        summary: strikeoutSummary,
+        valueLabel: pitcherK9 !== undefined ? `K/9 ${pitcherK9.toFixed(1)}` : undefined,
+      },
+      {
+        key: "control",
+        label: "Control",
+        delta: roundNumber(controlDelta, 1),
+        direction: componentDirection(controlDelta),
+        summary: controlSummary,
+        valueLabel: pitcherBb9 !== undefined ? `BB/9 ${pitcherBb9.toFixed(1)}` : undefined,
+      },
+      {
+        key: "recentForm",
+        label: "Recent form",
+        delta: roundNumber(recentFormDelta, 1),
+        direction: componentDirection(recentFormDelta),
+        summary: recentFormSummary,
+        valueLabel: recentEra !== undefined ? `Last 3 ERA ${recentEra.toFixed(2)}` : undefined,
+      },
+      {
+        key: "opponentContact",
+        label: "Opponent contact profile",
+        delta: roundNumber(opponentContactDelta, 1),
+        direction: componentDirection(opponentContactDelta),
+        summary: opponentContactSummary,
+        valueLabel: contactSummary || undefined,
+      },
+    ];
+
+    const knownFactorCount = [
+      pitcherHand && lineupKnown,
+      pitcherK9 !== undefined || hitterStrikeoutsPerGame !== undefined,
+      pitcherBb9 !== undefined,
+      recentEra !== undefined,
+      opponentTendencyKnown,
+    ].filter(Boolean).length;
+    const matchupDelta = componentBreakdown.reduce((total, component) => total + component.delta, 0);
+    const matchupScore = clamp(
+      Math.round(50 + matchupDelta * scoreScaleFromCoverage(knownFactorCount)),
+      0,
+      100,
+    );
+    const confidenceLabel = confidenceLabelFromInputs({
+      probableStarterPosted: true,
+      statsBasisLabel: pitcherCard?.statsBasisLabel,
+      lineupKnown,
+      lineupSampleSize: lineupProfile.sampleSize,
+      opponentStatsKnown: opponentTendencyKnown,
+      recentStartsKnown: recentEra !== undefined,
+      approximateLineup: lineupProfile.source === "active_roster",
+    });
+    const verdict = verdictFromScore(matchupScore);
+    const reasons = buildPitcherVsProjectedLineupReasons([
+      { reason: handednessReason, weight: Math.abs(handednessDelta) },
+      { reason: strikeoutReason, weight: Math.abs(strikeoutDelta) },
+      { reason: controlReason, weight: Math.abs(controlDelta) },
+      { reason: recentFormReason, weight: Math.abs(recentFormDelta) },
+      { reason: opponentContactReason, weight: Math.abs(opponentContactDelta) },
+    ], [
+      lineupProfile.lineupHandedness === "balanced"
+        ? `${opponentSide.key}'s projected hitter mix looks balanced.`
+        : lineupProfile.lineupHandedness === "left" || lineupProfile.lineupHandedness === "right"
+        ? `${opponentSide.key}'s projected hitter mix leans ${lineupProfile.lineupHandedness}-handed.`
+        : `${opponentSide.key}'s projected hitter mix is still approximate.`,
+      opponentContactReason,
+      recentFormReason,
+      "Several matchup inputs are still approximate, so this grade stays conservative.",
+    ]);
+    const pitcherConfidenceNote = [
+      pitcherCard?.confidenceNote,
+      isBullpenSelection ? "Bullpen selection uses season-level pitching data, so starter-style recent form is limited." : "",
+    ].filter(Boolean).join(" ");
+
+    return {
+      data: {
+        teamKey: team.key,
+        teamName: team.name,
+        game: {
+          gameId: String(selectedGame.gamePk ?? ""),
+          gameDate: selectedGame.gameDate,
+          officialDate: selectedGame.officialDate,
+          opponentKey: opponentSide.key,
+          opponentName: opponentSide.name,
+          homeAway: isHome ? "home" : "away",
+          venue: selectedGame.venue,
+          probableStarterPosted: true,
+        },
+        verdict,
+        matchupScore,
+        confidenceLabel,
+        reasons,
+        componentBreakdown,
+        pitcherSummary: {
+          playerId: pitcherCard?.playerId ?? selectedPitcher.playerId,
+          fullName: displayPitcherName,
+          handedness: pitcherCard?.handedness,
+          record: pitcherCard?.record,
+          era: parseNumericStat(pitcherCard?.era),
+          kPer9: pitcherK9,
+          bbPer9: pitcherBb9,
+          recentFormEra: recentEra,
+          statsBasisLabel: pitcherCard?.statsBasisLabel,
+          confidenceNote: pitcherConfidenceNote || undefined,
+        },
+        lineupSummary: {
+          teamKey: opponentSide.key,
+          teamName: opponentSide.name,
+          projectedLineupLabel: lineupProfile.projectedLineupLabel,
+          handednessSummary: lineupProfile.lineupSummary,
+          contactSummary: contactSummary || undefined,
+        },
+        assumptionsNote,
+        selectableGames,
+        pitcherSelection,
+        state: "success",
+        notes: [
+          "Projected lineup uses an active-roster approximation.",
+          !lineupKnown && lineupProfile.sampleSize > 0
+            ? `Lineup tendency is treated as unknown because only ${lineupProfile.sampleSize} hitters had batside data.`
+            : "",
+          !opponentTendencyKnown ? "Opponent team contact and strikeout inputs are partial." : "",
+          isBullpenSelection ? `Custom advanced pitcher selection is active for ${displayPitcherName}.` : "",
+          pitcherCard?.statsBasisLabel ? `Pitcher basis: ${pitcherCard.statsBasisLabel}.` : "",
+        ].filter(Boolean),
+      },
+      meta: {
+        ...(pitcherResult.meta ?? schedule.meta),
+        warning: combineWarnings([
+          schedule.meta.warning,
+          pitcherResult.warning,
+          opponentSeasonResult.meta.warning,
+          requestedPitcherId && !selectedOption ? "Selected advanced pitcher was unavailable, so the probable starter baseline was used." : undefined,
+        ]),
+      },
+    };
+  },
+
   async getPlatoonAdvantage(teamKey: string, dataMode?: ModeArg, cacheBust?: CacheBustArg) {
     const resolved = getMlbDataMode(dataMode);
     const team = resolveMlbTeam(teamKey);
@@ -1611,8 +2464,16 @@ export const mlbProvider: MlbProvider = {
       const homeKey = homeTeam?.key ?? "TBD";
       const awayKey = awayTeam?.key ?? "TBD";
       const unknownLineup: Awaited<ReturnType<typeof fetchTeamLineupHandedness>> = {
+        teamKey: "TBD",
+        teamName: "Unknown Team",
         lineupHandedness: "unknown",
         lineupSummary: "Unavailable.",
+        sampleSize: 0,
+        leftHandedHitters: 0,
+        rightHandedHitters: 0,
+        switchHitters: 0,
+        source: "active_roster",
+        projectedLineupLabel: "Active-roster approximation",
       };
 
       const [homeSplits, awaySplits, homeThrowingHand, awayThrowingHand, homeLineup, awayLineup] = await Promise.all([
