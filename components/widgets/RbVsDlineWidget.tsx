@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type RbData = {
@@ -210,8 +211,12 @@ export default function RbVsDlineWidget(props: WidgetCommonProps) {
         <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
           <p className="font-medium">{data.rbName} vs {data.opponent}</p>
           <p>{data.team} rushing context</p>
-          <p>RB: Att {data.rbAttempts ?? "-"} · Yds {data.rbYards ?? "-"} · YPC {data.rbYpc ?? "-"} · TD {data.rbTds ?? "-"} · Explosive {data.rbExplosiveRuns ?? "-"}</p>
-          <p>DEF: Yds Allowed {data.defRushYardsAllowed ?? "-"} · YPC Allowed {data.defYpcAllowed ?? "-"} · TD Allowed {data.defRushTdsAllowed ?? "-"} · Explosive Allowed {data.defExplosiveRunsAllowed ?? "-"}</p>
+          <p>
+            RB: Att {data.rbAttempts ?? "-"} · Yds {data.rbYards ?? "-"} · <StatLabel statKey="YPC" sport="NFL">YPC</StatLabel> {data.rbYpc ?? "-"} · TD {data.rbTds ?? "-"} · Explosive {data.rbExplosiveRuns ?? "-"}
+          </p>
+          <p>
+            DEF: Yds Allowed {data.defRushYardsAllowed ?? "-"} · <StatLabel statKey="YPC" sport="NFL" options={{ triggerLabel: "YPC Allowed" }}>YPC Allowed</StatLabel> {data.defYpcAllowed ?? "-"} · TD Allowed {data.defRushTdsAllowed ?? "-"} · Explosive Allowed {data.defExplosiveRunsAllowed ?? "-"}
+          </p>
           <p className="text-neutral-400">{data.whyItMatters}</p>
           <p className="text-neutral-500">{data.disclaimer}</p>
           {props.mode === "ADVANCED" && data.learnMore ? <a className="text-blue-300 underline" href={data.learnMore} target="_blank" rel="noreferrer">Learn more</a> : null}

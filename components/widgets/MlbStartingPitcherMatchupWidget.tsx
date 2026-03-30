@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import { MLB_TEAM_OPTIONS } from "@/lib/providers/mlb/teamMap";
 import type { MlbStartingPitcherMatchupData, PitcherMatchupCard } from "@/lib/sports/resolvers/mlbStartingPitcherMatchup";
@@ -81,6 +82,27 @@ function hasMetric(value: unknown): boolean {
   return Number.isFinite(Number(value));
 }
 
+const PITCHER_METRIC_EXPLAINERS: Partial<Record<PitcherMetricTile["key"], { statKey: string; triggerLabel?: string }>> = {
+  era: { statKey: "ERA" },
+  whip: { statKey: "WHIP" },
+  kPer9: { statKey: "K/9" },
+  bbPer9: { statKey: "BB/9" },
+  opponentAvg: { statKey: "AVG", triggerLabel: "Opp AVG" },
+};
+
+function renderPitcherMetricLabel(tile: PitcherMetricTile) {
+  const explainer = PITCHER_METRIC_EXPLAINERS[tile.key];
+  if (!explainer) {
+    return tile.label;
+  }
+
+  return (
+    <StatLabel statKey={explainer.statKey} sport="MLB" options={explainer.triggerLabel ? { triggerLabel: explainer.triggerLabel } : undefined}>
+      {tile.label}
+    </StatLabel>
+  );
+}
+
 export function buildPitcherMetricTiles(
   pitcher: PitcherMatchupCard | null,
   mode: "BEGINNER" | "ADVANCED",
@@ -111,15 +133,7 @@ export function buildPitcherMetricTiles(
 }
 
 export function buildBeginnerStatLine(pitcher: PitcherMatchupCard | null): string[] {
-  if (!pitcher) return [];
-  const row: string[] = [];
-  if (hasMetric(pitcher.era)) {
-    row.push(`ERA ${metricLabel(pitcher.era, 2)}`);
-  }
-  if (hasMetric(pitcher.record)) {
-    row.push(`W-L ${metricLabel(pitcher.record, 0)}`);
-  }
-  return row;
+  return buildPitcherMetricTiles(pitcher, "BEGINNER").map((tile) => `${tile.label} ${metricLabel(tile.value, tile.digits ?? 2)}`);
 }
 
 function hasPostedStarter(pitcher: PitcherMatchupCard | null): boolean {
@@ -243,7 +257,6 @@ function PitcherCard({
   const gameLogRows = pitcher.gameLogMiniSummary ?? [];
   const metricTiles = buildPitcherMetricTiles(pitcher, mode);
   const hasAdvancedMetrics = mode !== "ADVANCED" || metricTiles.length > 0;
-  const beginnerStatLine = buildBeginnerStatLine(pitcher);
 
   return (
     <div className="h-full rounded border border-neutral-700 bg-neutral-950 p-3">
@@ -269,7 +282,14 @@ function PitcherCard({
 
       {mode === "BEGINNER" ? (
         <p className="mt-2 text-[11px] text-neutral-300">
-          {beginnerStatLine.length > 0 ? beginnerStatLine.join(" | ") : "No posted stat line yet."}
+          {metricTiles.length > 0 ? (
+            metricTiles.map((tile, index) => (
+              <span key={tile.key}>
+                {index > 0 ? " | " : null}
+                {renderPitcherMetricLabel(tile)} {metricLabel(tile.value, tile.digits ?? 2)}
+              </span>
+            ))
+          ) : "No posted stat line yet."}
         </p>
       ) : null}
 
@@ -277,7 +297,7 @@ function PitcherCard({
       <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
         {metricTiles.map((tile) => (
           <div key={tile.key} className={`rounded border border-neutral-800 px-2 py-1 ${tile.colSpan2 ? "col-span-2" : ""}`}>
-            {tile.label}: {metricLabel(tile.value, tile.digits ?? 2)}
+            {renderPitcherMetricLabel(tile)}: {metricLabel(tile.value, tile.digits ?? 2)}
           </div>
         ))}
       </div>
