@@ -10,7 +10,6 @@ import RbVsDlineWidget from "@/components/widgets/RbVsDlineWidget";
 import DataHealthWidget from "@/components/widgets/DataHealthWidget";
 import MlbNext7GamesWidget from "@/components/widgets/MlbNext7GamesWidget";
 import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidget";
-<<<<<<< HEAD
 import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
 import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
 import MlbSeasonStatsWidget from "@/components/widgets/MlbSeasonStatsWidget";
@@ -18,12 +17,8 @@ import MlbPlatoonAdvantageWidget from "@/components/widgets/MlbPlatoonAdvantageW
 import MlbRecentFormWidget from "@/components/widgets/MlbRecentFormWidget";
 import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidget";
 import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
-=======
-import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
-import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
 import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
 import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
->>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -81,7 +76,6 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   data_health: (props) => <DataHealthWidget {...props} />,
   mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
-<<<<<<< HEAD
   mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
   mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
   mlb_season_stats: (props) => <MlbSeasonStatsWidget {...props} />,
@@ -89,12 +83,8 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
   mlb_bullpen_fatigue: (props) => <MlbBullpenFatigueWidget {...props} />,
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
-=======
-  "mlb-starting-pitcher-matchup": (props) => <MlbStartingPitcherMatchupWidget {...props} />,
-  "mlb-series-tracker": (props) => <MlbSeriesTrackerWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
->>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
 };
 
 function to12h(value: string): string {

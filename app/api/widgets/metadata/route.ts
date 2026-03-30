@@ -1,19 +1,4 @@
-<<<<<<< HEAD
-﻿import { NextResponse } from "next/server";
-import { WIDGET_DEFINITIONS } from "@/lib/widgets/registry";
-
-export async function GET() {
-  const categories = {
-    NFL: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "NFL"),
-    MLB: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "MLB"),
-    NBA: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "NBA"),
-    Utilities: WIDGET_DEFINITIONS.filter((w) => w.sportCategory === "UTILITIES"),
-  };
-
-  return NextResponse.json({ widgets: WIDGET_DEFINITIONS, categories });
-}
-=======
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import type { Meta } from "@/lib/providers/types";
 import { WIDGET_DEFINITIONS } from "@/lib/widgets/registry";
@@ -46,7 +31,6 @@ export async function GET(req: NextRequest) {
     primaryProvider: "apiSports",
     notes: ["Widget metadata is served from the internal registry."],
   });
->>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
 
   return NextResponse.json({ widgets, categories, contract });
 }

@@ -1,4 +1,4 @@
-﻿export type WidgetSport = "NFL" | "NBA" | "MLB" | "UTILITIES";
+export type WidgetSport = "NFL" | "NBA" | "MLB" | "UTILITIES";
 
 export type WidgetDefinition = {
   key: string;
@@ -50,11 +50,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "mlb_next_7_games",
     name: "MLB Next 7 Games",
-<<<<<<< HEAD
     description: "Upcoming 7-game schedule for any MLB team via MLB Stats API.",
-=======
-    description: "Upcoming MLB games for a selected team.",
->>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
     stability: "stable",
@@ -63,10 +59,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "mlb_pitcher_arsenal",
     name: "Pitcher Arsenal",
-<<<<<<< HEAD
     description: "Pitch-type breakdown with velocity and spin rate for a selected pitcher.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    stability: "experimental",
+    audience: "advanced",
   },
   {
     key: "mlb_series_tracker",
@@ -114,13 +111,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     key: "mlb_run_expectancy",
     name: "Run Expectancy (RE24)",
     description: "Interactive RE24 matrix — click any base/out state to see expected runs and scoring probability.",
-=======
-    description: "Pitch mix snapshot for a selected MLB pitcher.",
->>>>>>> 5518813dbf8beb460abbc3bf1376ae9c65caee03
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    stability: "experimental",
-    audience: "advanced",
   },
   {
     key: "mlb-starting-pitcher-matchup",
