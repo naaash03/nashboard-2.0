@@ -7,12 +7,27 @@ type ArsenalPitch = {
   type: string;
   usagePct?: number;
   velocityMph?: number;
+  spinRpm?: number;
 };
 
 type ArsenalResponse = {
   data: {
     playerId: string;
     playerName?: string;
+    season?: number;
+    seasonLabel?: string;
+    fallbackSeason?: number;
+    status?: "current" | "fallback" | "unavailable";
+    message?: string;
+    seasonStats?: {
+      era?: string;
+      whip?: string;
+      inningsPitched?: string;
+      strikeOuts?: number;
+      wins?: number;
+      losses?: number;
+      gamesStarted?: number;
+    };
     pitches: ArsenalPitch[];
   } | null;
   meta?: WidgetMeta;
@@ -43,6 +58,11 @@ function to12h(value: string): string {
 function formatPct(value?: number): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `${value.toFixed(1)}%`;
+}
+
+function formatDecimal(value?: number, suffix = ""): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  return `${value.toFixed(1)}${suffix}`;
 }
 
 function isNumericPlayerId(value: string): boolean {
@@ -257,13 +277,27 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
 
       {data ? (
         <div className="space-y-1 rounded border border-neutral-700 bg-neutral-950 p-2">
-          <p className="font-medium">{data.playerName ?? "Unknown player"} ({data.playerId})</p>
+          <div className="space-y-1">
+            <p className="font-medium">{data.playerName ?? "Unknown player"} ({data.playerId})</p>
+            <p className="text-[11px] text-neutral-400">
+              Season {data.seasonLabel ?? data.season ?? "-"}
+              {data.status === "fallback" && data.fallbackSeason ? ` · Fallback ${data.fallbackSeason}` : ""}
+            </p>
+            {data.seasonStats ? (
+              <p className="text-[11px] text-neutral-400">
+                {data.seasonStats.wins ?? "-"}W-{data.seasonStats.losses ?? "-"}L · {data.seasonStats.era ?? "-"} ERA · {data.seasonStats.whip ?? "-"} WHIP · {data.seasonStats.strikeOuts ?? "-"} K · {data.seasonStats.inningsPitched ?? "-"} IP
+              </p>
+            ) : null}
+            {data.message ? <p className="text-[11px] text-amber-300">{data.message}</p> : null}
+          </div>
           {data.pitches.map((pitch) => (
             <div key={pitch.type} className="flex items-center justify-between border-b border-neutral-800 py-1 last:border-b-0">
               <span>{pitch.type}</span>
               <span>
                 Usage {formatPct(pitch.usagePct)}
-                {props.mode === "ADVANCED" ? ` - Velo ${typeof pitch.velocityMph === "number" ? `${pitch.velocityMph.toFixed(1)} mph` : "-"}` : ""}
+                {props.mode === "ADVANCED"
+                  ? ` - Velo ${formatDecimal(pitch.velocityMph, " mph")} - Spin ${typeof pitch.spinRpm === "number" ? `${Math.round(pitch.spinRpm)} rpm` : "-"}`
+                  : ""}
               </span>
             </div>
           ))}
