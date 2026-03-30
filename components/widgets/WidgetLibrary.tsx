@@ -52,40 +52,57 @@ export default function WidgetLibrary({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/60 p-4">
-      <div className="mx-auto max-w-3xl rounded-xl border border-neutral-700 bg-neutral-900 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Add Widget</h2>
-          <button className="rounded border border-neutral-700 px-2 py-1 text-xs" onClick={onClose} type="button">Close</button>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div
+        aria-labelledby="widget-library-title"
+        aria-modal="true"
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900"
+        role="dialog"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-neutral-800 px-4 py-4">
+          <h2 className="text-lg font-semibold" id="widget-library-title">
+            Add Widget
+          </h2>
+          <button className="rounded border border-neutral-700 px-2 py-1 text-xs" onClick={onClose} type="button">
+            Close
+          </button>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {sections.map((section) => (
-            <div key={section.key} className="space-y-2">
-              <p className="text-sm font-medium">{section.label}</p>
-              {section.items.length === 0 ? <p className="text-xs text-neutral-500">No widgets.</p> : null}
-              {section.items.map((widget) => (
-                <div key={widget.key} className="rounded border border-neutral-700 bg-neutral-950 p-2 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium">{widget.name}</p>
-                    <div className="flex gap-1 text-[10px]">
-                      {widget.stability ? (
-                        <span className="rounded border border-neutral-600 px-1 py-0.5 text-neutral-300">
-                          {stabilityLabel[widget.stability]}
-                        </span>
-                      ) : null}
-                      {widget.audience ? (
-                        <span className="rounded border border-neutral-700 px-1 py-0.5 text-neutral-400">
-                          {audienceLabel[widget.audience]}
-                        </span>
-                      ) : null}
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4">
+          <div className="grid items-start gap-4 md:grid-cols-2">
+            {sections.map((section) => (
+              <div key={section.key} className="space-y-2">
+                <p className="text-sm font-medium">{section.label}</p>
+                {section.items.length === 0 ? <p className="text-xs text-neutral-500">No widgets.</p> : null}
+                {section.items.map((widget) => (
+                  <div key={widget.key} className="rounded border border-neutral-700 bg-neutral-950 p-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium">{widget.name}</p>
+                      <div className="flex gap-1 text-[10px]">
+                        {widget.stability ? (
+                          <span className="rounded border border-neutral-600 px-1 py-0.5 text-neutral-300">
+                            {stabilityLabel[widget.stability]}
+                          </span>
+                        ) : null}
+                        {widget.audience ? (
+                          <span className="rounded border border-neutral-700 px-1 py-0.5 text-neutral-400">
+                            {audienceLabel[widget.audience]}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
+                    <p className="text-neutral-400">{widget.description}</p>
+                    <button
+                      type="button"
+                      className="mt-2 rounded border border-neutral-700 px-2 py-1"
+                      onClick={() => onAddWidget(widget.key)}
+                    >
+                      Add
+                    </button>
                   </div>
-                  <p className="text-neutral-400">{widget.description}</p>
-                  <button type="button" className="mt-2 rounded border border-neutral-700 px-2 py-1" onClick={() => onAddWidget(widget.key)}>Add</button>
-                </div>
-              ))}
-            </div>
-          ))}
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
