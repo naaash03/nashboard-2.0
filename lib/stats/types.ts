@@ -16,6 +16,25 @@ export type StatThreshold = {
   tone: StatThresholdTone;
 };
 
+export type StatLeader = {
+  rank: number;
+  playerName: string;
+  team: string;
+  value: string;
+};
+
+export type StatLeaderSourceUsed = "mlb" | "cache" | "fixture" | "fallback";
+
+export type StatLeadersResponse = {
+  statKey: string;
+  sport: StatSport;
+  season: number;
+  leaders: StatLeader[];
+  sourceUsed: StatLeaderSourceUsed;
+  usedFallback: boolean;
+  updatedAt: string;
+};
+
 export type StatGlossaryEntry = {
   key: string;
   sport: StatSport;

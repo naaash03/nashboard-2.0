@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherAvailability = {
@@ -216,7 +217,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                     <span className="text-right">Rest</span>
                     <span className="text-right">IP</span>
                     <span className="text-right">P/S</span>
-                    <span className="text-right">K/9</span>
+                    <span className="text-right"><StatLabel statKey="K/9" sport="MLB">K/9</StatLabel></span>
                   </div>
                   {data.starters.map((starter) => (
                     <div key={starter.playerId} className="grid grid-cols-6 gap-1 rounded border border-neutral-800 bg-neutral-950 p-1.5">

@@ -3,7 +3,19 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMode } from "@/app/context/ModeContext";
 import { useStatExplainer } from "@/app/context/StatExplainerContext";
-import type { StatBetterDirection, StatThresholdTone } from "@/lib/stats/types";
+import { hasStatLeaderSupport } from "@/lib/stats/leaderSupport";
+import type {
+  StatBetterDirection,
+  StatLeadersResponse,
+  StatThresholdTone,
+} from "@/lib/stats/types";
+
+type LeadersState = {
+  loading: boolean;
+  supported: boolean;
+  data: StatLeadersResponse | null;
+  error: string | null;
+};
 
 function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
   if (!container) return [];
@@ -50,15 +62,56 @@ function betterDirectionLabel(direction: StatBetterDirection): string {
   return "Context matters most";
 }
 
+function formatUpdatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Updated recently";
+  }
+
+  return `Updated ${date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
+function CurrentLeadersSkeleton() {
+  return (
+    <div className="mt-3 space-y-2">
+      {[0, 1, 2, 3].map((row) => (
+        <div
+          key={row}
+          className="flex animate-pulse items-center gap-3 rounded-xl border border-neutral-800 bg-black/30 px-3 py-2"
+        >
+          <div className="h-7 w-7 rounded-full bg-neutral-800" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-32 rounded bg-neutral-800" />
+            <div className="h-2 w-20 rounded bg-neutral-900" />
+          </div>
+          <div className="h-3 w-12 rounded bg-neutral-800" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function StatExplainerModal() {
   const { current, closeExplainer } = useStatExplainer();
   const { mode } = useMode();
   const [ready, setReady] = useState(false);
+  const [leadersState, setLeadersState] = useState<LeadersState>({
+    loading: false,
+    supported: false,
+    data: null,
+    error: null,
+  });
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
+  const hasLeaderSupport = current.entry ? hasStatLeaderSupport(current.entry.key, current.entry.sport) : false;
 
   const thresholdWidth = useMemo(
     () => (current.entry ? 100 / current.entry.thresholds.length : 25),
@@ -124,6 +177,88 @@ export default function StatExplainerModal() {
       previousFocusRef.current?.focus();
     };
   }, [closeExplainer, current.isOpen]);
+
+  useEffect(() => {
+    if (!current.isOpen || !current.entry) {
+      setLeadersState({
+        loading: false,
+        supported: false,
+        data: null,
+        error: null,
+      });
+      return;
+    }
+
+    if (!hasLeaderSupport) {
+      setLeadersState({
+        loading: false,
+        supported: false,
+        data: null,
+        error: null,
+      });
+      return;
+    }
+
+    const currentEntry = current.entry;
+    const controller = new AbortController();
+
+    setLeadersState({
+      loading: true,
+      supported: true,
+      data: null,
+      error: null,
+    });
+
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          statKey: currentEntry.key,
+          sport: currentEntry.sport,
+        });
+        const response = await fetch(`/api/stats/leaders?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (response.status === 404) {
+          setLeadersState({
+            loading: false,
+            supported: false,
+            data: null,
+            error: null,
+          });
+          return;
+        }
+
+        const json = (await response.json()) as StatLeadersResponse | { error?: string };
+        if (!response.ok) {
+          throw new Error("error" in json ? json.error ?? "Failed to load current leaders" : "Failed to load current leaders");
+        }
+
+        setLeadersState({
+          loading: false,
+          supported: true,
+          data: json as StatLeadersResponse,
+          error: null,
+        });
+      } catch {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setLeadersState({
+          loading: false,
+          supported: true,
+          data: null,
+          error: "Current leaders are unavailable right now.",
+        });
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [current.entry, current.isOpen, hasLeaderSupport]);
 
   if (!current.isOpen || !current.entry) {
     return null;
@@ -256,6 +391,63 @@ export default function StatExplainerModal() {
                 ))}
               </div>
             </section>
+
+            {leadersState.supported ? (
+              <section className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Current Leaders</p>
+                    <p className="mt-2 text-xs text-neutral-400">
+                      {leadersState.data ? `Season ${leadersState.data.season}` : "Current-season leaderboard"}
+                    </p>
+                  </div>
+                  {leadersState.data ? (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span
+                        className={`rounded-full border px-2 py-1 ${
+                          leadersState.data.usedFallback
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                        }`}
+                      >
+                        {leadersState.data.usedFallback ? "Fallback snapshot" : "Live feed"}
+                      </span>
+                      <span className="text-neutral-500">{formatUpdatedAt(leadersState.data.updatedAt)}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {leadersState.loading ? <CurrentLeadersSkeleton /> : null}
+
+                {!leadersState.loading && leadersState.data?.leaders.length ? (
+                  <div className="mt-3 space-y-2">
+                    {leadersState.data.leaders.map((leader) => (
+                      <div
+                        key={`${entry.key}-${leader.rank}-${leader.playerName}-${leader.team}`}
+                        className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-black/30 px-3 py-2"
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900 text-[11px] font-semibold text-neutral-200">
+                          {leader.rank}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white">{leader.playerName}</p>
+                          <p className="truncate text-[11px] text-neutral-400">{leader.team}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-cyan-200">{leader.value}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {!leadersState.loading && !leadersState.data?.leaders.length ? (
+                  <p className="mt-3 text-sm leading-6 text-neutral-400">
+                    {leadersState.error ?? "Current leaders are not available for this stat right now."}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
 
             {mode === "advanced" && entry.advancedNote ? (
               <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
