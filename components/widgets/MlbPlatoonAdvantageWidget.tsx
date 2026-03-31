@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherSplits = {
@@ -63,11 +64,11 @@ function SplitsTable({ pitcher }: { pitcher: { fullName: string; throwsHand: str
         <thead>
           <tr className="text-neutral-500">
             <th className="py-0.5 text-left">Split</th>
-            <th className="py-0.5 text-right">ERA</th>
-            <th className="py-0.5 text-right">WHIP</th>
-            <th className="py-0.5 text-right">AVG</th>
-            <th className="py-0.5 text-right">OPS</th>
-            <th className="py-0.5 text-right">BF</th>
+            <th className="py-0.5 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-0.5 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-0.5 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-0.5 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-0.5 text-right"><StatLabel label="BF" statKey="batters_faced" sport="MLB" mode="ADVANCED" /></th>
           </tr>
         </thead>
         <tbody>

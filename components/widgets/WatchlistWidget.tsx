@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
+import StatLabel from "@/components/stats/StatLabel";
 import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import { getGuestWatchlist, type GuestWatchlistItem } from "@/lib/guest/watchlist";
@@ -1676,7 +1677,7 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
                             <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                               {(insight?.season?.metrics ?? []).slice(0, 4).map((metric) => (
                                 <p key={`${player.playerId}-${metric.key}`} className="truncate">
-                                  <span className="text-neutral-500">{metric.label}:</span> {metric.value}
+                                  <span className="text-neutral-500"><StatLabel label={metric.label} statKey={metric.key} sport={sportKey.toUpperCase()} mode={props.mode} />:</span> {metric.value}
                                 </p>
                               ))}
                             </div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
+import StatExplainerProvider from "@/components/stats/StatExplainerProvider";
 import WidgetLibrary from "@/components/widgets/WidgetLibrary";
 import TonightsSlateWidget from "@/components/widgets/TonightsSlateWidget";
 import PlayerCardWidget from "@/components/widgets/PlayerCardWidget";
@@ -77,7 +78,9 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
   mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
+  "mlb-series-tracker": (props) => <MlbSeriesTrackerWidget {...props} />,
   mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
+  "mlb-starting-pitcher-matchup": (props) => <MlbStartingPitcherMatchupWidget {...props} />,
   mlb_season_stats: (props) => <MlbSeasonStatsWidget {...props} />,
   mlb_platoon_advantage: (props) => <MlbPlatoonAdvantageWidget {...props} />,
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
@@ -462,7 +465,8 @@ export default function DashboardPage({
   })();
 
   return (
-    <div className="min-h-screen bg-[#090c11] text-white">
+    <StatExplainerProvider>
+      <div className="min-h-screen bg-[#090c11] text-white">
       <header className="border-b border-neutral-800 px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -628,7 +632,8 @@ export default function DashboardPage({
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </StatExplainerProvider>
   );
 }
 

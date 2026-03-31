@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type StandingRow = {
@@ -31,10 +32,12 @@ function ConferenceTable({
   title,
   rows,
   showTeamKey,
+  mode,
 }: {
   title: string;
   rows: StandingRow[];
   showTeamKey: boolean;
+  mode: "BEGINNER" | "ADVANCED";
 }) {
   return (
     <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
@@ -46,7 +49,9 @@ function ConferenceTable({
             {row.rank}. {row.team}
             {showTeamKey && row.key ? ` (${row.key})` : ""}
           </span>
-          <span>{row.wins}-{row.losses} ({row.pct})</span>
+          <span>
+            <StatLabel label="W-L" statKey="w_l_record" sport="NBA" mode={mode} /> {row.wins}-{row.losses} · <StatLabel label="Pct" statKey="win_pct" sport="NBA" mode={mode} /> {row.pct}
+          </span>
         </div>
       ))}
     </div>
@@ -107,8 +112,8 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
 
       {data ? (
         <div className="space-y-2">
-          <ConferenceTable title="East" rows={data.east} showTeamKey={props.mode === "ADVANCED"} />
-          <ConferenceTable title="West" rows={data.west} showTeamKey={props.mode === "ADVANCED"} />
+          <ConferenceTable title="East" rows={data.east} showTeamKey={props.mode === "ADVANCED"} mode={props.mode} />
+          <ConferenceTable title="West" rows={data.west} showTeamKey={props.mode === "ADVANCED"} mode={props.mode} />
         </div>
       ) : null}
 

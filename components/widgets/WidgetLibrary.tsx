@@ -53,37 +53,41 @@ export default function WidgetLibrary({
 
   return (
     <div className="fixed inset-0 z-40 bg-black/60 p-4">
-      <div className="mx-auto max-w-3xl rounded-xl border border-neutral-700 bg-neutral-900 p-4">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="mx-auto flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col rounded-xl border border-neutral-700 bg-neutral-900 p-4">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h2 className="text-lg font-semibold">Add Widget</h2>
           <button className="rounded border border-neutral-700 px-2 py-1 text-xs" onClick={onClose} type="button">Close</button>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid min-h-0 flex-1 auto-rows-fr gap-4 md:grid-cols-2">
           {sections.map((section) => (
-            <div key={section.key} className="space-y-2">
-              <p className="text-sm font-medium">{section.label}</p>
-              {section.items.length === 0 ? <p className="text-xs text-neutral-500">No widgets.</p> : null}
-              {section.items.map((widget) => (
-                <div key={widget.key} className="rounded border border-neutral-700 bg-neutral-950 p-2 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium">{widget.name}</p>
-                    <div className="flex gap-1 text-[10px]">
-                      {widget.stability ? (
-                        <span className="rounded border border-neutral-600 px-1 py-0.5 text-neutral-300">
-                          {stabilityLabel[widget.stability]}
-                        </span>
-                      ) : null}
-                      {widget.audience ? (
-                        <span className="rounded border border-neutral-700 px-1 py-0.5 text-neutral-400">
-                          {audienceLabel[widget.audience]}
-                        </span>
-                      ) : null}
+            <div key={section.key} className="flex min-h-0 flex-col gap-2">
+              <p className="shrink-0 text-sm font-medium">{section.label}</p>
+              <div className="min-h-0 overflow-y-auto pr-1">
+                <div className="space-y-2">
+                  {section.items.length === 0 ? <p className="text-xs text-neutral-500">No widgets.</p> : null}
+                  {section.items.map((widget) => (
+                    <div key={widget.key} className="rounded border border-neutral-700 bg-neutral-950 p-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium">{widget.name}</p>
+                        <div className="flex gap-1 text-[10px]">
+                          {widget.stability ? (
+                            <span className="rounded border border-neutral-600 px-1 py-0.5 text-neutral-300">
+                              {stabilityLabel[widget.stability]}
+                            </span>
+                          ) : null}
+                          {widget.audience ? (
+                            <span className="rounded border border-neutral-700 px-1 py-0.5 text-neutral-400">
+                              {audienceLabel[widget.audience]}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <p className="text-neutral-400">{widget.description}</p>
+                      <button type="button" className="mt-2 rounded border border-neutral-700 px-2 py-1" onClick={() => onAddWidget(widget.key)}>Add</button>
                     </div>
-                  </div>
-                  <p className="text-neutral-400">{widget.description}</p>
-                  <button type="button" className="mt-2 rounded border border-neutral-700 px-2 py-1" onClick={() => onAddWidget(widget.key)}>Add</button>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
           ))}
         </div>

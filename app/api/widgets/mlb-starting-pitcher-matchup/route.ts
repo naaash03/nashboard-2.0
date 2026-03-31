@@ -23,8 +23,10 @@ type ContractMatchup = {
   homeTeamId: string;
   pitchers: MlbStartingPitcherMatchupData["pitchers"];
   edge: MlbStartingPitcherMatchupData["edge"];
+  gameContext: MlbStartingPitcherMatchupData["gameContext"];
+  pitcherSelection: MlbStartingPitcherMatchupData["pitcherSelection"];
   state: MatchupState;
-  selectableGames?: Array<{ gameId: string; label: string }>;
+  selectableGames?: Array<{ gameId: string; label: string; contextType: "upcoming" | "past" | "live" }>;
 };
 
 function normalizeMode(value: string | null): MatchupMode {
@@ -77,6 +79,8 @@ function toContractData(data: MlbStartingPitcherMatchupData | null): ContractMat
     homeTeamId: homeTeam.id,
     pitchers: data.pitchers,
     edge: data.edge,
+    gameContext: data.gameContext,
+    pitcherSelection: data.pitcherSelection,
     state: data.state,
     selectableGames: data.selectableGames,
   };
@@ -95,6 +99,8 @@ export async function GET(req: Request) {
   const teamKey = (searchParams.get("teamKey") ?? "").trim().toUpperCase();
   const gameIdRaw = (searchParams.get("gameId") ?? "").trim();
   const gameId = gameIdRaw.length > 0 ? gameIdRaw : undefined;
+  const pitcherIdRaw = (searchParams.get("pitcherId") ?? "").trim();
+  const pitcherId = pitcherIdRaw.length > 0 ? pitcherIdRaw : undefined;
   const mode = normalizeMode(searchParams.get("mode"));
   const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
@@ -124,6 +130,7 @@ export async function GET(req: Request) {
   const result = await resolveMlbStartingPitcherMatchup({
     teamKey,
     gameId,
+    pitcherId,
     mode,
     dataMode: resolvedDataMode,
     cacheBust,

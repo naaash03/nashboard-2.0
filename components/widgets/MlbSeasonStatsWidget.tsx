@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PlayerYearStats = {
@@ -332,16 +333,16 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                     <thead>
                       <tr className="text-neutral-500">
                         <th className="py-0.5 text-left">Year</th>
-                        <th className="py-0.5 text-right">G</th>
-                        <th className="py-0.5 text-right">AVG</th>
-                        <th className="py-0.5 text-right">HR</th>
-                        <th className="py-0.5 text-right">RBI</th>
-                        {advanced && <th className="py-0.5 text-right">OBP</th>}
-                        {advanced && <th className="py-0.5 text-right">SLG</th>}
-                        {advanced && <th className="py-0.5 text-right">OPS</th>}
-                        {advanced && <th className="py-0.5 text-right">BB</th>}
-                        {advanced && <th className="py-0.5 text-right">K</th>}
-                        {advanced && <th className="py-0.5 text-right">SB</th>}
+                        <th className="py-0.5 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="RBI" statKey="rbi" sport="MLB" mode={props.mode} /></th>
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="BB" statKey="walks" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="SB" statKey="stolen_bases" sport="MLB" mode={props.mode} /></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -370,14 +371,14 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                     <thead>
                       <tr className="text-neutral-500">
                         <th className="py-0.5 text-left">Year</th>
-                        <th className="py-0.5 text-right">G</th>
-                        <th className="py-0.5 text-right">ERA</th>
-                        <th className="py-0.5 text-right">K</th>
-                        {advanced && <th className="py-0.5 text-right">W</th>}
-                        {advanced && <th className="py-0.5 text-right">L</th>}
-                        {advanced && <th className="py-0.5 text-right">WHIP</th>}
-                        {advanced && <th className="py-0.5 text-right">IP</th>}
-                        {advanced && <th className="py-0.5 text-right">GS</th>}
+                        <th className="py-0.5 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="W" statKey="wins" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="L" statKey="losses" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="GS" statKey="games_started" sport="MLB" mode={props.mode} /></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -459,18 +460,18 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
               <div className="space-y-1 rounded border border-neutral-800 bg-neutral-950 p-2">
                 <p className="text-[10px] uppercase tracking-wide text-neutral-500">Team Snapshot</p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                  <span>AVG: <span className="text-white">{teamStats.hitting.avg ?? "-"}</span></span>
-                  <span>ERA: <span className="text-white">{teamStats.pitching.era ?? "-"}</span></span>
-                  {advanced && <span>OBP: <span className="text-white">{teamStats.hitting.obp ?? "-"}</span></span>}
-                  {advanced && <span>WHIP: <span className="text-white">{teamStats.pitching.whip ?? "-"}</span></span>}
-                  {advanced && <span>SLG: <span className="text-white">{teamStats.hitting.slg ?? "-"}</span></span>}
-                  {advanced && <span>K (pit): <span className="text-white">{teamStats.pitching.strikeOuts ?? "-"}</span></span>}
-                  {advanced && <span>OPS: <span className="text-white">{teamStats.hitting.ops ?? "-"}</span></span>}
-                  {advanced && <span>Saves: <span className="text-white">{teamStats.pitching.saves ?? "-"}</span></span>}
-                  <span>Runs: <span className="text-white">{teamStats.hitting.runsScored ?? "-"}</span></span>
-                  <span>RA: <span className="text-white">{teamStats.pitching.runsAllowed ?? "-"}</span></span>
-                  {advanced && <span>HR: <span className="text-white">{teamStats.hitting.hr ?? "-"}</span></span>}
-                  {advanced && <span>BS: <span className="text-white">{teamStats.pitching.blownSaves ?? "-"}</span></span>}
+                  <span><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.avg ?? "-"}</span></span>
+                  <span><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.era ?? "-"}</span></span>
+                  {advanced && <span><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.obp ?? "-"}</span></span>}
+                  {advanced && <span><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.whip ?? "-"}</span></span>}
+                  {advanced && <span><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.slg ?? "-"}</span></span>}
+                  {advanced && <span><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /> (pit): <span className="text-white">{teamStats.pitching.strikeOuts ?? "-"}</span></span>}
+                  {advanced && <span><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.ops ?? "-"}</span></span>}
+                  {advanced && <span><StatLabel label="Saves" statKey="saves" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.saves ?? "-"}</span></span>}
+                  <span><StatLabel label="Runs" statKey="runs_scored" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.runsScored ?? "-"}</span></span>
+                  <span><StatLabel label="RA" statKey="runs_allowed" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.runsAllowed ?? "-"}</span></span>
+                  {advanced && <span><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.hr ?? "-"}</span></span>}
+                  {advanced && <span><StatLabel label="BS" statKey="blown_saves" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.blownSaves ?? "-"}</span></span>}
                 </div>
               </div>
             </div>

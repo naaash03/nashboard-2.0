@@ -83,3 +83,19 @@ While widgets are migrating:
 - legacy response keys remain for backward compatibility
 - canonical `contract` is the stable internal boundary
 - new widget work should be built against canonical contracts first
+
+## Stat Explainer Standard
+
+Every stable widget that shows a meaningful advanced stat or abbreviated metric should follow the shared stat explainer pattern:
+
+- use `components/stats/StatLabel.tsx` for clickable metric labels
+- rely on the dashboard-level `StatExplainerProvider` instead of widget-local modals
+- add missing glossary coverage in `lib/stats/glossary.ts` before shipping a new metric
+- leave labels plain only when the text is already fully self-explanatory
+- pass the widget mode through to `StatLabel` so beginner mode shows the plain definition and advanced mode can expose advanced notes
+
+For future widget work:
+
+- prefer explicit metric keys like `era`, `obp`, `win_pct`, `ppg`, `pass_ypg`
+- if an upstream field uses a one-off key, either map it to an existing glossary key or add an alias in the glossary
+- keep unsupported stats non-clickable; graceful plain-text fallback is the default behavior

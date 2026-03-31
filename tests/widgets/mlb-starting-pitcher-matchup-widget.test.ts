@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  buildAdvancedOverview,
   buildBeginnerStatLine,
   buildMatchupSummary,
   buildPitcherMetricTiles,
+  buildRecentFormSummary,
 } from "@/components/widgets/MlbStartingPitcherMatchupWidget";
 import type { PitcherMatchupCard } from "@/lib/sports/resolvers/mlbStartingPitcherMatchup";
 
@@ -39,6 +41,43 @@ describe("MLB Starting Pitcher Matchup widget stat tiles", () => {
     expect(buildBeginnerStatLine(rich)).toEqual(["ERA 3.11", "W-L 10-5"]);
   });
 
+  it("restores a dense recent-form summary for advanced mode", () => {
+    const pitcher: PitcherMatchupCard = {
+      fullName: "Max Fried",
+      last3Starts: [
+        { innings: "6.0", earnedRuns: 2, strikeouts: 7 },
+        { innings: "7.0", earnedRuns: 1, strikeouts: 8 },
+        { innings: "5.2", earnedRuns: 2, strikeouts: 6 },
+      ],
+    };
+
+    expect(buildRecentFormSummary(pitcher)).toBe("Last 3: 18.2 IP, 5 ER, 21 K (2.41 ERA).");
+  });
+
+  it("builds an advanced matchup overview from edge categories", () => {
+    const overview = buildAdvancedOverview({
+      game: {
+        gameId: "1",
+        awayTeam: { key: "NYM", name: "New York Mets" },
+        homeTeam: { key: "ATL", name: "Atlanta Braves" },
+        gameTime: "2026-04-01T23:10:00.000Z",
+        status: "scheduled",
+      },
+      pitchers: { away: null, home: null },
+      edge: {
+        overall: "Edge: NYM starter",
+        categories: [
+          { label: "K/9", winner: "away" },
+          { label: "BB/9", winner: "home" },
+          { label: "Recent Form (3-start ERA)", winner: "even" },
+        ],
+      },
+      state: "success",
+    });
+
+    expect(overview).toBe("Edge: NYM starter. NYM leads K/9. ATL leads BB/9.");
+  });
+
   it("renders one-sided starter summary intentionally in partial states", () => {
     const summary = buildMatchupSummary({
       game: {
@@ -62,6 +101,8 @@ describe("MLB Starting Pitcher Matchup widget stat tiles", () => {
   it("keeps advanced sections gated out of beginner mode", () => {
     const source = readFileSync("components/widgets/MlbStartingPitcherMatchupWidget.tsx", "utf8");
     expect(source.includes("mode === \"ADVANCED\" && last3.length > 0")).toBe(true);
-    expect(source.includes("mode === \"BEGINNER\" ? (")).toBe(true);
+    expect(source.includes("buildRecentFormSummary(pitcher)")).toBe(true);
+    expect(source.includes("Pitcher source:")).toBe(true);
+    expect(source.includes("Game Context")).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import { MLB_TEAM_OPTIONS } from "@/lib/providers/mlb/teamMap";
 import type { MlbSeriesTimelineGame, MlbSeriesTrackerData } from "@/lib/sports/resolvers/mlbSeriesTracker";
@@ -321,19 +322,19 @@ export default function MlbSeriesTrackerWidget(props: WidgetCommonProps) {
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                   <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
                     <p className="text-[11px] uppercase tracking-wide text-neutral-500">{data.team.key}</p>
-                    <p>Runs Scored: {data.teamTotals.runsScored}</p>
-                    <p>Runs Allowed: {data.teamTotals.runsAllowed}</p>
-                    {typeof data.teamTotals.teamAVG === "number" ? <p>Team AVG: {data.teamTotals.teamAVG.toFixed(3)}</p> : null}
-                    {typeof data.teamTotals.teamOBP === "number" ? <p>Team OBP: {data.teamTotals.teamOBP.toFixed(3)}</p> : null}
-                    {typeof data.teamTotals.teamSLG === "number" ? <p>Team SLG: {data.teamTotals.teamSLG.toFixed(3)}</p> : null}
+                    <p><StatLabel label="Runs" statKey="runs_scored" sport="MLB" mode={props.mode} />: {data.teamTotals.runsScored}</p>
+                    <p><StatLabel label="RA" statKey="runs_allowed" sport="MLB" mode={props.mode} />: {data.teamTotals.runsAllowed}</p>
+                    {typeof data.teamTotals.teamAVG === "number" ? <p><StatLabel label="Team AVG" statKey="avg" sport="MLB" mode={props.mode} />: {data.teamTotals.teamAVG.toFixed(3)}</p> : null}
+                    {typeof data.teamTotals.teamOBP === "number" ? <p><StatLabel label="Team OBP" statKey="obp" sport="MLB" mode={props.mode} />: {data.teamTotals.teamOBP.toFixed(3)}</p> : null}
+                    {typeof data.teamTotals.teamSLG === "number" ? <p><StatLabel label="Team SLG" statKey="slg" sport="MLB" mode={props.mode} />: {data.teamTotals.teamSLG.toFixed(3)}</p> : null}
                   </div>
                   <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
                     <p className="text-[11px] uppercase tracking-wide text-neutral-500">Series Analytics</p>
                     <p>Grouping: {data.groupingMethod === "official" ? "Official" : "Opponent + consecutive dates"}</p>
                     <p>Resolution: {data.resolution}</p>
-                    <p>Run Differential: {data.runDifferential >= 0 ? `+${data.runDifferential}` : data.runDifferential}</p>
-                    {typeof data.pitchingTotals.startersEra === "number" ? <p>Starters ERA: {data.pitchingTotals.startersEra.toFixed(2)}</p> : null}
-                    {typeof data.bullpenTotals.bullpenEra === "number" ? <p>Bullpen ERA: {data.bullpenTotals.bullpenEra.toFixed(2)}</p> : null}
+                    <p><StatLabel label="Run Differential" statKey="run_differential" sport="MLB" mode={props.mode} />: {data.runDifferential >= 0 ? `+${data.runDifferential}` : data.runDifferential}</p>
+                    {typeof data.pitchingTotals.startersEra === "number" ? <p><StatLabel label="Starters ERA" statKey="era" sport="MLB" mode={props.mode} />: {data.pitchingTotals.startersEra.toFixed(2)}</p> : null}
+                    {typeof data.bullpenTotals.bullpenEra === "number" ? <p><StatLabel label="Bullpen ERA" statKey="era" sport="MLB" mode={props.mode} />: {data.bullpenTotals.bullpenEra.toFixed(2)}</p> : null}
                   </div>
                 </div>
 

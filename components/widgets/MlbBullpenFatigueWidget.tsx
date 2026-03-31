@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherAvailability = {
@@ -205,7 +206,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                     <p className="text-neutral-400">
                       Last start: {starter.lastStartDate ?? "-"} · Rest: {starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}
                     </p>
-                    <p className="text-neutral-500">IP in last start: {starter.inningsLastStart ?? "-"}</p>
+                    <p className="text-neutral-500"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /> in last start: {starter.inningsLastStart ?? "-"}</p>
                   </div>
                 ))}
               {advanced && (
@@ -213,10 +214,10 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                   <div className="grid grid-cols-6 gap-1 text-[10px] text-neutral-500">
                     <span>Starter</span>
                     <span className="text-right">Last Start</span>
-                    <span className="text-right">Rest</span>
-                    <span className="text-right">IP</span>
-                    <span className="text-right">P/S</span>
-                    <span className="text-right">K/9</span>
+                    <span className="text-right"><StatLabel label="Rest" statKey="days_rest" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-right"><StatLabel label="P/S" statKey="pitches_strikes" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-right"><StatLabel label="K/9" statKey="k_per_9" sport="MLB" mode={props.mode} /></span>
                   </div>
                   {data.starters.map((starter) => (
                     <div key={starter.playerId} className="grid grid-cols-6 gap-1 rounded border border-neutral-800 bg-neutral-950 p-1.5">
@@ -263,7 +264,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                     </div>
                     {reliever.lastAppearance && (
                       <p className="text-[10px] text-neutral-600">
-                        Last outing: {reliever.lastAppearance} · {reliever.inningsLastAppearance ?? "-"} IP
+                        Last outing: {reliever.lastAppearance} · <StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /> {reliever.inningsLastAppearance ?? "-"}
                       </p>
                     )}
                     {reliever.recentAppearances.length > 0 && (

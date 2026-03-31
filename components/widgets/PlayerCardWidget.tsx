@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
+import StatLabel from "@/components/stats/StatLabel";
 import TabsRow from "@/components/widgets/shared/TabsRow";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { Envelope, PlayerProfile, PlayerSearchResult, SportKey } from "@/lib/types/players";
@@ -876,7 +877,9 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(insights?.season?.metrics ?? []).slice(0, 6).map((metric) => (
                     <div key={metric.key} className="rounded border border-neutral-700 bg-neutral-900/80 px-2 py-1">
-                      <p className="text-[10px] uppercase tracking-wide text-neutral-400">{metric.label}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-neutral-400">
+                        <StatLabel label={metric.label} statKey={metric.key} sport={sportKey.toUpperCase()} mode={props.mode} />
+                      </p>
                       <p className="text-sm font-semibold text-neutral-100">{metric.value}</p>
                     </div>
                   ))}

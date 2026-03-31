@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type FormPeriod = {
@@ -165,9 +166,9 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
               <p className="text-neutral-500">{data.sampleContext}</p>
               <div className="grid grid-cols-5 gap-1 text-[10px] text-neutral-500">
                 <span>Period</span>
-                <span className="text-right">W-L</span>
-                <span className="text-right">R/G Diff</span>
-                <span className="text-right">Win%</span>
+                <span className="text-right"><StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={props.mode} /></span>
+                <span className="text-right"><StatLabel label="R/G Diff" statKey="run_diff_per_game" sport="MLB" mode={props.mode} /></span>
+                <span className="text-right"><StatLabel label="Win%" statKey="win_pct" sport="MLB" mode={props.mode} /></span>
                 <span className="text-right">Trend</span>
               </div>
               {[data.last7, data.last14, data.last30].map((period) => (

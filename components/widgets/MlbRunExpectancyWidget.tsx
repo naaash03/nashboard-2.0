@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type RE24State = {
@@ -107,7 +108,7 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
-        <span className="font-medium">Run Expectancy (RE24)</span>
+        <span className="font-medium">Run Expectancy (<StatLabel label="RE24" statKey="re24" sport="MLB" mode={props.mode} />)</span>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           value={props.mode}
@@ -166,13 +167,13 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
                   <p className="text-blue-200">{explainSituation(selectedState.bases, selectedOuts)}</p>
                   <div className="space-y-0.5 rounded border border-blue-900/70 bg-blue-900/30 p-2 text-blue-200">
                     <p>
-                      <span className="text-blue-400">RE value</span>: {expectedRuns.toFixed(3)}
+                      <span className="text-blue-400"><StatLabel label="RE value" statKey="re24" sport="MLB" mode={props.mode} className="border-blue-400" /></span>: {expectedRuns.toFixed(3)}
                     </p>
                     <p>
-                      <span className="text-blue-400">Probability of scoring</span>: {(scorePct * 100).toFixed(1)}%
+                      <span className="text-blue-400"><StatLabel label="Probability of scoring" statKey="score_probability" sport="MLB" mode={props.mode} className="border-blue-400" /></span>: {(scorePct * 100).toFixed(1)}%
                     </p>
                     <p>
-                      <span className="text-blue-400">Delta vs baseline</span> (Empty, 0 outs = {BASELINE_RE}): {expectedRuns >= BASELINE_RE ? "+" : ""}
+                      <span className="text-blue-400"><StatLabel label="Delta vs baseline" statKey="delta_vs_baseline" sport="MLB" mode={props.mode} className="border-blue-400" /></span> (Empty, 0 outs = {BASELINE_RE}): {expectedRuns >= BASELINE_RE ? "+" : ""}
                       {(expectedRuns - BASELINE_RE).toFixed(3)}
                     </p>
                   </div>
