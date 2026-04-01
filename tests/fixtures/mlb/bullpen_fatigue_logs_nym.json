@@ -1,0 +1,236 @@
+{
+  "people": [
+    {
+      "id": 673540,
+      "fullName": "Kodai Senga",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-28",
+              "stat": {
+                "inningsPitched": "6.0",
+                "numberOfPitches": 94,
+                "strikes": 61,
+                "strikeOuts": 8
+              }
+            },
+            {
+              "date": "2026-03-22",
+              "stat": {
+                "inningsPitched": "5.2",
+                "numberOfPitches": 88,
+                "strikes": 58,
+                "strikeOuts": 7
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 656849,
+      "fullName": "David Peterson",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-27",
+              "stat": {
+                "inningsPitched": "5.1",
+                "numberOfPitches": 91,
+                "strikes": 59,
+                "strikeOuts": 6
+              }
+            },
+            {
+              "date": "2026-03-21",
+              "stat": {
+                "inningsPitched": "6.0",
+                "numberOfPitches": 97,
+                "strikes": 64,
+                "strikeOuts": 5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 642547,
+      "fullName": "Freddy Peralta",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-26",
+              "stat": {
+                "inningsPitched": "5.0",
+                "numberOfPitches": 86,
+                "strikes": 57,
+                "strikeOuts": 7
+              }
+            },
+            {
+              "date": "2026-03-20",
+              "stat": {
+                "inningsPitched": "6.1",
+                "numberOfPitches": 101,
+                "strikes": 67,
+                "strikeOuts": 9
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 621345,
+      "fullName": "A.J. Minter",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-29",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 16,
+                "strikes": 11,
+                "strikeOuts": 2
+              }
+            },
+            {
+              "date": "2026-03-27",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 14,
+                "strikes": 9,
+                "strikeOuts": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 548384,
+      "fullName": "Brooks Raley",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-28",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 18,
+                "strikes": 12,
+                "strikeOuts": 1
+              }
+            },
+            {
+              "date": "2026-03-25",
+              "stat": {
+                "inningsPitched": "0.2",
+                "numberOfPitches": 15,
+                "strikes": 10,
+                "strikeOuts": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 642207,
+      "fullName": "Devin Williams",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-30",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 13,
+                "strikes": 9,
+                "strikeOuts": 2
+              }
+            },
+            {
+              "date": "2026-03-26",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 17,
+                "strikes": 11,
+                "strikeOuts": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 623211,
+      "fullName": "Huascar Brazoban",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-29",
+              "stat": {
+                "inningsPitched": "1.1",
+                "numberOfPitches": 21,
+                "strikes": 14,
+                "strikeOuts": 2
+              }
+            },
+            {
+              "date": "2026-03-24",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 12,
+                "strikes": 8,
+                "strikeOuts": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 472610,
+      "fullName": "Luis Garcia",
+      "stats": [
+        {
+          "type": { "displayName": "gameLog" },
+          "splits": [
+            {
+              "date": "2026-03-25",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 14,
+                "strikes": 10,
+                "strikeOuts": 1
+              }
+            },
+            {
+              "date": "2026-03-21",
+              "stat": {
+                "inningsPitched": "1.0",
+                "numberOfPitches": 15,
+                "strikes": 11,
+                "strikeOuts": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

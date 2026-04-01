@@ -5,8 +5,8 @@ import { mlbProvider } from "@/lib/providers/mlb";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = searchParams.get("mode") ?? "player";
-  const playerId = searchParams.get("playerId") ?? "";
-  const teamKey = (searchParams.get("teamKey") ?? "").toUpperCase();
+  const playerId = (searchParams.get("playerId") ?? "").trim();
+  const teamKey = (searchParams.get("teamKey") ?? "").trim().toUpperCase();
   const seasonParam = searchParams.get("season");
   const season = seasonParam ? parseInt(seasonParam, 10) : new Date().getFullYear();
   const { resolvedDataMode } = resolveDataModeFromRequest(req);

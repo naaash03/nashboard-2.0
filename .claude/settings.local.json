@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest:*)",
+      "Bash(pnpm vitest:*)",
+      "Bash(ls \"c:\\\\Users\\\\imada\\\\Desktop\\\\SK00L\\\\Grad School\\\\Software Engineering \\(Fall 25\\)\\\\Implementation phase\\\\NashBoard - 1.0\\\\NashBoard\\\\app\\\\api\\\\stat-ranking\")",
+      "Bash(find \"c:\\\\Users\\\\imada\\\\Desktop\\\\SK00L\\\\Grad School\\\\Software Engineering \\(Fall 25\\)\\\\Implementation phase\\\\NashBoard - 1.0\\\\NashBoard\" -type f -name \"route.ts\")",
+      "Bash(ls -la \"c:\\\\Users\\\\imada\\\\Desktop\\\\SK00L\\\\Grad School\\\\Software Engineering \\(Fall 25\\)\\\\Implementation phase\\\\NashBoard - 1.0\\\\NashBoard/app/api/stat-ranking/\")",
+      "Bash(find \"c:\\\\Users\\\\imada\\\\Desktop\\\\SK00L\\\\Grad School\\\\Software Engineering \\(Fall 25\\)\\\\Implementation phase\\\\NashBoard - 1.0\\\\NashBoard\" -type f \\\\\\( -name \"StatExplainerModal.tsx\" -o -name \"rankability.ts\" -o -name \"MlbSeasonStatsWidget.tsx\" -o -name \"MlbStartingPitcherMatchupWidget.tsx\" \\\\\\))"
+    ]
+  }
+}

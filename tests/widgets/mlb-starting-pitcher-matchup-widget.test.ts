@@ -104,5 +104,8 @@ describe("MLB Starting Pitcher Matchup widget stat tiles", () => {
     expect(source.includes("buildRecentFormSummary(pitcher)")).toBe(true);
     expect(source.includes("Pitcher source:")).toBe(true);
     expect(source.includes("Game Context")).toBe(true);
+    expect(source.includes("Tracked team starter")).toBe(true);
+    expect(source.includes("Bullpen arms")).toBe(true);
+    expect(source.includes("Probable Starters")).toBe(false);
   });
 });

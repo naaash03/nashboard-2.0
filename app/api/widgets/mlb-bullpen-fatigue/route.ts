@@ -4,7 +4,7 @@ import { mlbProvider } from "@/lib/providers/mlb";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const teamKey = (searchParams.get("teamKey") ?? "").toUpperCase();
+  const teamKey = (searchParams.get("teamKey") ?? "").trim().toUpperCase();
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   if (!teamKey) {

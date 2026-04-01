@@ -4,10 +4,12 @@ import { createContext, useContext, useEffect, useState } from "react";
 import StatExplainerModal from "@/components/stats/StatExplainerModal";
 import {
   BUILTIN_GLOSSARY_TERMS,
+  enrichTermWithFallbacks,
   lookupGlossaryTerm,
   mergeGlossaryTerms,
   type GlossaryTerm,
 } from "@/lib/stats/glossary";
+import type { RankingContext } from "@/lib/stats/rankability";
 
 type ExplainerMode = "BEGINNER" | "ADVANCED";
 
@@ -16,11 +18,15 @@ type OpenExplainerArgs = {
   label?: string | null;
   sport?: string | null;
   mode?: ExplainerMode;
+  /** Optional subject context from the widget — enables live ranking in the modal. */
+  rankingContext?: RankingContext;
 };
 
 type ActiveTerm = {
   term: GlossaryTerm;
   mode: ExplainerMode;
+  /** Preserved from OpenExplainerArgs so the modal can fetch ranking data. */
+  rankingContext?: RankingContext;
 };
 
 type StatExplainerContextValue = {
@@ -71,7 +77,7 @@ export default function StatExplainerProvider({ children }: { children: React.Re
       if (!term) {
         return false;
       }
-      setActiveTerm({ term, mode: args.mode ?? "BEGINNER" });
+      setActiveTerm({ term: enrichTermWithFallbacks(term), mode: args.mode ?? "BEGINNER", rankingContext: args.rankingContext });
       return true;
     },
     closeExplainer: () => setActiveTerm(null),

@@ -1,15 +1,23 @@
 import { mlbProvider as baseMlbProvider } from "@/lib/providers/mlb/provider";
 import {
   mlbSearchPlayers,
+  mlbGetRecentResults,
   mlbGetRecentForm,
+  mlbGetPlayerSeasonStats,
+  mlbGetTeamSeasonStats,
   mlbGetBullpenFatigue,
   mlbGetPlatoonAdvantage,
 } from "@/lib/providers/mlb/teamStats";
 import type { MlbProvider } from "@/lib/providers/mlb/provider";
 import type {
+  MlbRecentResult,
+  MlbRecentResults,
   MlbRecentForm,
   MlbRecentFormPeriod,
   MlbPlayerSearchResult,
+  MlbPlayerYearStats,
+  MlbPlayerSeasonStats,
+  MlbTeamSeasonStatsData,
   MlbBullpenFatigue,
   MlbPitcherAvailability,
   MlbStarterRow,
@@ -25,7 +33,10 @@ type ModeArg = "auto" | "live" | "fixture";
 
 // Extended provider type that includes all methods used by route handlers
 type ExtendedMlbProvider = MlbProvider & {
+  getRecentResults(teamKey: string, limit?: number, dataMode?: ModeArg): Promise<{ data: MlbRecentResults | null; meta: Meta }>;
   getRecentForm(teamKey: string, dataMode?: ModeArg): Promise<{ data: MlbRecentForm | null; meta: Meta }>;
+  getPlayerSeasonStats(playerId: string, dataMode?: ModeArg): Promise<{ data: MlbPlayerSeasonStats | null; meta: Meta }>;
+  getTeamSeasonStats(teamKey: string, season: number, dataMode?: ModeArg): Promise<{ data: MlbTeamSeasonStatsData | null; meta: Meta }>;
   getBullpenFatigue(teamKey: string, dataMode?: ModeArg): Promise<{ data: MlbBullpenFatigue | null; meta: Meta }>;
   getPlatoonAdvantage(teamKey: string, dataMode?: ModeArg): Promise<{ data: MlbPlatoonAdvantage | null; meta: Meta }>;
   searchPlayers(q: string, limit: number, dataMode?: ModeArg): Promise<{ data: MlbPlayerSearchResult[] | null; meta: Meta }>;
@@ -33,7 +44,10 @@ type ExtendedMlbProvider = MlbProvider & {
 
 export const mlbProvider: ExtendedMlbProvider = {
   ...baseMlbProvider,
+  getRecentResults: mlbGetRecentResults,
   getRecentForm: mlbGetRecentForm,
+  getPlayerSeasonStats: mlbGetPlayerSeasonStats,
+  getTeamSeasonStats: mlbGetTeamSeasonStats,
   getBullpenFatigue: mlbGetBullpenFatigue,
   getPlatoonAdvantage: mlbGetPlatoonAdvantage,
   searchPlayers: mlbSearchPlayers,
@@ -63,9 +77,14 @@ export type {
 
 // Team stats types
 export type {
+  MlbRecentResult,
+  MlbRecentResults,
   MlbRecentForm,
   MlbRecentFormPeriod,
   MlbPlayerSearchResult,
+  MlbPlayerYearStats,
+  MlbPlayerSeasonStats,
+  MlbTeamSeasonStatsData,
   MlbBullpenFatigue,
   MlbPitcherAvailability,
   MlbStarterRow,

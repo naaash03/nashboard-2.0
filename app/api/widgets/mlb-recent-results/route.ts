@@ -4,7 +4,7 @@ import { mlbProvider } from "@/lib/providers/mlb";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const teamKey = (searchParams.get("teamKey") ?? "").toUpperCase();
+  const teamKey = (searchParams.get("teamKey") ?? "").trim().toUpperCase();
   const limitParam = searchParams.get("limit");
   const limit = limitParam ? Math.max(1, Math.min(10, parseInt(limitParam, 10))) : 3;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);

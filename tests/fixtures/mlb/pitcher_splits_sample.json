@@ -1,0 +1,36 @@
+{
+  "people": [
+    {
+      "id": 673540,
+      "fullName": "Fixture Pitcher",
+      "pitchHand": { "code": "R" },
+      "stats": [
+        {
+          "type": { "displayName": "statSplits" },
+          "splits": [
+            {
+              "split": { "code": "vl", "description": "vs Left" },
+              "stat": {
+                "era": "2.41",
+                "whip": "0.98",
+                "avg": ".218",
+                "ops": ".621",
+                "battersFaced": 142
+              }
+            },
+            {
+              "split": { "code": "vr", "description": "vs Right" },
+              "stat": {
+                "era": "3.44",
+                "whip": "1.09",
+                "avg": ".251",
+                "ops": ".712",
+                "battersFaced": 198
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
