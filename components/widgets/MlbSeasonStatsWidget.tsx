@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
+import type { RankingContext } from "@/lib/stats/rankability";
 
 type PlayerYearStats = {
   season: number;
@@ -218,6 +219,26 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
   const selectedHitting = (playerStats?.hitting ?? []).find((row) => row.season === season) ?? null;
   const selectedPitching = (playerStats?.pitching ?? []).find((row) => row.season === season) ?? null;
 
+  const playerRankingContext: RankingContext | undefined = playerId
+    ? {
+        entityType: "player",
+        entityId: playerId,
+        entityName: playerName || playerStats?.playerName,
+        season,
+        sport: "MLB",
+      }
+    : undefined;
+
+  const teamRankingContext: RankingContext | undefined = teamKey
+    ? {
+        entityType: "team",
+        teamKey,
+        entityName: teamStats?.teamName,
+        season,
+        sport: "MLB",
+      }
+    : undefined;
+
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
@@ -334,12 +355,12 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                       <tr className="text-neutral-500">
                         <th className="py-0.5 text-left">Year</th>
                         <th className="py-0.5 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>
                         <th className="py-0.5 text-right"><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} /></th>
                         <th className="py-0.5 text-right"><StatLabel label="RBI" statKey="rbi" sport="MLB" mode={props.mode} /></th>
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
                         {advanced && <th className="py-0.5 text-right"><StatLabel label="BB" statKey="walks" sport="MLB" mode={props.mode} /></th>}
                         {advanced && <th className="py-0.5 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>}
                         {advanced && <th className="py-0.5 text-right"><StatLabel label="SB" statKey="stolen_bases" sport="MLB" mode={props.mode} /></th>}
@@ -372,12 +393,12 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                       <tr className="text-neutral-500">
                         <th className="py-0.5 text-left">Year</th>
                         <th className="py-0.5 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-0.5 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>
                         <th className="py-0.5 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>
                         {advanced && <th className="py-0.5 text-right"><StatLabel label="W" statKey="wins" sport="MLB" mode={props.mode} /></th>}
                         {advanced && <th className="py-0.5 text-right"><StatLabel label="L" statKey="losses" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-0.5 text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
                         {advanced && <th className="py-0.5 text-right"><StatLabel label="GS" statKey="games_started" sport="MLB" mode={props.mode} /></th>}
                       </tr>
                     </thead>
@@ -452,7 +473,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                 {teamStats.teamName} {teamStats.season}
               </p>
               <p className="text-neutral-400">
-                {teamStats.record.wins}-{teamStats.record.losses} ({teamStats.record.pct})
+                <StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={props.mode} rankingContext={teamRankingContext} />: {teamStats.record.wins}-{teamStats.record.losses} ({teamStats.record.pct})
                 {teamStats.record.divisionRank !== undefined ? ` · Div Rank: ${teamStats.record.divisionRank}` : ""}
                 {teamStats.record.gamesBack ? ` · GB: ${teamStats.record.gamesBack}` : ""}
               </p>
@@ -470,6 +491,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                   {advanced && <span><StatLabel label="Saves" statKey="saves" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.saves ?? "-"}</span></span>}
                   <span><StatLabel label="Runs" statKey="runs_scored" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.runsScored ?? "-"}</span></span>
                   <span><StatLabel label="RA" statKey="runs_allowed" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.runsAllowed ?? "-"}</span></span>
+                  {teamStats.hitting.runsScored !== undefined && teamStats.pitching.runsAllowed !== undefined && (
+                    <span><StatLabel label="Run Diff" statKey="run_differential" sport="MLB" mode={props.mode} rankingContext={teamRankingContext} />: <span className={teamStats.hitting.runsScored - teamStats.pitching.runsAllowed >= 0 ? "text-emerald-400" : "text-red-400"}>{teamStats.hitting.runsScored - teamStats.pitching.runsAllowed >= 0 ? "+" : ""}{teamStats.hitting.runsScored - teamStats.pitching.runsAllowed}</span></span>
+                  )}
                   {advanced && <span><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.hr ?? "-"}</span></span>}
                   {advanced && <span><StatLabel label="BS" statKey="blown_saves" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.blownSaves ?? "-"}</span></span>}
                 </div>

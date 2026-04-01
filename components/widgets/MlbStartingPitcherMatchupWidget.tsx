@@ -5,6 +5,7 @@ import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import { MLB_TEAM_OPTIONS } from "@/lib/providers/mlb/teamMap";
 import type { MlbStartingPitcherMatchupData, PitcherMatchupCard } from "@/lib/sports/resolvers/mlbStartingPitcherMatchup";
+import type { RankingContext } from "@/lib/stats/rankability";
 
 type MatchupResponse = {
   data: MlbStartingPitcherMatchupData | null;
@@ -22,6 +23,13 @@ type MatchupSide = "away" | "home";
 type BullpenDropdownData = {
   starters: Array<{ playerId: string; fullName: string }>;
   relievers: Array<{ playerId: string; fullName: string }>;
+};
+
+type PitcherDropdownOption = {
+  playerId: string;
+  fullName: string;
+  label: string;
+  detail?: string;
 };
 
 type PitcherMetricTile = {
@@ -62,6 +70,16 @@ function findTeamByKey(key: string) {
   return MLB_TEAM_OPTIONS.find((team) => team.key === key.toUpperCase());
 }
 
+function readConfigString(config: WidgetCommonProps["config"], keys: string[]): string {
+  for (const key of keys) {
+    const value = config[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
 function parseTeamKeyFromQuery(query: string): string | null {
   const trimmed = query.trim();
   if (!trimmed) return null;
@@ -80,6 +98,19 @@ function parseTeamKeyFromQuery(query: string): string | null {
 
   const byContains = MLB_TEAM_OPTIONS.find((team) => team.name.toUpperCase().includes(upper));
   return byContains?.key ?? null;
+}
+
+function trackedSideForTeam(data: MlbStartingPitcherMatchupData | null, teamKey: string): MatchupSide | null {
+  if (!data) {
+    return null;
+  }
+  if (data.game.awayTeam.key === teamKey) {
+    return "away";
+  }
+  if (data.game.homeTeam.key === teamKey) {
+    return "home";
+  }
+  return null;
 }
 
 function metricLabel(value: unknown, digits = 2): string {
@@ -352,6 +383,16 @@ function PitcherCard({
     );
   }
 
+  const pitcherRankingContext: RankingContext | undefined = pitcher.playerId
+    ? {
+        entityType: "player",
+        entityId: pitcher.playerId,
+        entityName: pitcher.fullName,
+        season: new Date().getFullYear(),
+        sport: "MLB",
+      }
+    : undefined;
+
   const last3 = pitcher.last3Starts ?? [];
   const homeSplitRows = formatSplitsBlock(pitcher.homeAwaySplits?.home);
   const awaySplitRows = formatSplitsBlock(pitcher.homeAwaySplits?.away);
@@ -391,10 +432,10 @@ function PitcherCard({
         beginnerStatLine.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-300">
             {hasMetric(pitcher.era) ? (
-              <p><StatLabel label="ERA" statKey="era" sport="MLB" mode={mode} /> {metricLabel(pitcher.era, 2)}</p>
+              <p><StatLabel label="ERA" statKey="era" sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(pitcher.era, 2)}</p>
             ) : null}
             {hasMetric(pitcher.record) ? (
-              <p><StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={mode} /> {metricLabel(pitcher.record, 0)}</p>
+              <p><StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(pitcher.record, 0)}</p>
             ) : null}
           </div>
         ) : (
@@ -407,7 +448,7 @@ function PitcherCard({
           <p>
             {hasMetric(pitcher.record) ? (
               <>
-                <StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={mode} /> {metricLabel(pitcher.record, 0)}
+                <StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(pitcher.record, 0)}
               </>
             ) : (
               "Record -"
@@ -415,7 +456,7 @@ function PitcherCard({
             {" · "}
             {hasMetric(pitcher.era) ? (
               <>
-                <StatLabel label="ERA" statKey="era" sport="MLB" mode={mode} /> {metricLabel(pitcher.era, 2)}
+                <StatLabel label="ERA" statKey="era" sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(pitcher.era, 2)}
               </>
             ) : (
               "ERA -"
@@ -423,13 +464,13 @@ function PitcherCard({
             {hasMetric(pitcher.inningsPitched) ? (
               <>
                 {" · "}
-                <StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={mode} /> {metricLabel(pitcher.inningsPitched, 1)}
+                <StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(pitcher.inningsPitched, 1)}
               </>
             ) : null}
             {hasMetric(pitcher.strikeouts) ? (
               <>
                 {" · "}
-                <StatLabel label="K" statKey="strikeouts" sport="MLB" mode={mode} /> {metricLabel(pitcher.strikeouts, 0)}
+                <StatLabel label="K" statKey="strikeouts" sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(pitcher.strikeouts, 0)}
               </>
             ) : null}
           </p>
@@ -439,7 +480,7 @@ function PitcherCard({
               {narrativeStats.map((stat, index) => (
                 <span key={stat.key}>
                   {index > 0 ? " · " : ""}
-                  <StatLabel label={stat.label} statKey={stat.statKey} sport="MLB" mode={mode} /> {metricLabel(stat.value, stat.digits ?? 2)}
+                  <StatLabel label={stat.label} statKey={stat.statKey} sport="MLB" mode={mode} rankingContext={pitcherRankingContext} /> {metricLabel(stat.value, stat.digits ?? 2)}
                 </span>
               ))}
             </p>
@@ -455,7 +496,7 @@ function PitcherCard({
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
           {metricTiles.map((tile) => (
             <div key={tile.key} className={`rounded border border-neutral-800 px-2 py-1 ${tile.colSpan2 ? "col-span-2" : ""}`}>
-              <StatLabel label={tile.label} statKey={tile.key} sport="MLB" mode={mode} />: {metricLabel(tile.value, tile.digits ?? 2)}
+              <StatLabel label={tile.label} statKey={tile.key} sport="MLB" mode={mode} rankingContext={pitcherRankingContext} />: {metricLabel(tile.value, tile.digits ?? 2)}
             </div>
           ))}
         </div>
@@ -535,13 +576,17 @@ function PitcherCard({
 }
 
 export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps) {
+  const configTeamKey = readConfigString(props.config, ["teamKey"]).toUpperCase() || "NYM";
+  const configGameId = readConfigString(props.config, ["selectedGameId", "gameId"]);
+  const configPitcherIdRaw = readConfigString(props.config, ["selectedPitcherId", "pitcherId"]);
+  const configPitcherId = isNumericPlayerId(configPitcherIdRaw) ? configPitcherIdRaw : "";
+  const configPitcherName = readConfigString(props.config, ["selectedPitcherName", "pitcherName"]);
+
   const [teamQuery, setTeamQuery] = useState("");
-  const [activeTeamKey, setActiveTeamKey] = useState<string>(String(props.config.teamKey ?? "NYM").toUpperCase());
-  const [selectedGameId, setSelectedGameId] = useState<string>(String(props.config.gameId ?? ""));
-  const [selectedPitcherId, setSelectedPitcherId] = useState<string>(
-    isNumericPlayerId(String(props.config.pitcherId ?? "")) ? String(props.config.pitcherId ?? "") : "",
-  );
-  const [selectedPitcherName, setSelectedPitcherName] = useState<string>(String(props.config.pitcherName ?? ""));
+  const [activeTeamKey, setActiveTeamKey] = useState<string>(configTeamKey);
+  const [selectedGameId, setSelectedGameId] = useState<string>(configGameId);
+  const [selectedPitcherId, setSelectedPitcherId] = useState<string>(configPitcherId);
+  const [selectedPitcherName, setSelectedPitcherName] = useState<string>(configPitcherName);
   const [bullpenData, setBullpenData] = useState<BullpenDropdownData | null>(null);
   const [bullpenLoading, setBullpenLoading] = useState(false);
   const [data, setData] = useState<MlbStartingPitcherMatchupData | null>(null);
@@ -551,30 +596,25 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
   const [endpoint, setEndpoint] = useState("");
 
   useEffect(() => {
-    const configTeamKey = String(props.config.teamKey ?? "NYM").toUpperCase();
     if (configTeamKey !== activeTeamKey) {
       setActiveTeamKey(configTeamKey);
     }
     const option = findTeamByKey(configTeamKey);
     setTeamQuery(option ? `${option.name} (${option.key})` : configTeamKey);
-  }, [props.config.teamKey, activeTeamKey]);
+  }, [configTeamKey, activeTeamKey]);
 
   useEffect(() => {
-    const configGameId = String(props.config.gameId ?? "");
     if (configGameId !== selectedGameId) {
       setSelectedGameId(configGameId);
     }
-  }, [props.config.gameId, selectedGameId]);
+  }, [configGameId, selectedGameId]);
 
   useEffect(() => {
-    const configPitcherId = isNumericPlayerId(String(props.config.pitcherId ?? ""))
-      ? String(props.config.pitcherId ?? "")
-      : "";
     if (configPitcherId !== selectedPitcherId) {
       setSelectedPitcherId(configPitcherId);
-      setSelectedPitcherName(String(props.config.pitcherName ?? ""));
+      setSelectedPitcherName(configPitcherName);
     }
-  }, [props.config.pitcherId, props.config.pitcherName, selectedPitcherId]);
+  }, [configPitcherId, configPitcherName, selectedPitcherId]);
 
   const matchingTeams = useMemo(() => {
     const q = teamQuery.trim().toLowerCase();
@@ -700,16 +740,9 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
   };
 
   const onPitcherDropdownChange = async (pitcherId: string) => {
-    let pitcherName = "";
-    if (pitcherId) {
-      const allOptions = [
-        ...(data?.pitchers.away?.playerId ? [{ playerId: data.pitchers.away.playerId, fullName: data.pitchers.away.fullName }] : []),
-        ...(data?.pitchers.home?.playerId ? [{ playerId: data.pitchers.home.playerId, fullName: data.pitchers.home.fullName }] : []),
-        ...(bullpenData?.starters ?? []),
-        ...(bullpenData?.relievers ?? []),
-      ];
-      pitcherName = allOptions.find((p) => p.playerId === pitcherId)?.fullName ?? "";
-    }
+    const pitcherName = pitcherId
+      ? selectedPitcherOptions.find((option) => option.playerId === pitcherId)?.fullName ?? ""
+      : "";
     setSelectedPitcherId(pitcherId);
     setSelectedPitcherName(pitcherName);
     await props.onPersist({
@@ -723,17 +756,62 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
     });
   };
 
-  const probableStarterOptions = useMemo(() => {
-    if (!data) return [];
-    const opts: Array<{ playerId: string; label: string }> = [];
-    if (data.pitchers.away?.playerId) {
-      opts.push({ playerId: data.pitchers.away.playerId, label: `${data.pitchers.away.fullName} (Away Starter)` });
+  const trackedPitcherCard = useMemo(() => {
+    const trackedSide = trackedSideForTeam(data, activeTeamKey);
+    return trackedSide === "away" ? data?.pitchers.away ?? null : trackedSide === "home" ? data?.pitchers.home ?? null : null;
+  }, [activeTeamKey, data]);
+
+  const probableStarterOption = useMemo(() => {
+    if (!trackedPitcherCard?.playerId) {
+      return null;
     }
-    if (data.pitchers.home?.playerId) {
-      opts.push({ playerId: data.pitchers.home.playerId, label: `${data.pitchers.home.fullName} (Home Starter)` });
+
+    const detail = data?.gameContext.type === "past"
+      ? "Starter from selected game context"
+      : data?.gameContext.type === "live"
+        ? "Live probable starter"
+        : "Upcoming probable starter";
+
+    return {
+      playerId: trackedPitcherCard.playerId,
+      fullName: trackedPitcherCard.fullName,
+      label: trackedPitcherCard.fullName,
+      detail,
+    } satisfies PitcherDropdownOption;
+  }, [data?.gameContext.type, trackedPitcherCard]);
+
+  const bullpenArmOptions = useMemo(() => {
+    const options: PitcherDropdownOption[] = [];
+    const seen = new Set<string>(probableStarterOption?.playerId ? [probableStarterOption.playerId] : []);
+
+    for (const reliever of bullpenData?.relievers ?? []) {
+      if (!reliever.playerId || seen.has(reliever.playerId)) {
+        continue;
+      }
+      seen.add(reliever.playerId);
+      options.push({
+        playerId: reliever.playerId,
+        fullName: reliever.fullName,
+        label: reliever.fullName,
+        detail: "Bullpen arm",
+      });
     }
-    return opts;
-  }, [data]);
+
+    return options;
+  }, [bullpenData?.relievers, probableStarterOption]);
+
+  const selectedPitcherOptions = useMemo(
+    () => [
+      ...(probableStarterOption ? [probableStarterOption] : []),
+      ...bullpenArmOptions,
+    ],
+    [bullpenArmOptions, probableStarterOption],
+  );
+
+  const selectedPitcherOption = useMemo(
+    () => selectedPitcherOptions.find((option) => option.playerId === selectedPitcherId) ?? null,
+    [selectedPitcherId, selectedPitcherOptions],
+  );
 
   const stateBanner = (() => {
     if (loading) return "Loading matchup...";
@@ -814,10 +892,27 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
         <div className="rounded border border-neutral-700 bg-neutral-950 p-2 text-[11px]">
           <p className="text-neutral-300">Pitcher source: {pitcherSelectionLabel}</p>
           <p className="mt-1 text-neutral-400">Game context: {gameContextLabel}</p>
-          {selectedPitcherId ? (
-            <p className="mt-1 text-neutral-400">
-              Selected: {selectedPitcherName || data?.pitcherSelection?.selectedPitcherName || "Player"} ({selectedPitcherId})
-            </p>
+          {selectedPitcherId && selectedPitcherOption ? (
+            <div className="mt-2 flex items-center gap-2 rounded border border-neutral-800 bg-neutral-900/60 p-2">
+              {trackedPitcherCard?.playerId === selectedPitcherId && trackedPitcherCard.headshotUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={trackedPitcherCard.headshotUrl}
+                  alt={`${trackedPitcherCard.fullName} headshot`}
+                  className="h-9 w-9 rounded-full border border-neutral-700 object-cover"
+                />
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-700 text-[10px] text-neutral-500">
+                  SP
+                </div>
+              )}
+              <div>
+                <p className="text-neutral-200">{selectedPitcherName || selectedPitcherOption.fullName}</p>
+                <p className="text-[10px] text-neutral-500">
+                  {selectedPitcherOption.detail ?? "Custom pitcher selection"} - ID {selectedPitcherId}
+                </p>
+              </div>
+            </div>
           ) : (
             <p className="mt-1 text-neutral-400">Using the tracked team&apos;s probable starter baseline.</p>
           )}
@@ -834,25 +929,18 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
               onChange={(event) => void onPitcherDropdownChange(event.target.value)}
               disabled={props.locked || bullpenLoading}
             >
-              <option value="">— Probable starter baseline —</option>
-              {probableStarterOptions.length > 0 ? (
-                <optgroup label="Probable Starters">
-                  {probableStarterOptions.map((opt) => (
-                    <option key={opt.playerId} value={opt.playerId}>{opt.label}</option>
-                  ))}
+              <option value="">-- Upcoming probable starter baseline --</option>
+              {probableStarterOption ? (
+                <optgroup label="Tracked team starter">
+                  <option value={probableStarterOption.playerId}>
+                    {probableStarterOption.label} ({probableStarterOption.detail})
+                  </option>
                 </optgroup>
               ) : null}
-              {bullpenData && bullpenData.starters.length > 0 ? (
-                <optgroup label={`${activeTeamKey} Rotation`}>
-                  {bullpenData.starters.map((p) => (
-                    <option key={p.playerId} value={p.playerId}>{p.fullName}</option>
-                  ))}
-                </optgroup>
-              ) : null}
-              {bullpenData && bullpenData.relievers.length > 0 ? (
-                <optgroup label={`${activeTeamKey} Bullpen`}>
-                  {bullpenData.relievers.map((p) => (
-                    <option key={p.playerId} value={p.playerId}>{p.fullName}</option>
+              {bullpenArmOptions.length > 0 ? (
+                <optgroup label={`${activeTeamKey} Bullpen arms`}>
+                  {bullpenArmOptions.map((option) => (
+                    <option key={option.playerId} value={option.playerId}>{option.label}</option>
                   ))}
                 </optgroup>
               ) : null}
@@ -860,7 +948,7 @@ export default function MlbStartingPitcherMatchupWidget(props: WidgetCommonProps
           </label>
           {bullpenLoading && <p className="text-[10px] text-neutral-500">Loading pitcher list...</p>}
           {!bullpenLoading && !bullpenData && activeTeamKey && (
-            <p className="text-[10px] text-neutral-500">Pitcher list unavailable — dropdown shows probable starters only.</p>
+            <p className="text-[10px] text-neutral-500">Pitcher list unavailable - dropdown shows posted starter options only.</p>
           )}
         </div>
       ) : null}
