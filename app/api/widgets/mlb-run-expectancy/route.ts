@@ -19,13 +19,12 @@ const RE24 = {
 };
 
 export async function GET(req: Request) {
-  const { resolvedDataMode } = resolveDataModeFromRequest(req);
+  resolveDataModeFromRequest(req);
   const data = { states: RE24.states, source: RE24.source };
   const meta: Meta = {
-    sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "demo",
+    sourceUsed: "demo",
     updatedAt: new Date().toISOString(),
     requestId: randomUUID(),
-    dataModeEffective: resolvedDataMode === "fixture" ? "fixture" : undefined,
   };
   const contract = toWidgetPayload({ data, error: null, meta, primaryProvider: "mlb" });
   if (process.env.NODE_ENV === "development") {

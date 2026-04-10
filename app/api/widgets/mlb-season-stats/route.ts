@@ -29,7 +29,7 @@ export async function GET(req: Request) {
         console.warn(`[contract] mlb-season-stats missing fields: ${missing.join(", ")}`);
       }
     }
-    return NextResponse.json({ data, meta, contract, mode: "player" });
+    return NextResponse.json({ data, meta, contract });
   }
 
   if (mode === "team") {
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
         console.warn(`[contract] mlb-season-stats missing fields: ${missing.join(", ")}`);
       }
     }
-    return NextResponse.json({ data, meta, contract, mode: "team" });
+    return NextResponse.json({ data, meta, contract });
   }
 
   return NextResponse.json({ error: "mode must be 'player' or 'team'" }, { status: 400 });
