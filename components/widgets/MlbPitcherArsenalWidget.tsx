@@ -255,6 +255,10 @@ export default function MlbPitcherArsenalWidget(props: WidgetCommonProps) {
         <p className="text-neutral-400">Pitch arsenal not available yet for this player.</p>
       ) : null}
 
+      {data && props.mode === "BEGINNER" ? (
+        <p className="text-neutral-500">Shows which pitches this pitcher throws and how often. Higher usage % means they lean on that pitch more.</p>
+      ) : null}
+
       {data ? (
         <div className="space-y-1 rounded border border-neutral-700 bg-neutral-950 p-2">
           <p className="font-medium">{data.playerName ?? "Unknown player"} ({data.playerId})</p>

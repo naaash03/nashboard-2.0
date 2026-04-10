@@ -190,11 +190,14 @@ function RankingSection({
       </div>
 
       {data.rank !== null && (
-        <div className="mt-3 flex items-baseline gap-2">
+        <div className="mt-3 flex items-baseline gap-3">
           <span className="text-2xl font-bold text-white">#{data.rank}</span>
-          <span className="text-[11px] text-neutral-400">
-            of {data.total} qualified
-          </span>
+          <span className="text-[11px] text-neutral-400">of {data.total}</span>
+          {data.subjectValue !== undefined && (
+            <span className="ml-auto font-mono text-sm font-semibold text-sky-300">
+              {data.subjectValue}
+            </span>
+          )}
         </div>
       )}
       <p className="mt-1 text-[11px] text-neutral-500">{data.qualifierText}</p>
@@ -241,7 +244,7 @@ function RankingSection({
                   <span>{context.entityName}</span>
                 </div>
                 <span className="font-mono">
-                  {context.statValue !== undefined ? String(context.statValue) : ""}
+                  {data.subjectValue ?? (context.statValue !== undefined ? String(context.statValue) : "")}
                 </span>
               </div>
             </>

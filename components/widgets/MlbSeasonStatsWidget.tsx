@@ -347,6 +347,16 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                 Showing {season} stats for {playerName || playerStats.playerName || playerStats.playerId}
               </p>
 
+              {!advanced && selectedHitting && !selectedPitching && (
+                <p className="text-neutral-500">Key hitting stats: AVG (batting average), HR (home runs), RBI (runs batted in). Higher is better for all three.</p>
+              )}
+              {!advanced && selectedPitching && !selectedHitting && (
+                <p className="text-neutral-500">Key pitching stats: ERA (runs allowed per 9 innings) and K (strikeouts). Lower ERA is better.</p>
+              )}
+              {!advanced && selectedHitting && selectedPitching && (
+                <p className="text-neutral-500">AVG, HR, RBI are the key hitting numbers. ERA and K are the key pitching numbers.</p>
+              )}
+
               {selectedHitting && (
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Hitting</p>
@@ -472,6 +482,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
               <p className="font-medium">
                 {teamStats.teamName} {teamStats.season}
               </p>
+              {!advanced && (
+                <p className="text-neutral-500">Run differential (runs scored minus runs allowed) is one of the best quick reads on how well a team is really performing. Positive is good.</p>
+              )}
               <p className="text-neutral-400">
                 <StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={props.mode} rankingContext={teamRankingContext} />: {teamStats.record.wins}-{teamStats.record.losses} ({teamStats.record.pct})
                 {teamStats.record.divisionRank !== undefined ? ` · Div Rank: ${teamStats.record.divisionRank}` : ""}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { mlbProvider } from "@/lib/providers/mlb";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -16,7 +17,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "playerId is required for mode=player" }, { status: 400 });
     }
     const { data, meta } = await mlbProvider.getPlayerSeasonStats(playerId, resolvedDataMode);
-    return NextResponse.json({ data, meta, mode: "player" });
+    const contract = toWidgetPayload({ data, error: null, meta, primaryProvider: "mlb" });
+    if (process.env.NODE_ENV === "development") {
+      const missing: string[] = [];
+      if (contract.ok === undefined || contract.ok === null) missing.push("ok");
+      if (!contract.source?.provider) missing.push("source.provider");
+      if (!contract.source?.mode) missing.push("source.mode");
+      if (!contract.source?.fetchedAt) missing.push("source.fetchedAt");
+      if (!contract.debug?.requestId) missing.push("debug.requestId");
+      if (missing.length > 0) {
+        console.warn(`[contract] mlb-season-stats missing fields: ${missing.join(", ")}`);
+      }
+    }
+    return NextResponse.json({ data, meta, contract, mode: "player" });
   }
 
   if (mode === "team") {
@@ -24,7 +37,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "teamKey is required for mode=team" }, { status: 400 });
     }
     const { data, meta } = await mlbProvider.getTeamSeasonStats(teamKey, season, resolvedDataMode);
-    return NextResponse.json({ data, meta, mode: "team" });
+    const contract = toWidgetPayload({ data, error: null, meta, primaryProvider: "mlb" });
+    if (process.env.NODE_ENV === "development") {
+      const missing: string[] = [];
+      if (contract.ok === undefined || contract.ok === null) missing.push("ok");
+      if (!contract.source?.provider) missing.push("source.provider");
+      if (!contract.source?.mode) missing.push("source.mode");
+      if (!contract.source?.fetchedAt) missing.push("source.fetchedAt");
+      if (!contract.debug?.requestId) missing.push("debug.requestId");
+      if (missing.length > 0) {
+        console.warn(`[contract] mlb-season-stats missing fields: ${missing.join(", ")}`);
+      }
+    }
+    return NextResponse.json({ data, meta, contract, mode: "team" });
   }
 
   return NextResponse.json({ error: "mode must be 'player' or 'team'" }, { status: 400 });

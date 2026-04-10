@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
+import { resolveDataModeFromRequest } from "@/lib/config/env";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
+import type { Meta } from "@/lib/providers/types";
 
 const RE24 = {
   states: [
@@ -15,13 +18,26 @@ const RE24 = {
   source: "2015-2022 MLB average RE24 matrix (Tom Tango / Baseball Reference)",
 };
 
-export async function GET() {
-  return NextResponse.json({
-    data: { states: RE24.states, source: RE24.source },
-    meta: {
-      sourceUsed: "demo",
-      updatedAt: new Date().toISOString(),
-      requestId: randomUUID(),
-    },
-  });
+export async function GET(req: Request) {
+  const { resolvedDataMode } = resolveDataModeFromRequest(req);
+  const data = { states: RE24.states, source: RE24.source };
+  const meta: Meta = {
+    sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "demo",
+    updatedAt: new Date().toISOString(),
+    requestId: randomUUID(),
+    dataModeEffective: resolvedDataMode === "fixture" ? "fixture" : undefined,
+  };
+  const contract = toWidgetPayload({ data, error: null, meta, primaryProvider: "mlb" });
+  if (process.env.NODE_ENV === "development") {
+    const missing: string[] = [];
+    if (contract.ok === undefined || contract.ok === null) missing.push("ok");
+    if (!contract.source?.provider) missing.push("source.provider");
+    if (!contract.source?.mode) missing.push("source.mode");
+    if (!contract.source?.fetchedAt) missing.push("source.fetchedAt");
+    if (!contract.debug?.requestId) missing.push("debug.requestId");
+    if (missing.length > 0) {
+      console.warn(`[contract] mlb-run-expectancy missing fields: ${missing.join(", ")}`);
+    }
+  }
+  return NextResponse.json({ data, meta, contract });
 }

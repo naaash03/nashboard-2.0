@@ -199,6 +199,9 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
           {viewMode === "starters" && (
             <div className="space-y-1">
+              {!advanced && (
+                <p className="pb-0.5 text-[10px] text-neutral-500">Starters typically pitch every 4-5 days. More rest means a fresher arm going deeper into the game.</p>
+              )}
               {!advanced &&
                 data.starters.map((starter) => (
                   <div key={starter.playerId} className="rounded border border-neutral-800 bg-neutral-950 p-1.5">
@@ -239,6 +242,15 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
           {viewMode === "bullpen" && (
             <div className="space-y-1">
+              {!advanced && (
+                <div className="flex flex-wrap gap-2 pb-0.5 text-[10px] text-neutral-500">
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />Rested</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />Fresh</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />Available</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />Tired</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-red-500" />Fatigued</span>
+                </div>
+              )}
               {!advanced &&
                 displayRelievers?.map((reliever) => (
                   <div key={reliever.playerId} className="flex items-center gap-2 rounded border border-neutral-800 bg-neutral-950 p-1.5">

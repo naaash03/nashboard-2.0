@@ -202,7 +202,7 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
 
           <p className="text-neutral-300">{data.explanation}</p>
 
-          {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 1 && (
+          {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 0 && (
             <p className="text-neutral-500">{data.handednessAnalyses[0].reasoning}</p>
           )}
 
