@@ -95,13 +95,18 @@ function SplitsTable({ pitcher }: { pitcher: { fullName: string; throwsHand: str
 }
 
 export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
-  const [teamKey, setTeamKey] = useState<string>((props.config.teamKey as string) ?? "");
+  const initialTeamKey = ((props.config.teamKey as string) ?? "").toUpperCase();
+  const [teamKey, setTeamKey] = useState<string>(initialTeamKey);
+  const [teamInput, setTeamInput] = useState<string>(initialTeamKey);
   const [data, setData] = useState<PlatoonAdvantage | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(
     async (key: string) => {
+      setLoading(true);
+      setWarning(null);
       const res = await fetch(
         `/api/widgets/mlb-platoon-advantage?teamKey=${encodeURIComponent(key)}&dataMode=${props.dataMode}`,
         { cache: "no-store" },
@@ -111,6 +116,7 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         meta?: WidgetMeta;
         error?: string;
       };
+      setLoading(false);
       if (!res.ok) throw new Error(json.error ?? "Failed to load platoon data");
       return { data: json.data ?? null, meta: json.meta ?? null };
     },
@@ -126,10 +132,15 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         if (!cancelled) {
           setData(result.data);
           setMeta(result.meta);
-          setWarning(null);
+          setWarning(result.meta?.warning ?? (!result.data ? "No matchup data is available for this team right now." : null));
         }
       } catch (error) {
-        if (!cancelled) setWarning(String(error));
+        if (!cancelled) {
+          setData(null);
+          setMeta(null);
+          setWarning(String(error));
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -138,7 +149,13 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
   }, [teamKey, load, props.refreshTick]);
 
   async function applyTeam() {
-    await props.onPersist({ config: { ...props.config, teamKey } });
+    const nextTeamKey = teamInput.trim().toUpperCase();
+    setTeamInput(nextTeamKey);
+    setTeamKey(nextTeamKey);
+    setData(null);
+    setMeta(null);
+    setWarning(null);
+    await props.onPersist({ config: { ...props.config, teamKey: nextTeamKey } });
   }
 
   const advanced = props.mode === "ADVANCED";
@@ -164,8 +181,8 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         <input
           className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           placeholder="Team (e.g. NYM)"
-          value={teamKey}
-          onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
+          value={teamInput}
+          onChange={(e) => setTeamInput(e.target.value.toUpperCase())}
         />
         <button
           className="rounded border border-neutral-700 px-2 py-1"
@@ -177,8 +194,11 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         </button>
       </div>
 
-      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation to start.</p>}
+      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation and press Set.</p>}
+      {teamInput && teamInput !== teamKey && <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p>}
       {warning && <p className="text-amber-300">{warning}</p>}
+      {loading && <p className="text-neutral-400">Loading platoon matchup...</p>}
+      {!loading && teamKey && !data && !warning && <p className="text-neutral-400">No platoon matchup data is available for this team right now.</p>}
 
       {data && (
         <div className="space-y-2">
@@ -196,11 +216,14 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
             </div>
           ) : (
             <span className="rounded border border-amber-500 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
-              Handedness Read
+              Handedness Estimate
             </span>
           )}
 
           <p className="text-neutral-300">{data.explanation}</p>
+          {data.analysisMode === "handedness" && (
+            <p className="text-[10px] text-neutral-500">Use this as a rough lean until both probable starters have posted split data.</p>
+          )}
 
           {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 0 && (
             <p className="text-neutral-500">{data.handednessAnalyses[0].reasoning}</p>

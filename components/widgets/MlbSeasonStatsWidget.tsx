@@ -102,7 +102,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
   const [tabMode, setTabMode] = useState<"player" | "team">(config.tabMode ?? "player");
   const [playerId, setPlayerId] = useState<string>(config.playerId ?? "");
   const [playerName, setPlayerName] = useState<string>(config.playerName ?? "");
-  const [teamKey, setTeamKey] = useState<string>(config.teamKey ?? "");
+  const initialTeamKey = (config.teamKey ?? "").toUpperCase();
+  const [teamKey, setTeamKey] = useState<string>(initialTeamKey);
+  const [teamInput, setTeamInput] = useState<string>(initialTeamKey);
   const [season, setSeason] = useState<number>(config.season ?? currentYear);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<PlayerSearchResult[]>([]);
@@ -118,6 +120,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
     async (pid: string) => {
       setLoading(true);
       setWarning(null);
+      setPlayerStats(null);
       try {
         const res = await fetch(
           `/api/widgets/mlb-season-stats?mode=player&playerId=${encodeURIComponent(pid)}&dataMode=${props.dataMode}`,
@@ -131,6 +134,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
         if (!res.ok) throw new Error(json.error ?? "Failed to load player stats");
         setPlayerStats(json.data ?? null);
         setMeta(json.meta ?? null);
+        setWarning(json.meta?.warning ?? (!json.data ? "No player season stats are available right now." : null));
       } catch (error) {
         setWarning(String(error));
       } finally {
@@ -144,6 +148,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
     async (key: string, year: number) => {
       setLoading(true);
       setWarning(null);
+      setTeamStats(null);
       try {
         const res = await fetch(
           `/api/widgets/mlb-season-stats?mode=team&teamKey=${encodeURIComponent(key)}&season=${year}&dataMode=${props.dataMode}`,
@@ -157,6 +162,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
         if (!res.ok) throw new Error(json.error ?? "Failed to load team stats");
         setTeamStats(json.data ?? null);
         setMeta(json.meta ?? null);
+        setWarning(json.meta?.warning ?? (!json.data ? "No team season stats are available right now." : null));
       } catch (error) {
         setWarning(String(error));
       } finally {
@@ -206,6 +212,16 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
   async function persistConfig(updates: Partial<typeof config>) {
     const next = { ...config, tabMode, playerId, playerName, teamKey, season, ...updates };
     await props.onPersist({ config: next });
+  }
+
+  async function applyTeamSelection() {
+    const nextTeamKey = teamInput.trim().toUpperCase();
+    setTeamInput(nextTeamKey);
+    setTeamKey(nextTeamKey);
+    setTeamStats(null);
+    setMeta(null);
+    setWarning(null);
+    await props.onPersist({ config: { ...config, tabMode: "team", playerId, playerName, teamKey: nextTeamKey, season } });
   }
 
   function selectPlayer(result: PlayerSearchResult) {
@@ -340,6 +356,8 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
           </div>
 
           {loading && <p className="text-neutral-400">Loading player stats...</p>}
+          {!playerId && !loading && <p className="text-neutral-400">Search for a player name to load season stats.</p>}
+          {playerId && !playerStats && !loading && !warning && <p className="text-neutral-400">No player season stats are available for this selection.</p>}
 
           {playerStats && !loading && (
             <div className="space-y-2">
@@ -443,8 +461,8 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
             <input
               className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
               placeholder="Team (e.g. NYM)"
-              value={teamKey}
-              onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
+              value={teamInput}
+              onChange={(e) => setTeamInput(e.target.value.toUpperCase())}
             />
             <select
               className="w-28 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
@@ -465,10 +483,7 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
             <button
               className="rounded border border-neutral-700 px-2 py-1"
               type="button"
-              onClick={() => {
-                void loadTeamStats(teamKey, season);
-                void persistConfig({ teamKey, season });
-              }}
+              onClick={() => void applyTeamSelection()}
               disabled={props.locked}
             >
               View
@@ -476,6 +491,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
           </div>
 
           {loading && <p className="text-neutral-400">Loading team stats...</p>}
+          {!teamKey && !loading && <p className="text-neutral-400">Enter a team abbreviation and press View.</p>}
+          {teamInput && teamInput !== teamKey && <p className="text-[10px] text-neutral-500">Press View to load {teamInput}.</p>}
+          {teamKey && !teamStats && !loading && !warning && <p className="text-neutral-400">No team season stats are available for this selection.</p>}
 
           {teamStats && !loading && (
             <div className="space-y-2">

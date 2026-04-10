@@ -256,6 +256,15 @@ function daysBetween(dateStr: string, now: Date): number {
   return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function outsFromInningsPitched(ip: string | null | undefined): number {
+  if (!ip) return 0;
+  const parts = String(ip).split(".");
+  const whole = Number.parseInt(parts[0] ?? "0", 10);
+  const frac = Number.parseInt(parts[1] ?? "0", 10);
+  if (Number.isNaN(whole) || Number.isNaN(frac)) return 0;
+  return whole * 3 + Math.max(0, Math.min(frac, 2));
+}
+
 function fatigueLevelFromDays(days: number): MlbPitcherAvailability["fatigue"] {
   if (days <= 1) return "fatigued";
   if (days === 2) return "tired";
@@ -856,6 +865,8 @@ type MlbBulkPeopleResponse = {
   }>;
 };
 
+type PersonSplitRow = { date?: string; ip: string; pitches?: number; strikes?: number; k?: number };
+
 function isPitcher(abbr?: string, type?: string): boolean {
   if (!abbr && !type) return false;
   const a = (abbr ?? "").toUpperCase();
@@ -865,6 +876,36 @@ function isPitcher(abbr?: string, type?: string): boolean {
 
 function isStarter(abbr?: string): boolean {
   return (abbr ?? "").toUpperCase() === "SP";
+}
+
+function inferStarterFromRecentWorkload(splits: PersonSplitRow[]): boolean {
+  const recentSplits = splits.slice(0, 3);
+  if (recentSplits.length === 0) return false;
+
+  let maxOuts = 0;
+  let maxPitches = 0;
+  for (const split of recentSplits) {
+    maxOuts = Math.max(maxOuts, outsFromInningsPitched(split.ip));
+    maxPitches = Math.max(maxPitches, split.pitches ?? 0);
+  }
+
+  return maxOuts >= 12 || (maxOuts >= 9 && maxPitches >= 50);
+}
+
+function classifyPitcherRole(abbr: string | undefined, splits: PersonSplitRow[]): {
+  isStarter: boolean;
+  inferred: boolean;
+} {
+  const normalizedAbbr = (abbr ?? "").toUpperCase();
+  if (normalizedAbbr === "SP") {
+    return { isStarter: true, inferred: false };
+  }
+  if (normalizedAbbr === "RP" || normalizedAbbr === "CL") {
+    return { isStarter: false, inferred: false };
+  }
+
+  const inferredStarter = inferStarterFromRecentWorkload(splits);
+  return { isStarter: inferredStarter, inferred: inferredStarter };
 }
 
 export async function mlbGetBullpenFatigue(
@@ -895,7 +936,7 @@ export async function mlbGetBullpenFatigue(
     isPitcher(e.position?.abbreviation, e.position?.type)
   );
 
-  const pitcherIds = sanitizeMlbPersonIds(pitcherEntries.map((entry) => entry.person?.id)).slice(0, 20);
+  const pitcherIds = sanitizeMlbPersonIds(pitcherEntries.map((entry) => entry.person?.id));
   const filteredPitcherCount = Math.max(0, pitcherEntries.length - pitcherIds.length);
 
   if (pitcherIds.length === 0) {
@@ -921,7 +962,6 @@ export async function mlbGetBullpenFatigue(
     dataMode: resolved,
   });
 
-  type PersonSplitRow = { date?: string; ip: string; pitches?: number; strikes?: number; k?: number };
   const personMap = new Map<string, PersonSplitRow[]>();
 
   for (const person of bulkResp.data.people ?? []) {
@@ -948,6 +988,7 @@ export async function mlbGetBullpenFatigue(
   const starters: MlbStarterRow[] = [];
   const relievers: MlbPitcherAvailability[] = [];
   const seenPitcherIds = new Set<string>();
+  let inferredStarterCount = 0;
 
   for (const entry of pitcherEntries) {
     const id = sanitizeMlbPersonIds([entry.person?.id])[0];
@@ -960,18 +1001,15 @@ export async function mlbGetBullpenFatigue(
     // Season K/9
     let totalOuts = 0, totalK = 0;
     for (const s of splits) {
-      if (s.ip) {
-        const parts = s.ip.split(".");
-        const whole = Number.parseInt(parts[0] ?? "0", 10);
-        const frac = Number.parseInt(parts[1] ?? "0", 10);
-        if (!Number.isNaN(whole) && !Number.isNaN(frac)) totalOuts += whole * 3 + frac;
-      }
+      totalOuts += outsFromInningsPitched(s.ip);
       totalK += s.k ?? 0;
     }
     const seasonKPer9 = totalOuts > 0 ? ((totalK * 27) / totalOuts).toFixed(1) : undefined;
     const seasonUsed = splits.length;
+    const role = classifyPitcherRole(abbr, splits);
 
-    if (isStarter(abbr)) {
+    if (role.isStarter) {
+      if (role.inferred) inferredStarterCount += 1;
       const last = splits[0];
       const lastDate = last?.date ?? null;
       starters.push({
@@ -1015,6 +1053,8 @@ export async function mlbGetBullpenFatigue(
     bulkResp.meta.warning,
     filteredPitcherCount > 0 ? `Filtered ${filteredPitcherCount} invalid or duplicate pitcher ids before requesting player logs.` : undefined,
     (bulkResp.data.people ?? []).length === 0 ? "No pitcher game logs were returned from MLB Stats API." : undefined,
+    inferredStarterCount > 0 ? `Inferred ${inferredStarterCount} starter${inferredStarterCount === 1 ? "" : "s"} from recent workload because MLB roster roles were generic.` : undefined,
+    starters.length === 0 ? "No starter-length outings were identified, so the starters view may be incomplete." : undefined,
   ].filter((value): value is string => Boolean(value));
 
   return {
@@ -1045,7 +1085,7 @@ type MlbPersonSplitsResponse = {
 
 async function fetchPitcherSplits(
   playerId: string,
-  dataMode: ModeArg,
+  dataMode: "live" | "fixture",
 ): Promise<{ fullName: string; pitchHand: string; splits: MlbPitcherSplitsData } | null> {
   const year = new Date().getUTCFullYear();
   try {
@@ -1095,6 +1135,10 @@ async function fetchPitcherSplits(
   } catch {
     return null;
   }
+}
+
+function hasAnyPitcherSplits(pitcher: MlbPlatoonPitcher | null): boolean {
+  return Boolean(pitcher?.splits.vsLeft || pitcher?.splits.vsRight);
 }
 
 function computeEdge(home: MlbPlatoonPitcher | null, away: MlbPlatoonPitcher | null): {
@@ -1187,11 +1231,10 @@ export async function mlbGetPlatoonAdvantage(
   const awayPitcher = toPlatoonPitcher(awayProb, awayData);
   const homePitcher = toPlatoonPitcher(homeProb, homeData);
 
-  const hasSplits = Boolean(
-    awayPitcher?.splits.vsLeft || awayPitcher?.splits.vsRight ||
-    homePitcher?.splits.vsLeft || homePitcher?.splits.vsRight
-  );
-  const analysisMode: MlbPlatoonAdvantage["analysisMode"] = hasSplits ? "splits" : "handedness";
+  const homeHasSplitData = hasAnyPitcherSplits(homePitcher);
+  const awayHasSplitData = hasAnyPitcherSplits(awayPitcher);
+  const hasComparableSplits = homeHasSplitData && awayHasSplitData;
+  const analysisMode: MlbPlatoonAdvantage["analysisMode"] = hasComparableSplits ? "splits" : "handedness";
 
   let advantage: MlbPlatoonAdvantage["advantage"] = "neutral";
   let advantageScore = 0;
@@ -1203,7 +1246,11 @@ export async function mlbGetPlatoonAdvantage(
     advantageScore = edge.advantageScore;
     explanation = edge.explanation;
   } else {
-    explanation = "Pitcher splits not yet posted. Analysis based on throwing hand.";
+    explanation = homeHasSplitData || awayHasSplitData
+      ? "Only one probable starter has usable split data right now, so this is a handedness-based estimate instead of a full split comparison."
+      : (homePitcher || awayPitcher)
+        ? "Pitcher splits are not posted yet. This is a handedness-based estimate."
+        : "Probable starters are not posted yet. Check back closer to first pitch.";
   }
 
   const handednessAnalyses: MlbHandednessAnalysis[] = [];
@@ -1211,6 +1258,13 @@ export async function mlbGetPlatoonAdvantage(
   if (homePitcher) handednessAnalyses.push(buildHandednessAnalysis(homePitcher, nextGame.homeTeam.key, nextGame.awayTeam.key));
 
   const gamePk = nextGame.gamePk ?? 0;
+  const warningParts = [
+    schedResult.meta.warning,
+    !hasComparableSplits && (homeHasSplitData || awayHasSplitData)
+      ? "Only one probable starter currently has split data; matchup edge is estimated from handedness."
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+
   return {
     data: {
       game: {
@@ -1221,6 +1275,9 @@ export async function mlbGetPlatoonAdvantage(
       },
       homePitcher, awayPitcher, advantage, advantageScore, explanation, analysisMode, handednessAnalyses,
     },
-    meta: schedResult.meta,
+    meta: {
+      ...schedResult.meta,
+      warning: warningParts.length > 0 ? warningParts.join(" ") : undefined,
+    },
   };
 }

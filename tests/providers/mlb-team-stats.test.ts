@@ -143,4 +143,160 @@ describe("MLB team-stats provider recovery", () => {
     expect(result.meta.warning).toContain("No valid MLB pitcher ids remained");
     expect(fetchMlbJson).toHaveBeenCalledTimes(1);
   });
+
+  it("does not truncate bullpen ids and can infer starters from starter-length workloads", async () => {
+    const fetchMlbJson = vi.fn(async ({ endpoint, params }: { endpoint: string; params?: Record<string, unknown> }) => {
+      if (endpoint === "/teams/121/roster") {
+        return {
+          data: {
+            team: { id: 121, name: "New York Mets" },
+            roster: Array.from({ length: 21 }, (_, index) => ({
+              person: { id: 900001 + index, fullName: `Pitcher ${index + 1}` },
+              position: { abbreviation: index === 20 ? "P" : "RP", type: "Pitcher" },
+            })),
+          },
+          meta: testMeta(),
+        };
+      }
+
+      if (endpoint === "/people") {
+        const personIds = String(params?.personIds ?? "").split(",");
+        expect(personIds).toHaveLength(21);
+        expect(personIds.at(-1)).toBe("900021");
+        return {
+          data: {
+            people: [
+              {
+                id: 900021,
+                fullName: "Pitcher 21",
+                stats: [
+                  {
+                    type: { displayName: "gameLog" },
+                    splits: [
+                      {
+                        date: "2026-03-28",
+                        stat: {
+                          inningsPitched: "5.0",
+                          numberOfPitches: 82,
+                          strikes: 55,
+                          strikeOuts: 6,
+                        },
+                      },
+                      {
+                        date: "2026-03-22",
+                        stat: {
+                          inningsPitched: "4.1",
+                          numberOfPitches: 74,
+                          strikes: 48,
+                          strikeOuts: 5,
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          meta: testMeta(),
+        };
+      }
+
+      throw new Error(`Unexpected endpoint ${endpoint}`);
+    });
+
+    vi.doMock("@/lib/providers/mlb/client", () => ({
+      getMlbDataMode: () => "live",
+      fetchMlbJson,
+    }));
+
+    const teamStats = await import("@/lib/providers/mlb/teamStats");
+    const result = await teamStats.mlbGetBullpenFatigue("NYM", "live");
+
+    expect(result.data?.starters).toEqual([
+      expect.objectContaining({ playerId: "900021", fullName: "Pitcher 21" }),
+    ]);
+    expect(result.data?.relievers.some((pitcher) => pitcher.playerId === "900021")).toBe(false);
+    expect(result.meta.warning).toContain("Inferred 1 starter");
+  });
+
+  it("falls back to handedness when only one probable starter has split data", async () => {
+    const fetchMlbJson = vi.fn(async ({ endpoint }: { endpoint: string }) => {
+      if (endpoint === "/people/1") {
+        return {
+          data: {
+            people: [
+              {
+                id: 1,
+                fullName: "Away Arm",
+                pitchHand: { code: "R" },
+                stats: [
+                  {
+                    type: { displayName: "statSplits" },
+                    splits: [
+                      { split: { code: "vl", description: "vs Left" }, stat: { era: "2.40", whip: "1.02", avg: ".220", ops: ".630", battersFaced: 120 } },
+                      { split: { code: "vr", description: "vs Right" }, stat: { era: "3.50", whip: "1.14", avg: ".251", ops: ".721", battersFaced: 180 } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          meta: testMeta(),
+        };
+      }
+
+      if (endpoint === "/people/2") {
+        return {
+          data: {
+            people: [
+              {
+                id: 2,
+                fullName: "Home Arm",
+                pitchHand: { code: "L" },
+                stats: [
+                  {
+                    type: { displayName: "statSplits" },
+                    splits: [],
+                  },
+                ],
+              },
+            ],
+          },
+          meta: testMeta(),
+        };
+      }
+
+      throw new Error(`Unexpected endpoint ${endpoint}`);
+    });
+
+    vi.doMock("@/lib/providers/mlb/client", () => ({
+      getMlbDataMode: () => "live",
+      fetchMlbJson,
+    }));
+    vi.doMock("@/lib/providers/mlb/provider", () => ({
+      getMlbUpcomingScheduleWithProbables: vi.fn(async () => ({
+        data: {
+          teamKey: "NYM",
+          teamId: 121,
+          games: [
+            {
+              gamePk: 42,
+              officialDate: "2026-04-01",
+              gameDate: "2026-04-01T23:10:00Z",
+              awayTeam: { key: "ATL", name: "Atlanta Braves", probableStarter: { playerId: "1", fullName: "Away Arm" } },
+              homeTeam: { key: "NYM", name: "New York Mets", probableStarter: { playerId: "2", fullName: "Home Arm" } },
+            },
+          ],
+        },
+        meta: testMeta(),
+      })),
+    }));
+
+    const teamStats = await import("@/lib/providers/mlb/teamStats");
+    const result = await teamStats.mlbGetPlatoonAdvantage("NYM", "live");
+
+    expect(result.data?.analysisMode).toBe("handedness");
+    expect(result.data?.explanation).toContain("Only one probable starter has usable split data");
+    expect(result.meta.warning).toContain("Only one probable starter currently has split data");
+  });
 });

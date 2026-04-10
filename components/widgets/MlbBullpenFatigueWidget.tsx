@@ -66,7 +66,9 @@ function fatigueLabel(fatigue: PitcherAvailability["fatigue"]): string {
 
 export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
   const config = props.config as { teamKey?: string; viewMode?: "starters" | "bullpen" };
-  const [teamKey, setTeamKey] = useState<string>(config.teamKey ?? "");
+  const initialTeamKey = (config.teamKey ?? "").toUpperCase();
+  const [teamKey, setTeamKey] = useState<string>(initialTeamKey);
+  const [teamInput, setTeamInput] = useState<string>(initialTeamKey);
   const [viewMode, setViewMode] = useState<"starters" | "bullpen">(config.viewMode ?? "bullpen");
   const [data, setData] = useState<BullpenFatigue | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
@@ -76,6 +78,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
   const load = useCallback(
     async (key: string) => {
       setLoading(true);
+      setWarning(null);
       const res = await fetch(
         `/api/widgets/mlb-bullpen-fatigue?teamKey=${encodeURIComponent(key)}&dataMode=${props.dataMode}`,
         { cache: "no-store" },
@@ -101,10 +104,12 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
         if (!cancelled) {
           setData(result.data);
           setMeta(result.meta);
-          setWarning(null);
+          setWarning(result.meta?.warning ?? (!result.data ? "No bullpen usage data is available for this team right now." : null));
         }
       } catch (error) {
         if (!cancelled) {
+          setData(null);
+          setMeta(null);
           setWarning(String(error));
           setLoading(false);
         }
@@ -117,6 +122,16 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
   async function persistConfig(next: Partial<typeof config>) {
     await props.onPersist({ config: { ...props.config, teamKey, viewMode, ...next } });
+  }
+
+  async function applyTeam() {
+    const nextTeamKey = teamInput.trim().toUpperCase();
+    setTeamInput(nextTeamKey);
+    setTeamKey(nextTeamKey);
+    setData(null);
+    setMeta(null);
+    setWarning(null);
+    await props.onPersist({ config: { ...props.config, teamKey: nextTeamKey, viewMode } });
   }
 
   const advanced = props.mode === "ADVANCED";
@@ -176,22 +191,24 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
         <input
           className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           placeholder="Team (e.g. NYM)"
-          value={teamKey}
-          onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
+          value={teamInput}
+          onChange={(e) => setTeamInput(e.target.value.toUpperCase())}
         />
         <button
           className="rounded border border-neutral-700 px-2 py-1"
           type="button"
-          onClick={() => void persistConfig({ teamKey })}
+          onClick={() => void applyTeam()}
           disabled={props.locked}
         >
           Set
         </button>
       </div>
 
-      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation to start.</p>}
+      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation and press Set.</p>}
+      {teamInput && teamInput !== teamKey && <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p>}
       {warning && <p className="text-amber-300">{warning}</p>}
       {loading && <p className="text-neutral-400">Loading pitcher availability...</p>}
+      {!loading && teamKey && !data && !warning && <p className="text-neutral-400">No pitcher usage data is available for this team right now.</p>}
 
       {data && !loading && (
         <div className="space-y-2">
@@ -200,7 +217,12 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
           {viewMode === "starters" && (
             <div className="space-y-1">
               {!advanced && (
-                <p className="pb-0.5 text-[10px] text-neutral-500">Starters typically pitch every 4-5 days. More rest means a fresher arm going deeper into the game.</p>
+                <p className="pb-0.5 text-[10px] text-neutral-500">Starters typically pitch every 4-5 days. This view uses roster roles first, then recent starter-length outings if MLB lists pitchers generically.</p>
+              )}
+              {data.starters.length === 0 && (
+                <p className="rounded border border-neutral-800 bg-neutral-950 p-2 text-neutral-400">
+                  No starter-length outings were identified yet. Early-season logs or generic roster roles can make this view incomplete.
+                </p>
               )}
               {!advanced &&
                 data.starters.map((starter) => (
@@ -250,6 +272,14 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                   <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />Tired</span>
                   <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-red-500" />Fatigued</span>
                 </div>
+              )}
+              {!advanced && data.relievers.length > (displayRelievers?.length ?? 0) && (
+                <p className="text-[10px] text-neutral-500">Showing the top {displayRelievers?.length ?? 0} relievers. Switch to Advanced for the full bullpen list and recent usage.</p>
+              )}
+              {data.relievers.length === 0 && (
+                <p className="rounded border border-neutral-800 bg-neutral-950 p-2 text-neutral-400">
+                  No recent bullpen appearances were found for this team.
+                </p>
               )}
               {!advanced &&
                 displayRelievers?.map((reliever) => (

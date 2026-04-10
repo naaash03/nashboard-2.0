@@ -55,20 +55,34 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
   const [warning, setWarning] = useState<string | null>(null);
   const [selectedBases, setSelectedBases] = useState<string | null>(null);
   const [selectedOuts, setSelectedOuts] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
+        setLoading(true);
         const res = await fetch("/api/widgets/mlb-run-expectancy", { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setWarning("Failed to load run expectancy data.");
+          setLoading(false);
+          return;
+        }
         const json = (await res.json()) as {
           data?: RunExpectancyData;
           meta?: WidgetMeta;
         };
         setReData(json.data ?? null);
         setMeta(json.meta ?? null);
+        setWarning(json.data ? null : "Run expectancy data is unavailable right now.");
+        const firstState = json.data?.states[0];
+        if (firstState) {
+          setSelectedBases((current) => current ?? firstState.bases);
+          setSelectedOuts((current) => current ?? 0);
+        }
       } catch {
         setWarning("Failed to load run expectancy data.");
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -123,10 +137,12 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
       </div>
 
       {warning && <p className="text-amber-300">{warning}</p>}
+      {loading && <p className="text-neutral-400">Loading run expectancy matrix...</p>}
 
       {reData && (
         <div className="space-y-2">
           <p className="text-neutral-500">Click a cell to select the current base/out situation.</p>
+          <p className="text-[10px] text-neutral-500">This is a static teaching matrix, not a live team-strength feed.</p>
 
           <div className="grid grid-cols-4 gap-1">
             <div className="py-1 font-medium text-neutral-500">Bases</div>
