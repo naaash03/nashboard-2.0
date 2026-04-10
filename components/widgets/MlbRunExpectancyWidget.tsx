@@ -119,6 +119,14 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
     return outs === 0 ? state.outs0 : outs === 1 ? state.outs1 : state.outs2;
   }
 
+  function getReColor(value: number): string {
+    if (value >= 1.5) return "text-emerald-300 font-semibold";
+    if (value >= 0.9) return "text-emerald-500";
+    if (value >= BASELINE_RE) return "text-neutral-200";
+    if (value >= 0.3) return "text-orange-400";
+    return "text-red-400";
+  }
+
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
@@ -166,7 +174,15 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
                     setSelectedOuts(outs);
                   }}
                 >
-                  <span className="block text-[11px] font-medium">{getReValue(state, outs).toFixed(3)}</span>
+                  <span
+                    className={`block text-[11px] ${
+                      state.bases === selectedBases && outs === selectedOuts
+                        ? "font-semibold"
+                        : getReColor(getReValue(state, outs))
+                    }`}
+                  >
+                    {getReValue(state, outs).toFixed(3)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -181,16 +197,23 @@ export default function MlbRunExpectancyWidget(props: WidgetCommonProps) {
               {advanced && (
                 <div className="space-y-1 text-blue-100">
                   <p className="text-blue-200">{explainSituation(selectedState.bases, selectedOuts)}</p>
-                  <div className="space-y-0.5 rounded border border-blue-900/70 bg-blue-900/30 p-2 text-blue-200">
-                    <p>
-                      <span className="text-blue-400"><StatLabel label="RE value" statKey="re24" sport="MLB" mode={props.mode} className="border-blue-400" /></span>: {expectedRuns.toFixed(3)}
-                    </p>
-                    <p>
-                      <span className="text-blue-400"><StatLabel label="Probability of scoring" statKey="score_probability" sport="MLB" mode={props.mode} className="border-blue-400" /></span>: {(scorePct * 100).toFixed(1)}%
-                    </p>
-                    <p>
-                      <span className="text-blue-400"><StatLabel label="Delta vs baseline" statKey="delta_vs_baseline" sport="MLB" mode={props.mode} className="border-blue-400" /></span> (Empty, 0 outs = {BASELINE_RE}): {expectedRuns >= BASELINE_RE ? "+" : ""}
-                      {(expectedRuns - BASELINE_RE).toFixed(3)}
+                  <div className="space-y-1.5 rounded border border-blue-900/70 bg-blue-900/30 p-2.5 text-blue-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-400"><StatLabel label="RE value" statKey="re24" sport="MLB" mode={props.mode} className="border-blue-400" /></span>
+                      <span className="font-medium">{expectedRuns.toFixed(3)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-400"><StatLabel label="Probability of scoring" statKey="score_probability" sport="MLB" mode={props.mode} className="border-blue-400" /></span>
+                      <span className="font-medium">{(scorePct * 100).toFixed(1)}%</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-400"><StatLabel label="Delta vs baseline" statKey="delta_vs_baseline" sport="MLB" mode={props.mode} className="border-blue-400" /></span>
+                      <span className={`font-medium ${expectedRuns >= BASELINE_RE ? "text-emerald-300" : "text-red-300"}`}>
+                        {expectedRuns >= BASELINE_RE ? "+" : ""}{(expectedRuns - BASELINE_RE).toFixed(3)}
+                      </span>
+                    </div>
+                    <p className="border-t border-blue-900/50 pt-1 text-[10px] text-blue-400">
+                      Empty, 0 outs baseline = {BASELINE_RE}
                     </p>
                   </div>
                   <p className="text-blue-300">

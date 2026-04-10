@@ -366,47 +366,53 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
               </p>
 
               {!advanced && selectedHitting && !selectedPitching && (
-                <p className="text-neutral-500">Key hitting stats: AVG (batting average), HR (home runs), RBI (runs batted in). Higher is better for all three.</p>
+                <div className="rounded border border-neutral-800 bg-neutral-900/50 px-2.5 py-2 text-neutral-400">
+                  Key stats: <span className="text-neutral-300">AVG</span> (batting average), <span className="text-neutral-300">HR</span> (home runs), <span className="text-neutral-300">RBI</span> (runs batted in). Higher is better for all three.
+                </div>
               )}
               {!advanced && selectedPitching && !selectedHitting && (
-                <p className="text-neutral-500">Key pitching stats: ERA (runs allowed per 9 innings) and K (strikeouts). Lower ERA is better.</p>
+                <div className="rounded border border-neutral-800 bg-neutral-900/50 px-2.5 py-2 text-neutral-400">
+                  Key stats: <span className="text-neutral-300">ERA</span> (earned runs per 9 innings, lower is better) and <span className="text-neutral-300">K</span> (strikeouts, higher is better).
+                </div>
               )}
               {!advanced && selectedHitting && selectedPitching && (
-                <p className="text-neutral-500">AVG, HR, RBI are the key hitting numbers. ERA and K are the key pitching numbers.</p>
+                <div className="rounded border border-neutral-800 bg-neutral-900/50 px-2.5 py-2 text-neutral-400">
+                  Hitting: <span className="text-neutral-300">AVG, HR, RBI</span>. Pitching: <span className="text-neutral-300">ERA</span> (lower is better) and <span className="text-neutral-300">K</span>.
+                </div>
               )}
 
               {selectedHitting && (
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Hitting</p>
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-neutral-500">Hitting</p>
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="text-neutral-500">
-                        <th className="py-0.5 text-left">Year</th>
-                        <th className="py-0.5 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="RBI" statKey="rbi" sport="MLB" mode={props.mode} /></th>
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="BB" statKey="walks" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="SB" statKey="stolen_bases" sport="MLB" mode={props.mode} /></th>}
+                        <th className="py-1 text-left">Year</th>
+                        <th className="py-1 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-1 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>
+                        <th className="py-1 text-right"><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-1 text-right"><StatLabel label="RBI" statKey="rbi" sport="MLB" mode={props.mode} /></th>
+                        {advanced && <th className="py-1 text-right"><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="BB" statKey="walks" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="SB" statKey="stolen_bases" sport="MLB" mode={props.mode} /></th>}
                       </tr>
                     </thead>
                     <tbody>
                       <tr className="border-t border-neutral-800">
-                        <td className="py-0.5">{selectedHitting.season}</td>
-                        <td className="py-0.5 text-right text-neutral-400">{selectedHitting.gamesPlayed ?? "-"}</td>
-                        <td className="py-0.5 text-right">{selectedHitting.avg ?? "-"}</td>
-                        <td className="py-0.5 text-right">{selectedHitting.hr ?? "-"}</td>
-                        <td className="py-0.5 text-right">{selectedHitting.rbi ?? "-"}</td>
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.obp ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.slg ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.ops ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.baseOnBallsHitting ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.strikeOutsHitting ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedHitting.stolenBases ?? "-"}</td>}
+                        <td className="py-1">{selectedHitting.season}</td>
+                        <td className="py-1 text-right text-neutral-400">{selectedHitting.gamesPlayed ?? "-"}</td>
+                        <td className="py-1 text-right">{selectedHitting.avg ?? "-"}</td>
+                        <td className="py-1 text-right">{selectedHitting.hr ?? "-"}</td>
+                        <td className="py-1 text-right">{selectedHitting.rbi ?? "-"}</td>
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedHitting.obp ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedHitting.slg ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedHitting.ops ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedHitting.baseOnBallsHitting ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedHitting.strikeOutsHitting ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedHitting.stolenBases ?? "-"}</td>}
                       </tr>
                     </tbody>
                   </table>
@@ -415,32 +421,32 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
 
               {selectedPitching && (
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Pitching</p>
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-neutral-500">Pitching</p>
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="text-neutral-500">
-                        <th className="py-0.5 text-left">Year</th>
-                        <th className="py-0.5 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>
-                        <th className="py-0.5 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="W" statKey="wins" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="L" statKey="losses" sport="MLB" mode={props.mode} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
-                        {advanced && <th className="py-0.5 text-right"><StatLabel label="GS" statKey="games_started" sport="MLB" mode={props.mode} /></th>}
+                        <th className="py-1 text-left">Year</th>
+                        <th className="py-1 text-right"><StatLabel label="G" statKey="games_played" sport="MLB" mode={props.mode} /></th>
+                        <th className="py-1 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>
+                        <th className="py-1 text-right"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /></th>
+                        {advanced && <th className="py-1 text-right"><StatLabel label="W" statKey="wins" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="L" statKey="losses" sport="MLB" mode={props.mode} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} rankingContext={playerRankingContext} /></th>}
+                        {advanced && <th className="py-1 text-right"><StatLabel label="GS" statKey="games_started" sport="MLB" mode={props.mode} /></th>}
                       </tr>
                     </thead>
                     <tbody>
                       <tr className="border-t border-neutral-800">
-                        <td className="py-0.5">{selectedPitching.season}</td>
-                        <td className="py-0.5 text-right text-neutral-400">{selectedPitching.gamesPlayed ?? "-"}</td>
-                        <td className="py-0.5 text-right">{selectedPitching.era ?? "-"}</td>
-                        <td className="py-0.5 text-right">{selectedPitching.strikeOuts ?? "-"}</td>
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.wins ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.losses ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.whip ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.inningsPitched ?? "-"}</td>}
-                        {advanced && <td className="py-0.5 text-right text-neutral-400">{selectedPitching.gamesStarted ?? "-"}</td>}
+                        <td className="py-1">{selectedPitching.season}</td>
+                        <td className="py-1 text-right text-neutral-400">{selectedPitching.gamesPlayed ?? "-"}</td>
+                        <td className="py-1 text-right">{selectedPitching.era ?? "-"}</td>
+                        <td className="py-1 text-right">{selectedPitching.strikeOuts ?? "-"}</td>
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedPitching.wins ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedPitching.losses ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedPitching.whip ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedPitching.inningsPitched ?? "-"}</td>}
+                        {advanced && <td className="py-1 text-right text-neutral-400">{selectedPitching.gamesStarted ?? "-"}</td>}
                       </tr>
                     </tbody>
                   </table>
@@ -501,7 +507,9 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                 {teamStats.teamName} {teamStats.season}
               </p>
               {!advanced && (
-                <p className="text-neutral-500">Run differential (runs scored minus runs allowed) is one of the best quick reads on how well a team is really performing. Positive is good.</p>
+                <div className="rounded border border-neutral-800 bg-neutral-900/50 px-2.5 py-2 text-neutral-400">
+                  <span className="text-neutral-300">Run Diff</span> (runs scored minus runs allowed) is one of the best quick reads on team performance. Positive means more runs scored than allowed.
+                </div>
               )}
               <p className="text-neutral-400">
                 <StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={props.mode} rankingContext={teamRankingContext} />: {teamStats.record.wins}-{teamStats.record.losses} ({teamStats.record.pct})
@@ -509,24 +517,85 @@ export default function MlbSeasonStatsWidget(props: WidgetCommonProps) {
                 {teamStats.record.gamesBack ? ` · GB: ${teamStats.record.gamesBack}` : ""}
               </p>
 
-              <div className="space-y-1 rounded border border-neutral-800 bg-neutral-950 p-2">
-                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Team Snapshot</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                  <span><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.avg ?? "-"}</span></span>
-                  <span><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.era ?? "-"}</span></span>
-                  {advanced && <span><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.obp ?? "-"}</span></span>}
-                  {advanced && <span><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.whip ?? "-"}</span></span>}
-                  {advanced && <span><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.slg ?? "-"}</span></span>}
-                  {advanced && <span><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /> (pit): <span className="text-white">{teamStats.pitching.strikeOuts ?? "-"}</span></span>}
-                  {advanced && <span><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.ops ?? "-"}</span></span>}
-                  {advanced && <span><StatLabel label="Saves" statKey="saves" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.saves ?? "-"}</span></span>}
-                  <span><StatLabel label="Runs" statKey="runs_scored" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.runsScored ?? "-"}</span></span>
-                  <span><StatLabel label="RA" statKey="runs_allowed" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.runsAllowed ?? "-"}</span></span>
-                  {teamStats.hitting.runsScored !== undefined && teamStats.pitching.runsAllowed !== undefined && (
-                    <span><StatLabel label="Run Diff" statKey="run_differential" sport="MLB" mode={props.mode} rankingContext={teamRankingContext} />: <span className={teamStats.hitting.runsScored - teamStats.pitching.runsAllowed >= 0 ? "text-emerald-400" : "text-red-400"}>{teamStats.hitting.runsScored - teamStats.pitching.runsAllowed >= 0 ? "+" : ""}{teamStats.hitting.runsScored - teamStats.pitching.runsAllowed}</span></span>
+              <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+                <div className="mb-1.5 grid grid-cols-2 gap-x-4 text-[10px] uppercase tracking-wide text-neutral-600">
+                  <span>Hitting</span>
+                  <span>Pitching</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between gap-1">
+                    <span className="text-neutral-400"><StatLabel label="AVG" statKey="avg" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-white">{teamStats.hitting.avg ?? "-"}</span>
+                  </div>
+                  <div className="flex justify-between gap-1">
+                    <span className="text-neutral-400"><StatLabel label="ERA" statKey="era" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-white">{teamStats.pitching.era ?? "-"}</span>
+                  </div>
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="OBP" statKey="obp" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.hitting.obp ?? "-"}</span>
+                    </div>
                   )}
-                  {advanced && <span><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.hitting.hr ?? "-"}</span></span>}
-                  {advanced && <span><StatLabel label="BS" statKey="blown_saves" sport="MLB" mode={props.mode} />: <span className="text-white">{teamStats.pitching.blownSaves ?? "-"}</span></span>}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.pitching.whip ?? "-"}</span>
+                    </div>
+                  )}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="SLG" statKey="slg" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.hitting.slg ?? "-"}</span>
+                    </div>
+                  )}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="K" statKey="strikeouts" sport="MLB" mode={props.mode} /> (pit)</span>
+                      <span className="text-white">{teamStats.pitching.strikeOuts ?? "-"}</span>
+                    </div>
+                  )}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="OPS" statKey="ops" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.hitting.ops ?? "-"}</span>
+                    </div>
+                  )}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="Saves" statKey="saves" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.pitching.saves ?? "-"}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-1">
+                    <span className="text-neutral-400"><StatLabel label="Runs" statKey="runs_scored" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-white">{teamStats.hitting.runsScored ?? "-"}</span>
+                  </div>
+                  <div className="flex justify-between gap-1">
+                    <span className="text-neutral-400"><StatLabel label="RA" statKey="runs_allowed" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-white">{teamStats.pitching.runsAllowed ?? "-"}</span>
+                  </div>
+                  {teamStats.hitting.runsScored !== undefined && teamStats.pitching.runsAllowed !== undefined && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="Run Diff" statKey="run_differential" sport="MLB" mode={props.mode} rankingContext={teamRankingContext} /></span>
+                      <span className={teamStats.hitting.runsScored - teamStats.pitching.runsAllowed >= 0 ? "text-emerald-400" : "text-red-400"}>
+                        {teamStats.hitting.runsScored - teamStats.pitching.runsAllowed >= 0 ? "+" : ""}
+                        {teamStats.hitting.runsScored - teamStats.pitching.runsAllowed}
+                      </span>
+                    </div>
+                  )}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="HR" statKey="hr" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.hitting.hr ?? "-"}</span>
+                    </div>
+                  )}
+                  {advanced && (
+                    <div className="flex justify-between gap-1">
+                      <span className="text-neutral-400"><StatLabel label="BS" statKey="blown_saves" sport="MLB" mode={props.mode} /></span>
+                      <span className="text-white">{teamStats.pitching.blownSaves ?? "-"}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

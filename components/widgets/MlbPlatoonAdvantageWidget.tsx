@@ -63,30 +63,30 @@ function SplitsTable({ pitcher }: { pitcher: { fullName: string; throwsHand: str
       <table className="mt-1 w-full border-collapse">
         <thead>
           <tr className="text-neutral-500">
-            <th className="py-0.5 text-left">Split</th>
-            <th className="py-0.5 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode="ADVANCED" /></th>
-            <th className="py-0.5 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode="ADVANCED" /></th>
-            <th className="py-0.5 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode="ADVANCED" /></th>
-            <th className="py-0.5 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode="ADVANCED" /></th>
-            <th className="py-0.5 text-right"><StatLabel label="BF" statKey="batters_faced" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-left">Split</th>
+            <th className="py-1 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="BF" statKey="batters_faced" sport="MLB" mode="ADVANCED" /></th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-t border-neutral-800">
-            <td className="py-0.5 text-neutral-400">vs L</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.era ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.whip ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.avg ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.ops ?? "-"}</td>
-            <td className="py-0.5 text-right text-neutral-500">{pitcher.splits.vsLeft?.sample ?? "-"}</td>
+            <td className="py-1 text-neutral-400">vs L</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.era ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.whip ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.avg ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.ops ?? "-"}</td>
+            <td className="py-1 text-right text-neutral-500">{pitcher.splits.vsLeft?.sample ?? "-"}</td>
           </tr>
           <tr className="border-t border-neutral-800">
-            <td className="py-0.5 text-neutral-400">vs R</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.era ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.whip ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.avg ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.ops ?? "-"}</td>
-            <td className="py-0.5 text-right text-neutral-500">{pitcher.splits.vsRight?.sample ?? "-"}</td>
+            <td className="py-1 text-neutral-400">vs R</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.era ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.whip ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.avg ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.ops ?? "-"}</td>
+            <td className="py-1 text-right text-neutral-500">{pitcher.splits.vsRight?.sample ?? "-"}</td>
           </tr>
         </tbody>
       </table>
@@ -209,24 +209,32 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
             <p className="text-neutral-400">{data.game.officialDate}</p>
           </div>
 
-          {data.analysisMode === "splits" ? (
-            <div className="flex items-center gap-2">
-              <AdvantageBadge advantage={data.advantage} />
-              {advanced && <span className="text-neutral-500">Score: {data.advantageScore > 0 ? "+" : ""}{data.advantageScore}</span>}
-            </div>
-          ) : (
-            <span className="rounded border border-amber-500 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
-              Handedness Estimate
-            </span>
-          )}
-
-          <p className="text-neutral-300">{data.explanation}</p>
-          {data.analysisMode === "handedness" && (
-            <p className="text-[10px] text-neutral-500">Use this as a rough lean until both probable starters have posted split data.</p>
-          )}
+          <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+            {data.analysisMode === "splits" ? (
+              <div className="mb-2 flex items-center gap-2">
+                <AdvantageBadge advantage={data.advantage} />
+                {advanced && <span className="text-neutral-500">Score: {data.advantageScore > 0 ? "+" : ""}{data.advantageScore}</span>}
+              </div>
+            ) : (
+              <div className="mb-2">
+                <span className="rounded border border-amber-500 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
+                  Handedness Estimate
+                </span>
+              </div>
+            )}
+            <p className="text-neutral-200">{data.explanation}</p>
+            {data.analysisMode === "handedness" && (
+              <p className="mt-1.5 border-t border-neutral-800 pt-1.5 text-[10px] text-neutral-500">
+                Use this as a rough lean until both probable starters have posted split data.
+              </p>
+            )}
+          </div>
 
           {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 0 && (
-            <p className="text-neutral-500">{data.handednessAnalyses[0].reasoning}</p>
+            <div className="rounded border border-neutral-800 bg-neutral-900/40 p-2">
+              <p className="text-[10px] uppercase tracking-wide text-neutral-600">Handedness reasoning</p>
+              <p className="mt-1 text-neutral-400">{data.handednessAnalyses[0].reasoning}</p>
+            </div>
           )}
 
           {advanced && data.analysisMode === "splits" && (

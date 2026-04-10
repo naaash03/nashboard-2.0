@@ -226,15 +226,26 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
               )}
               {!advanced &&
                 data.starters.map((starter) => (
-                  <div key={starter.playerId} className="rounded border border-neutral-800 bg-neutral-950 p-1.5">
-                    <p className="font-medium">{starter.fullName}</p>
-                    <p className="text-neutral-400">
-                      Last start: {starter.lastStartDate ?? "-"} · Rest: {starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}
+                  <div
+                    key={starter.playerId}
+                    className={`rounded border bg-neutral-950 p-1.5 ${
+                      starter.lastStartDate === null
+                        ? "border-neutral-800/50 opacity-60"
+                        : "border-neutral-800"
+                    }`}
+                  >
+                    <p className={`font-medium ${starter.lastStartDate === null ? "text-neutral-500" : ""}`}>
+                      {starter.fullName}
                     </p>
-                    <p className="text-neutral-500"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /> in last start: {starter.inningsLastStart ?? "-"}</p>
+                    <p className="text-neutral-400">
+                      Last start: {starter.lastStartDate ?? "No outing logged yet"} · Rest: {starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}
+                    </p>
+                    {starter.lastStartDate && (
+                      <p className="text-neutral-500"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /> in last start: {starter.inningsLastStart ?? "-"}</p>
+                    )}
                   </div>
                 ))}
-              {advanced && (
+              {advanced && data.starters.length > 0 && (
                 <div className="space-y-1">
                   <div className="grid grid-cols-6 gap-1 text-[10px] text-neutral-500">
                     <span>Starter</span>
@@ -245,9 +256,14 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                     <span className="text-right"><StatLabel label="K/9" statKey="k_per_9" sport="MLB" mode={props.mode} /></span>
                   </div>
                   {data.starters.map((starter) => (
-                    <div key={starter.playerId} className="grid grid-cols-6 gap-1 rounded border border-neutral-800 bg-neutral-950 p-1.5">
+                    <div
+                      key={starter.playerId}
+                      className={`grid grid-cols-6 gap-1 rounded border bg-neutral-950 p-1.5 ${
+                        starter.lastStartDate === null ? "border-neutral-800/50 opacity-60" : "border-neutral-800"
+                      }`}
+                    >
                       <span>{starter.fullName}</span>
-                      <span className="text-right text-neutral-400">{starter.lastStartDate ?? "-"}</span>
+                      <span className="text-right text-neutral-400">{starter.lastStartDate ?? "—"}</span>
                       <span className="text-right text-neutral-400">{starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}</span>
                       <span className="text-right text-neutral-400">{starter.inningsLastStart ?? "-"}</span>
                       <span className="text-right text-neutral-400">
@@ -257,6 +273,11 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                       <span className="text-right text-neutral-400">{starter.seasonKPer9 ?? "-"}</span>
                     </div>
                   ))}
+                  {data.starters.some((s) => s.lastStartDate === null) && (
+                    <p className="text-[10px] text-neutral-500">
+                      Starters showing — have no logged outing yet this season. Their data will fill in as the season progresses.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -265,12 +286,12 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
           {viewMode === "bullpen" && (
             <div className="space-y-1">
               {!advanced && (
-                <div className="flex flex-wrap gap-2 pb-0.5 text-[10px] text-neutral-500">
-                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />Rested</span>
-                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />Fresh</span>
-                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />Available</span>
-                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-yellow-500" />Tired</span>
-                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-red-500" />Fatigued</span>
+                <div className="grid grid-cols-5 gap-1 pb-0.5 text-[10px] text-neutral-500">
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-600" />Rested</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400" />Fresh</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-300" />Avail.</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-500" />Tired</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />Fatigd.</span>
                 </div>
               )}
               {!advanced && data.relievers.length > (displayRelievers?.length ?? 0) && (

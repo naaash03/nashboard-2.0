@@ -12,7 +12,8 @@
       "Bash(npx tsc:*)",
       "Bash(DATABASE_URL=\"postgresql://admin:admin@localhost:5433/nashboard\" NEXTAUTH_SECRET=\"dev-secret\" NEXTAUTH_URL=\"http://localhost:3000\" npx next build)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
