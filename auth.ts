@@ -10,7 +10,7 @@ const dbConfigured = isDbConfigured();
 const coreAuthConfigured = isCoreAuthConfigured();
 const googleConfigured = isGoogleConfigured();
 const devAdminEnabled = process.env.DEV_ADMIN_ENABLED === "true";
-const useAdapter = coreAuthConfigured && dbConfigured;
+const useAdapter = !devAdminEnabled && coreAuthConfigured && dbConfigured;
 const sessionStrategy: "jwt" | "database" = devAdminEnabled ? "jwt" : useAdapter ? "database" : "jwt";
 
 const providers: NextAuthConfig["providers"] = [];

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { fetchEspnJson } from "@/lib/providers/espn/client";
 import { getMlbUpcomingScheduleWithProbables } from "@/lib/providers/mlb";
+import { getMlbTeamSeasonScheduleWithProbables } from "@/lib/providers/mlb";
 import { resolveMlbPitcherComparisonStats } from "@/lib/providers/mlb";
 import { resolveMlbTeam } from "@/lib/providers/mlb/teamMap";
 import type { MlbScheduledGame } from "@/lib/providers/mlb";
@@ -13,6 +14,7 @@ type DataModeArg = "auto" | "live" | "fixture";
 type MatchupMode = "beginner" | "advanced";
 type MatchupState = "success" | "partial" | "failed";
 type MatchupSide = "away" | "home";
+export type MatchupGameContextType = "upcoming" | "past" | "live";
 
 type RecordMap = Record<string, unknown>;
 
@@ -85,11 +87,23 @@ export type MlbStartingPitcherMatchupData = {
     beginnerSummary?: string;
     categories?: StarterComparisonCategory[];
   } | null;
+  gameContext: {
+    type: MatchupGameContextType;
+    label: string;
+  };
+  pitcherSelection: {
+    type: "baseline" | "custom";
+    label: string;
+    teamKey: string;
+    selectedPitcherId?: string;
+    selectedPitcherName?: string;
+  };
   state: MatchupState;
   notes?: string[];
   selectableGames?: Array<{
     gameId: string;
     label: string;
+    contextType: MatchupGameContextType;
   }>;
 };
 
@@ -115,6 +129,7 @@ export type MlbStartingPitcherMatchupResult = {
 export type ResolveMlbStartingPitcherMatchupArgs = {
   teamKey: string;
   gameId?: string;
+  pitcherId?: string;
   mode: MatchupMode;
   dataMode: DataModeArg;
   cacheBust?: string | number;
@@ -357,6 +372,8 @@ function parseTeamFromApiSports(
   };
 }
 
+// Kept for APISports payload parity while the matchup resolver now merges season-window and upcoming schedule feeds.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function parseApiSportsGameRows(payload: unknown, timeZone: string): NormalizedGame[] {
   const root = asObject(payload);
   const rows = asArray(root?.response);
@@ -597,21 +614,57 @@ function dateLabel(value: string): string {
   });
 }
 
+function gameContextType(game: NormalizedGame, now: Date): MatchupGameContextType {
+  if (game.status === "live") {
+    return "live";
+  }
+  const start = new Date(game.startTime).getTime();
+  if (game.status === "final" || (Number.isFinite(start) && start < now.getTime())) {
+    return "past";
+  }
+  return "upcoming";
+}
+
+function gameContextLabel(type: MatchupGameContextType): string {
+  if (type === "live") return "Live game context";
+  if (type === "past") return "Past game context";
+  return "Upcoming game context";
+}
+
+function buildSelectableGameOptions(
+  games: NormalizedGame[],
+  now: Date,
+): Array<{ gameId: string; label: string; contextType: MatchupGameContextType }> {
+  const upcomingOrLive = games
+    .filter((game) => gameContextType(game, now) !== "past")
+    .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime());
+  const past = games
+    .filter((game) => gameContextType(game, now) === "past")
+    .sort((left, right) => new Date(right.startTime).getTime() - new Date(left.startTime).getTime());
+
+  return [...upcomingOrLive, ...past].slice(0, 8).map((game) => {
+    const contextType = gameContextType(game, now);
+    const status = contextType === "past" ? "Final" : game.status === "live" ? "Live" : "Upcoming";
+    return {
+      gameId: game.gameId,
+      label: `${contextType === "past" ? "Past" : contextType === "live" ? "Live" : "Upcoming"}: ${dateLabel(game.startTime)} - ${game.awayTeam.key} at ${game.homeTeam.key} (${status})`,
+      contextType,
+    };
+  });
+}
+
 export function selectMatchupGame(args: {
   games: NormalizedGame[];
   gameId?: string;
   now: Date;
   timeZone: string;
-}): { selected: NormalizedGame | null; selectableGames: Array<{ gameId: string; label: string }> } {
+}): { selected: NormalizedGame | null; selectableGames: Array<{ gameId: string; label: string; contextType: MatchupGameContextType }> } {
   const sorted = [...args.games].sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime());
   if (sorted.length === 0) {
     return { selected: null, selectableGames: [] };
   }
 
-  const selectableGames = sorted.slice(0, 8).map((game) => ({
-    gameId: game.gameId,
-    label: `${dateLabel(game.startTime)} - ${game.awayTeam.key} at ${game.homeTeam.key}`,
-  }));
+  const selectableGames = buildSelectableGameOptions(sorted, args.now);
 
   if (args.gameId) {
     const override = sorted.find((game) => String(game.gameId) === String(args.gameId));
@@ -907,6 +960,34 @@ function mergePitcher(base: PitcherMatchupCard | null, fallback: PitcherMatchupC
   };
 }
 
+function trackedSideForTeam(game: NormalizedGame, teamKey: string): MatchupSide {
+  return game.awayTeam.key === teamKey ? "away" : "home";
+}
+
+function buildPitcherSelection(args: {
+  mode: MatchupMode;
+  teamKey: string;
+  selectedPitcherId?: string;
+  selectedPitcherName?: string;
+  gameContextType: MatchupGameContextType;
+}): MlbStartingPitcherMatchupData["pitcherSelection"] {
+  if (args.mode === "advanced" && args.selectedPitcherId) {
+    return {
+      type: "custom",
+      label: "Custom pitcher selection",
+      teamKey: args.teamKey,
+      selectedPitcherId: args.selectedPitcherId,
+      selectedPitcherName: args.selectedPitcherName,
+    };
+  }
+
+  return {
+    type: "baseline",
+    label: args.gameContextType === "upcoming" ? "Upcoming probable starter baseline" : "Probable starter baseline",
+    teamKey: args.teamKey,
+  };
+}
+
 function createFailedResult(args: {
   message: string;
   code: string;
@@ -958,7 +1039,10 @@ function prunePitcherForMode(pitcher: PitcherMatchupCard | null, mode: MatchupMo
   };
 }
 
-function buildSelectableGames(mode: MatchupMode, rows: Array<{ gameId: string; label: string }>): Array<{ gameId: string; label: string }> | undefined {
+function buildSelectableGames(
+  mode: MatchupMode,
+  rows: Array<{ gameId: string; label: string; contextType: MatchupGameContextType }>,
+): Array<{ gameId: string; label: string; contextType: MatchupGameContextType }> | undefined {
   if (mode !== "advanced") {
     return undefined;
   }
@@ -971,12 +1055,17 @@ function buildUiState(args: {
   homePitcher: PitcherMatchupCard | null;
   edge: { overall?: string; beginnerSummary?: string; categories?: StarterComparisonCategory[] } | null;
   mode: MatchupMode;
-  selectableGames: Array<{ gameId: string; label: string }>;
+  selectableGames: Array<{ gameId: string; label: string; contextType: MatchupGameContextType }>;
+  gameContextType: MatchupGameContextType;
+  trackedTeamKey: string;
+  selectedPitcherId?: string;
   notes: string[];
 }): MlbStartingPitcherMatchupData {
   const hasBothPitchers = Boolean(args.awayPitcher?.fullName && args.homePitcher?.fullName);
   const state: MatchupState = hasBothPitchers ? "success" : "partial";
   const userNotes = toUserFacingMatchupNotes(args.notes);
+  const trackedSide = trackedSideForTeam(args.selectedGame, args.trackedTeamKey);
+  const selectedPitcherName = trackedSide === "away" ? args.awayPitcher?.fullName : args.homePitcher?.fullName;
 
   return {
     game: {
@@ -994,6 +1083,17 @@ function buildUiState(args: {
     edge: args.mode === "advanced"
       ? args.edge
       : (args.edge ? { overall: args.edge.beginnerSummary, beginnerSummary: args.edge.beginnerSummary } : null),
+    gameContext: {
+      type: args.gameContextType,
+      label: gameContextLabel(args.gameContextType),
+    },
+    pitcherSelection: buildPitcherSelection({
+      mode: args.mode,
+      teamKey: args.trackedTeamKey,
+      selectedPitcherId: args.selectedPitcherId,
+      selectedPitcherName,
+      gameContextType: args.gameContextType,
+    }),
     state,
     notes: userNotes.length > 0 ? userNotes : undefined,
     selectableGames: buildSelectableGames(args.mode, args.selectableGames),
@@ -1002,7 +1102,8 @@ function buildUiState(args: {
 
 function defaultDeps(): ResolveDeps {
   return {
-    fetchTeamIdentity: async (teamKey, providerMode, cacheBust) => {
+    fetchTeamIdentity: async (teamKey, providerMode, _cacheBust) => {
+      void _cacheBust;
       const resolved = resolveMlbTeam(teamKey);
       if (resolved) {
         return {
@@ -1056,17 +1157,35 @@ function defaultDeps(): ResolveDeps {
         sport: "mlb",
         timeZone: "America/New_York",
       });
-      const schedule = await getMlbUpcomingScheduleWithProbables(team.key, providerMode, cacheBust);
-      const rows = (schedule.data?.games ?? []).map((game) => mapScheduledGameToNormalized(game, scheduleContext.window.timeZone));
+      const [seasonSchedule, upcomingSchedule] = await Promise.all([
+        getMlbTeamSeasonScheduleWithProbables(team.key, providerMode, cacheBust, {
+          season: Number(scheduleContext.season),
+          startDate: scheduleContext.window.startDate,
+          endDate: scheduleContext.window.endDate,
+        }),
+        getMlbUpcomingScheduleWithProbables(team.key, providerMode, cacheBust),
+      ]);
+      const mergedGames = [
+        ...(seasonSchedule.data?.games ?? []),
+        ...(upcomingSchedule.data?.games ?? []),
+      ];
+      const dedupedGames = mergedGames.filter((game, index, all) => {
+        const gameId = game.gamePk ? String(game.gamePk) : `${game.awayTeam.key}-${game.homeTeam.key}-${game.gameDate}`;
+        return all.findIndex((candidate) => {
+          const candidateId = candidate.gamePk ? String(candidate.gamePk) : `${candidate.awayTeam.key}-${candidate.homeTeam.key}-${candidate.gameDate}`;
+          return candidateId === gameId;
+        }) === index;
+      });
+      const rows = dedupedGames.map((game) => mapScheduledGameToNormalized(game, scheduleContext.window.timeZone));
       const notes = [
         `Schedule window ${scheduleContext.window.startDate}..${scheduleContext.window.endDate} (${scheduleContext.window.timeZone}) from MLB schedule provider.`,
         ...scheduleContext.seasonResolution.notes,
       ];
       return {
         games: rows,
-        meta: schedule.meta,
+        meta: upcomingSchedule.meta,
         notes,
-        warning: schedule.meta.warning,
+        warning: upcomingSchedule.meta.warning ?? seasonSchedule.meta.warning,
       };
     },
     fetchEspnGameFallback: async (selected, providerMode, cacheBust) => {
@@ -1174,10 +1293,11 @@ export async function resolveMlbStartingPitcherMatchup(
   const scheduleContext = resolveScheduleQueryContext({
     sport: "mlb",
   });
+  const now = deps.now();
   const selected = selectMatchupGame({
     games: gamesResult.games,
     gameId: args.gameId,
-    now: deps.now(),
+    now,
     timeZone: scheduleContext.window.timeZone,
   });
 
@@ -1199,6 +1319,7 @@ export async function resolveMlbStartingPitcherMatchup(
   let game = selected.selected;
   let awayPitcher = selected.selected.probableAway;
   let homePitcher = selected.selected.probableHome;
+  const trackedSide = trackedSideForTeam(selected.selected, normalizedTeamKey);
 
   if (!awayPitcher || !homePitcher) {
     const espnFallback = await deps.fetchEspnGameFallback(selected.selected, providerMode, args.cacheBust);
@@ -1248,6 +1369,23 @@ export async function resolveMlbStartingPitcherMatchup(
   awayPitcher = await maybeHydratePitcher(awayPitcher);
   homePitcher = await maybeHydratePitcher(homePitcher);
 
+  const selectedPitcherId = args.mode === "advanced" ? args.pitcherId?.trim() : undefined;
+  if (selectedPitcherId) {
+    const baselinePitcher = trackedSide === "away" ? awayPitcher : homePitcher;
+    const customPitcher = await maybeHydratePitcher({
+      playerId: selectedPitcherId,
+      fullName: baselinePitcher?.fullName ?? "Selected pitcher",
+      teamKey: normalizedTeamKey,
+      confidenceNote: "Custom pitcher selection replaces probable-starter baseline for the tracked team.",
+    });
+    if (trackedSide === "away") {
+      awayPitcher = mergePitcher(customPitcher, awayPitcher);
+    } else {
+      homePitcher = mergePitcher(customPitcher, homePitcher);
+    }
+    notes.push(`Custom pitcher selection active for ${normalizedTeamKey}.`);
+  }
+
   const hasBothProbables = Boolean(awayPitcher?.fullName && homePitcher?.fullName);
   if (!hasBothProbables) {
     notes.push("Game found, probable starters not posted yet.");
@@ -1271,6 +1409,9 @@ export async function resolveMlbStartingPitcherMatchup(
     edge,
     mode: args.mode,
     selectableGames: selected.selectableGames,
+    gameContextType: gameContextType(game, now),
+    trackedTeamKey: normalizedTeamKey,
+    selectedPitcherId,
     notes: unique(notes),
   });
   const state = data.state;

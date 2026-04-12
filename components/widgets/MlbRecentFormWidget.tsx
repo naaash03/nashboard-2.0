@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type FormPeriod = {
@@ -51,21 +52,40 @@ function RatingBadge({ rating }: { rating: RecentForm["rating"] }) {
   );
 }
 
-function trendLabel(periodWinPct: number, baselineWinPct: number): string {
-  const diff = periodWinPct - baselineWinPct;
-  if (diff > 0.05) return "^ Up";
-  if (diff < -0.05) return "v Down";
-  return "= Flat";
+function TrendBadge({ winPct, baselineWinPct }: { winPct: number; baselineWinPct: number }) {
+  const diff = winPct - baselineWinPct;
+  if (diff > 0.05)
+    return (
+      <span className="rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+        ▲ Up
+      </span>
+    );
+  if (diff < -0.05)
+    return (
+      <span className="rounded bg-red-950 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
+        ▼ Down
+      </span>
+    );
+  return (
+    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">
+      — Flat
+    </span>
+  );
 }
 
 export default function MlbRecentFormWidget(props: WidgetCommonProps) {
-  const [teamKey, setTeamKey] = useState<string>((props.config.teamKey as string) ?? "");
+  const initialTeamKey = ((props.config.teamKey as string) ?? "").toUpperCase();
+  const [teamKey, setTeamKey] = useState<string>(initialTeamKey);
+  const [teamInput, setTeamInput] = useState<string>(initialTeamKey);
   const [data, setData] = useState<RecentForm | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(
     async (key: string) => {
+      setLoading(true);
+      setWarning(null);
       const res = await fetch(
         `/api/widgets/mlb-recent-form?teamKey=${encodeURIComponent(key)}&dataMode=${props.dataMode}`,
         { cache: "no-store" },
@@ -75,6 +95,7 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
         meta?: WidgetMeta;
         error?: string;
       };
+      setLoading(false);
       if (!res.ok) throw new Error(json.error ?? "Failed to load recent form data");
       return { data: json.data ?? null, meta: json.meta ?? null };
     },
@@ -90,10 +111,15 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
         if (!cancelled) {
           setData(result.data);
           setMeta(result.meta);
-          setWarning(null);
+          setWarning(result.meta?.warning ?? (!result.data ? "No recent form data is available for this team right now." : null));
         }
       } catch (error) {
-        if (!cancelled) setWarning(String(error));
+        if (!cancelled) {
+          setData(null);
+          setMeta(null);
+          setWarning(String(error));
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -102,7 +128,13 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
   }, [teamKey, load, props.refreshTick]);
 
   async function applyTeam() {
-    await props.onPersist({ config: { ...props.config, teamKey } });
+    const nextTeamKey = teamInput.trim().toUpperCase();
+    setTeamInput(nextTeamKey);
+    setTeamKey(nextTeamKey);
+    setData(null);
+    setMeta(null);
+    setWarning(null);
+    await props.onPersist({ config: { ...props.config, teamKey: nextTeamKey } });
   }
 
   const advanced = props.mode === "ADVANCED";
@@ -128,8 +160,8 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
         <input
           className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           placeholder="Team (e.g. NYM)"
-          value={teamKey}
-          onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
+          value={teamInput}
+          onChange={(e) => setTeamInput(e.target.value.toUpperCase())}
         />
         <button
           className="rounded border border-neutral-700 px-2 py-1"
@@ -141,8 +173,11 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
         </button>
       </div>
 
-      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation to start.</p>}
+      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation and press Set.</p>}
+      {teamInput && teamInput !== teamKey && <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p>}
       {warning && <p className="text-amber-300">{warning}</p>}
+      {loading && <p className="text-neutral-400">Loading recent form...</p>}
+      {!loading && teamKey && !data && !warning && <p className="text-neutral-400">No recent form data is available for this team right now.</p>}
 
       {data && (
         <div className="space-y-2">
@@ -152,10 +187,10 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
           </div>
 
           {!advanced && (
-            <div className="space-y-1 rounded border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-neutral-300">Recent form looks at wins, losses, and run differential over the last 7, 14, and 30 days of games.</p>
+            <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+              <p className="mb-2 text-neutral-400">Recent form looks at wins, losses, and run differential over the last 7, 14, and 30 days of games.</p>
               <p className="text-neutral-100">{data.explanation}</p>
-              <p className="text-neutral-500">{data.sampleContext}</p>
+              <p className="mt-1.5 border-t border-neutral-800 pt-1.5 text-[10px] text-neutral-500">{data.sampleContext}</p>
             </div>
           )}
 
@@ -165,24 +200,39 @@ export default function MlbRecentFormWidget(props: WidgetCommonProps) {
               <p className="text-neutral-500">{data.sampleContext}</p>
               <div className="grid grid-cols-5 gap-1 text-[10px] text-neutral-500">
                 <span>Period</span>
-                <span className="text-right">W-L</span>
-                <span className="text-right">R/G Diff</span>
-                <span className="text-right">Win%</span>
+                <span className="text-right"><StatLabel label="W-L" statKey="w_l_record" sport="MLB" mode={props.mode} /></span>
+                <span className="text-right"><StatLabel label="R/G Diff" statKey="run_diff_per_game" sport="MLB" mode={props.mode} /></span>
+                <span className="text-right"><StatLabel label="Win%" statKey="win_pct" sport="MLB" mode={props.mode} /></span>
                 <span className="text-right">Trend</span>
               </div>
               {[data.last7, data.last14, data.last30].map((period) => (
-                <div key={period.days} className="grid grid-cols-5 gap-1 rounded border border-neutral-800 p-1.5">
-                  <span className="text-neutral-400">L{period.days}</span>
+                <div
+                  key={period.days}
+                  className={`grid grid-cols-5 gap-1 rounded border p-1.5 ${
+                    period.days === 30
+                      ? "border-neutral-700 bg-neutral-900/60"
+                      : "border-neutral-800"
+                  }`}
+                >
+                  <span className={`${period.days === 30 ? "text-neutral-500" : "text-neutral-400"}`}>L{period.days}</span>
                   <span className="text-right">{period.wins}-{period.losses}</span>
                   <span className={`text-right ${period.runDiffPerGame >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                     {period.runDiffPerGame >= 0 ? "+" : ""}{period.runDiffPerGame.toFixed(1)}
                   </span>
                   <span className="text-right text-neutral-300">{(period.winPct * 100).toFixed(1)}%</span>
-                  <span className="text-right text-neutral-300">{trendLabel(period.winPct, data.last30.winPct)}</span>
+                  <span className="flex justify-end">
+                    {period.days === 30 ? (
+                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">
+                        baseline
+                      </span>
+                    ) : (
+                      <TrendBadge winPct={period.winPct} baselineWinPct={data.last30.winPct} />
+                    )}
+                  </span>
                 </div>
               ))}
               <p className="text-[10px] text-neutral-500">
-                Trend compares each window to the 30-day baseline: `^ Up` means better than the 30-day sample, `v Down` means worse, and `= Flat` means roughly unchanged.
+                Trend compares each window to the 30-day baseline: ▲ Up means better, ▼ Down means worse, — Flat means roughly unchanged. L30 is the baseline itself.
               </p>
             </div>
           )}

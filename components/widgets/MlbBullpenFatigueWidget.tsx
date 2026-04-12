@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherAvailability = {
@@ -65,7 +66,9 @@ function fatigueLabel(fatigue: PitcherAvailability["fatigue"]): string {
 
 export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
   const config = props.config as { teamKey?: string; viewMode?: "starters" | "bullpen" };
-  const [teamKey, setTeamKey] = useState<string>(config.teamKey ?? "");
+  const initialTeamKey = (config.teamKey ?? "").toUpperCase();
+  const [teamKey, setTeamKey] = useState<string>(initialTeamKey);
+  const [teamInput, setTeamInput] = useState<string>(initialTeamKey);
   const [viewMode, setViewMode] = useState<"starters" | "bullpen">(config.viewMode ?? "bullpen");
   const [data, setData] = useState<BullpenFatigue | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
@@ -75,6 +78,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
   const load = useCallback(
     async (key: string) => {
       setLoading(true);
+      setWarning(null);
       const res = await fetch(
         `/api/widgets/mlb-bullpen-fatigue?teamKey=${encodeURIComponent(key)}&dataMode=${props.dataMode}`,
         { cache: "no-store" },
@@ -100,10 +104,12 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
         if (!cancelled) {
           setData(result.data);
           setMeta(result.meta);
-          setWarning(null);
+          setWarning(result.meta?.warning ?? (!result.data ? "No bullpen usage data is available for this team right now." : null));
         }
       } catch (error) {
         if (!cancelled) {
+          setData(null);
+          setMeta(null);
           setWarning(String(error));
           setLoading(false);
         }
@@ -116,6 +122,16 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
   async function persistConfig(next: Partial<typeof config>) {
     await props.onPersist({ config: { ...props.config, teamKey, viewMode, ...next } });
+  }
+
+  async function applyTeam() {
+    const nextTeamKey = teamInput.trim().toUpperCase();
+    setTeamInput(nextTeamKey);
+    setTeamKey(nextTeamKey);
+    setData(null);
+    setMeta(null);
+    setWarning(null);
+    await props.onPersist({ config: { ...props.config, teamKey: nextTeamKey, viewMode } });
   }
 
   const advanced = props.mode === "ADVANCED";
@@ -175,22 +191,24 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
         <input
           className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           placeholder="Team (e.g. NYM)"
-          value={teamKey}
-          onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
+          value={teamInput}
+          onChange={(e) => setTeamInput(e.target.value.toUpperCase())}
         />
         <button
           className="rounded border border-neutral-700 px-2 py-1"
           type="button"
-          onClick={() => void persistConfig({ teamKey })}
+          onClick={() => void applyTeam()}
           disabled={props.locked}
         >
           Set
         </button>
       </div>
 
-      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation to start.</p>}
+      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation and press Set.</p>}
+      {teamInput && teamInput !== teamKey && <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p>}
       {warning && <p className="text-amber-300">{warning}</p>}
       {loading && <p className="text-neutral-400">Loading pitcher availability...</p>}
+      {!loading && teamKey && !data && !warning && <p className="text-neutral-400">No pitcher usage data is available for this team right now.</p>}
 
       {data && !loading && (
         <div className="space-y-2">
@@ -198,30 +216,54 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
           {viewMode === "starters" && (
             <div className="space-y-1">
+              {!advanced && (
+                <p className="pb-0.5 text-[10px] text-neutral-500">Starters typically pitch every 4-5 days. This view uses roster roles first, then recent starter-length outings if MLB lists pitchers generically.</p>
+              )}
+              {data.starters.length === 0 && (
+                <p className="rounded border border-neutral-800 bg-neutral-950 p-2 text-neutral-400">
+                  No starter-length outings were identified yet. Early-season logs or generic roster roles can make this view incomplete.
+                </p>
+              )}
               {!advanced &&
                 data.starters.map((starter) => (
-                  <div key={starter.playerId} className="rounded border border-neutral-800 bg-neutral-950 p-1.5">
-                    <p className="font-medium">{starter.fullName}</p>
-                    <p className="text-neutral-400">
-                      Last start: {starter.lastStartDate ?? "-"} · Rest: {starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}
+                  <div
+                    key={starter.playerId}
+                    className={`rounded border bg-neutral-950 p-1.5 ${
+                      starter.lastStartDate === null
+                        ? "border-neutral-800/50 opacity-60"
+                        : "border-neutral-800"
+                    }`}
+                  >
+                    <p className={`font-medium ${starter.lastStartDate === null ? "text-neutral-500" : ""}`}>
+                      {starter.fullName}
                     </p>
-                    <p className="text-neutral-500">IP in last start: {starter.inningsLastStart ?? "-"}</p>
+                    <p className="text-neutral-400">
+                      Last start: {starter.lastStartDate ?? "No outing logged yet"} · Rest: {starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}
+                    </p>
+                    {starter.lastStartDate && (
+                      <p className="text-neutral-500"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /> in last start: {starter.inningsLastStart ?? "-"}</p>
+                    )}
                   </div>
                 ))}
-              {advanced && (
+              {advanced && data.starters.length > 0 && (
                 <div className="space-y-1">
                   <div className="grid grid-cols-6 gap-1 text-[10px] text-neutral-500">
                     <span>Starter</span>
                     <span className="text-right">Last Start</span>
-                    <span className="text-right">Rest</span>
-                    <span className="text-right">IP</span>
-                    <span className="text-right">P/S</span>
-                    <span className="text-right">K/9</span>
+                    <span className="text-right"><StatLabel label="Rest" statKey="days_rest" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-right"><StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-right"><StatLabel label="P/S" statKey="pitches_strikes" sport="MLB" mode={props.mode} /></span>
+                    <span className="text-right"><StatLabel label="K/9" statKey="k_per_9" sport="MLB" mode={props.mode} /></span>
                   </div>
                   {data.starters.map((starter) => (
-                    <div key={starter.playerId} className="grid grid-cols-6 gap-1 rounded border border-neutral-800 bg-neutral-950 p-1.5">
+                    <div
+                      key={starter.playerId}
+                      className={`grid grid-cols-6 gap-1 rounded border bg-neutral-950 p-1.5 ${
+                        starter.lastStartDate === null ? "border-neutral-800/50 opacity-60" : "border-neutral-800"
+                      }`}
+                    >
                       <span>{starter.fullName}</span>
-                      <span className="text-right text-neutral-400">{starter.lastStartDate ?? "-"}</span>
+                      <span className="text-right text-neutral-400">{starter.lastStartDate ?? "—"}</span>
                       <span className="text-right text-neutral-400">{starter.daysRest >= 99 ? "N/A" : `${starter.daysRest}d`}</span>
                       <span className="text-right text-neutral-400">{starter.inningsLastStart ?? "-"}</span>
                       <span className="text-right text-neutral-400">
@@ -231,6 +273,11 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                       <span className="text-right text-neutral-400">{starter.seasonKPer9 ?? "-"}</span>
                     </div>
                   ))}
+                  {data.starters.some((s) => s.lastStartDate === null) && (
+                    <p className="text-[10px] text-neutral-500">
+                      Starters showing — have no logged outing yet this season. Their data will fill in as the season progresses.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -238,6 +285,23 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
           {viewMode === "bullpen" && (
             <div className="space-y-1">
+              {!advanced && (
+                <div className="grid grid-cols-5 gap-1 pb-0.5 text-[10px] text-neutral-500">
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-600" />Rested</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400" />Fresh</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-300" />Avail.</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-yellow-500" />Tired</span>
+                  <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" />Fatigd.</span>
+                </div>
+              )}
+              {!advanced && data.relievers.length > (displayRelievers?.length ?? 0) && (
+                <p className="text-[10px] text-neutral-500">Showing the top {displayRelievers?.length ?? 0} relievers. Switch to Advanced for the full bullpen list and recent usage.</p>
+              )}
+              {data.relievers.length === 0 && (
+                <p className="rounded border border-neutral-800 bg-neutral-950 p-2 text-neutral-400">
+                  No recent bullpen appearances were found for this team.
+                </p>
+              )}
               {!advanced &&
                 displayRelievers?.map((reliever) => (
                   <div key={reliever.playerId} className="flex items-center gap-2 rounded border border-neutral-800 bg-neutral-950 p-1.5">
@@ -263,7 +327,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
                     </div>
                     {reliever.lastAppearance && (
                       <p className="text-[10px] text-neutral-600">
-                        Last outing: {reliever.lastAppearance} · {reliever.inningsLastAppearance ?? "-"} IP
+                        Last outing: {reliever.lastAppearance} · <StatLabel label="IP" statKey="innings_pitched" sport="MLB" mode={props.mode} /> {reliever.inningsLastAppearance ?? "-"}
                       </p>
                     )}
                     {reliever.recentAppearances.length > 0 && (

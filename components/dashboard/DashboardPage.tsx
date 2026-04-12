@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX } from "react";
+import StatExplainerProvider from "@/components/stats/StatExplainerProvider";
 import WidgetLibrary from "@/components/widgets/WidgetLibrary";
 import TonightsSlateWidget from "@/components/widgets/TonightsSlateWidget";
 import PlayerCardWidget from "@/components/widgets/PlayerCardWidget";
@@ -77,7 +78,9 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
   mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
+  "mlb-series-tracker": (props) => <MlbSeriesTrackerWidget {...props} />,
   mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
+  "mlb-starting-pitcher-matchup": (props) => <MlbStartingPitcherMatchupWidget {...props} />,
   mlb_season_stats: (props) => <MlbSeasonStatsWidget {...props} />,
   mlb_platoon_advantage: (props) => <MlbPlatoonAdvantageWidget {...props} />,
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
@@ -439,7 +442,11 @@ export default function DashboardPage({
   };
 
   if (loading) {
-    return <div className="p-6">Loading dashboard...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#090c11] text-sm text-neutral-400">
+        Loading dashboard...
+      </div>
+    );
   }
 
   const statusBanner = (() => {
@@ -462,94 +469,131 @@ export default function DashboardPage({
   })();
 
   return (
-    <div className="min-h-screen bg-[#090c11] text-white">
-      <header className="border-b border-neutral-800 px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold">NashBoard</h1>
-            <p className="text-xs text-neutral-400">{dashboard?.title ?? "Dashboard"}</p>
+    <StatExplainerProvider>
+      <div className="min-h-screen bg-[#090c11] text-white">
+      <header className="sticky top-0 z-30 border-b border-neutral-800 bg-[#090c11]">
+        <div className="mx-auto max-w-screen-2xl px-6">
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
+            <div className="flex items-baseline gap-3">
+              <h1 className="text-xl font-bold tracking-tight">NashBoard</h1>
+              {dashboard?.title && (
+                <span className="hidden text-xs text-neutral-500 sm:block">{dashboard.title}</span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <TopBarAuth />
+
+              <span className="mx-0.5 h-3 w-px shrink-0 bg-neutral-700" aria-hidden="true" />
+
+              <button
+                className="rounded border border-neutral-500 bg-neutral-800 px-3 py-1 font-medium hover:bg-neutral-700"
+                onClick={() => setLibraryOpen(true)}
+                type="button"
+              >
+                + Add Widget
+              </button>
+              <button
+                className="rounded border border-neutral-700 px-3 py-1 text-neutral-300 hover:bg-neutral-800"
+                onClick={() => refreshAll()}
+                type="button"
+              >
+                Refresh
+              </button>
+              <button
+                className={`rounded border px-3 py-1 transition-colors ${
+                  dashboard?.layoutLocked
+                    ? "border-amber-600/50 bg-amber-950/40 text-amber-300"
+                    : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+                }`}
+                onClick={() => void toggleLock()}
+                type="button"
+              >
+                {dashboard?.layoutLocked ? "Unlock" : "Lock"}
+              </button>
+              <button
+                className="rounded border border-neutral-700 px-3 py-1 text-neutral-500 hover:border-red-800/60 hover:text-red-400"
+                onClick={() => void resetDashboard()}
+                type="button"
+              >
+                Reset
+              </button>
+              {!isGuestMode && dashboard?.shareToken ? (
+                <div className="flex items-center gap-1.5 rounded border border-neutral-700 bg-neutral-900 px-2 py-1">
+                  <span className="text-neutral-500">Share</span>
+                  <code className="font-mono text-[10px] text-neutral-300">{dashboard.shareToken.slice(0, 8)}…</code>
+                </div>
+              ) : null}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <button
-              className="rounded border border-neutral-700 px-3 py-1"
-              onClick={() => setLibraryOpen(true)}
-              type="button"
-            >
-              Add Widget
-            </button>
-            <button className="rounded border border-neutral-700 px-3 py-1" onClick={() => refreshAll()} type="button">
-              Refresh All
-            </button>
-            <button
-              className="rounded border border-neutral-700 px-3 py-1"
-              onClick={() => void resetDashboard()}
-              type="button"
-            >
-              Reset Dashboard
-            </button>
-            <button
-              className="rounded border border-neutral-700 px-3 py-1"
-              onClick={() => void toggleLock()}
-              type="button"
-            >
-              {dashboard?.layoutLocked ? "Unlock Layout" : "Lock Layout"}
-            </button>
-            {!isGuestMode && dashboard?.shareToken ? (
-              <span className="text-neutral-400">Share: ?shareToken={dashboard.shareToken}</span>
-            ) : null}
-          </div>
-        </div>
-        <div className="mt-2">
-          <TopBarAuth />
         </div>
       </header>
 
-      <main className="p-6">
+      <main className="mx-auto max-w-screen-2xl px-6 py-5">
         {error ? (
-          <p className="mb-3 rounded border border-red-500 bg-red-950 p-2 text-xs text-red-200">{error}</p>
-        ) : null}
-        <p className={`mb-3 text-xs ${statusBanner.tone === "emerald" ? "text-emerald-300" : "text-amber-300"}`}>
-          {statusBanner.text}
-        </p>
-        {sortedWidgets.length === 0 ? (
-          <p className="rounded border border-dashed border-neutral-700 p-4 text-sm text-neutral-400">
-            Dashboard is blank. Open Add Widget to start.
-          </p>
+          <div className="mb-4 rounded border border-red-500/50 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+            {error}
+          </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={`mb-4 border-l-2 pl-3 text-xs ${
+          statusBanner.tone === "emerald"
+            ? "border-emerald-500 text-emerald-300"
+            : "border-amber-500/70 text-amber-300"
+        }`}>
+          {statusBanner.text}
+        </div>
+
+        {sortedWidgets.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-neutral-700/60 px-6 py-16 text-center">
+            <p className="text-sm font-medium text-neutral-300">Your dashboard is empty</p>
+            <p className="text-xs text-neutral-500">Add widgets to start tracking what matters.</p>
+            <button
+              onClick={() => setLibraryOpen(true)}
+              className="mt-1 rounded border border-neutral-600 bg-neutral-800/80 px-4 py-1.5 text-xs font-medium hover:bg-neutral-700"
+              type="button"
+            >
+              Add your first widget
+            </button>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sortedWidgets.map((widget) => {
             const Component = WIDGET_COMPONENTS[widget.widgetType];
             return (
               <section key={widget.id} className="rounded-xl border border-neutral-800 bg-[#111827] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-wide text-neutral-400">
+                <div className="mb-2.5 flex items-center justify-between border-b border-neutral-800/60 pb-2">
+                  <p className="text-[10px] font-medium uppercase tracking-widest text-neutral-500">
                     {widget.widgetType.replaceAll("_", " ")}
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-0.5">
                     <button
                       type="button"
-                      className="text-xs text-neutral-300"
+                      className="rounded px-1.5 py-0.5 text-[11px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300 disabled:cursor-default disabled:opacity-30"
                       onClick={() => void moveWidget(widget.id, -1)}
                       disabled={Boolean(dashboard?.layoutLocked)}
+                      title="Move up"
                     >
-                      Up
+                      ↑
                     </button>
                     <button
                       type="button"
-                      className="text-xs text-neutral-300"
+                      className="rounded px-1.5 py-0.5 text-[11px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300 disabled:cursor-default disabled:opacity-30"
                       onClick={() => void moveWidget(widget.id, 1)}
                       disabled={Boolean(dashboard?.layoutLocked)}
+                      title="Move down"
                     >
-                      Down
+                      ↓
                     </button>
                     <button
                       type="button"
-                      className="text-xs text-red-300"
+                      className="rounded px-1.5 py-0.5 text-[11px] text-neutral-500 hover:bg-red-950 hover:text-red-300 disabled:cursor-default disabled:opacity-30"
                       onClick={() => void removeWidget(widget.id)}
                       disabled={Boolean(dashboard?.layoutLocked)}
+                      title="Remove widget"
                     >
-                      Remove
+                      ×
                     </button>
                   </div>
                 </div>
@@ -597,13 +641,13 @@ export default function DashboardPage({
       />
 
       {bugBundle ? (
-        <div className="fixed inset-0 z-50 bg-black/60 p-4">
-          <div className="mx-auto max-w-2xl rounded border border-neutral-700 bg-neutral-900 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="font-medium">Report a bug</p>
+        <div className="fixed inset-0 z-50 bg-black/70 p-4">
+          <div className="mx-auto max-w-2xl rounded-xl border border-neutral-700 bg-neutral-900 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-semibold">Report a bug</p>
               <button
                 type="button"
-                className="rounded border border-neutral-700 px-2 py-1 text-xs"
+                className="rounded border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800"
                 onClick={() => setBugBundle(null)}
               >
                 Close
@@ -615,10 +659,10 @@ export default function DashboardPage({
             <pre className="mt-2 max-h-64 overflow-auto rounded bg-black/40 p-2 text-[11px]">
               {JSON.stringify(bugBundle, null, 2)}
             </pre>
-            <div className="mt-2 flex items-center justify-between">
+            <div className="mt-3 flex items-center justify-between border-t border-neutral-800 pt-3">
               <p className="text-[10px] text-neutral-500">Updated {to12h(new Date().toISOString())}</p>
               <button
-                className="rounded border border-neutral-700 px-2 py-1 text-xs"
+                className="rounded border border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-800"
                 type="button"
                 onClick={() => void copyBugBundle()}
               >
@@ -628,7 +672,8 @@ export default function DashboardPage({
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </StatExplainerProvider>
   );
 }
 

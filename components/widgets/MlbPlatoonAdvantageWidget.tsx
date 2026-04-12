@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherSplits = {
@@ -62,30 +63,30 @@ function SplitsTable({ pitcher }: { pitcher: { fullName: string; throwsHand: str
       <table className="mt-1 w-full border-collapse">
         <thead>
           <tr className="text-neutral-500">
-            <th className="py-0.5 text-left">Split</th>
-            <th className="py-0.5 text-right">ERA</th>
-            <th className="py-0.5 text-right">WHIP</th>
-            <th className="py-0.5 text-right">AVG</th>
-            <th className="py-0.5 text-right">OPS</th>
-            <th className="py-0.5 text-right">BF</th>
+            <th className="py-1 text-left">Split</th>
+            <th className="py-1 text-right"><StatLabel label="ERA" statKey="era" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="WHIP" statKey="whip" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="AVG" statKey="avg" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="OPS" statKey="ops" sport="MLB" mode="ADVANCED" /></th>
+            <th className="py-1 text-right"><StatLabel label="BF" statKey="batters_faced" sport="MLB" mode="ADVANCED" /></th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-t border-neutral-800">
-            <td className="py-0.5 text-neutral-400">vs L</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.era ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.whip ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.avg ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsLeft?.ops ?? "-"}</td>
-            <td className="py-0.5 text-right text-neutral-500">{pitcher.splits.vsLeft?.sample ?? "-"}</td>
+            <td className="py-1 text-neutral-400">vs L</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.era ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.whip ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.avg ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsLeft?.ops ?? "-"}</td>
+            <td className="py-1 text-right text-neutral-500">{pitcher.splits.vsLeft?.sample ?? "-"}</td>
           </tr>
           <tr className="border-t border-neutral-800">
-            <td className="py-0.5 text-neutral-400">vs R</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.era ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.whip ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.avg ?? "-"}</td>
-            <td className="py-0.5 text-right">{pitcher.splits.vsRight?.ops ?? "-"}</td>
-            <td className="py-0.5 text-right text-neutral-500">{pitcher.splits.vsRight?.sample ?? "-"}</td>
+            <td className="py-1 text-neutral-400">vs R</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.era ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.whip ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.avg ?? "-"}</td>
+            <td className="py-1 text-right">{pitcher.splits.vsRight?.ops ?? "-"}</td>
+            <td className="py-1 text-right text-neutral-500">{pitcher.splits.vsRight?.sample ?? "-"}</td>
           </tr>
         </tbody>
       </table>
@@ -94,13 +95,18 @@ function SplitsTable({ pitcher }: { pitcher: { fullName: string; throwsHand: str
 }
 
 export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
-  const [teamKey, setTeamKey] = useState<string>((props.config.teamKey as string) ?? "");
+  const initialTeamKey = ((props.config.teamKey as string) ?? "").toUpperCase();
+  const [teamKey, setTeamKey] = useState<string>(initialTeamKey);
+  const [teamInput, setTeamInput] = useState<string>(initialTeamKey);
   const [data, setData] = useState<PlatoonAdvantage | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(
     async (key: string) => {
+      setLoading(true);
+      setWarning(null);
       const res = await fetch(
         `/api/widgets/mlb-platoon-advantage?teamKey=${encodeURIComponent(key)}&dataMode=${props.dataMode}`,
         { cache: "no-store" },
@@ -110,6 +116,7 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         meta?: WidgetMeta;
         error?: string;
       };
+      setLoading(false);
       if (!res.ok) throw new Error(json.error ?? "Failed to load platoon data");
       return { data: json.data ?? null, meta: json.meta ?? null };
     },
@@ -125,10 +132,15 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         if (!cancelled) {
           setData(result.data);
           setMeta(result.meta);
-          setWarning(null);
+          setWarning(result.meta?.warning ?? (!result.data ? "No matchup data is available for this team right now." : null));
         }
       } catch (error) {
-        if (!cancelled) setWarning(String(error));
+        if (!cancelled) {
+          setData(null);
+          setMeta(null);
+          setWarning(String(error));
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -137,7 +149,13 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
   }, [teamKey, load, props.refreshTick]);
 
   async function applyTeam() {
-    await props.onPersist({ config: { ...props.config, teamKey } });
+    const nextTeamKey = teamInput.trim().toUpperCase();
+    setTeamInput(nextTeamKey);
+    setTeamKey(nextTeamKey);
+    setData(null);
+    setMeta(null);
+    setWarning(null);
+    await props.onPersist({ config: { ...props.config, teamKey: nextTeamKey } });
   }
 
   const advanced = props.mode === "ADVANCED";
@@ -163,8 +181,8 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         <input
           className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           placeholder="Team (e.g. NYM)"
-          value={teamKey}
-          onChange={(e) => setTeamKey(e.target.value.toUpperCase())}
+          value={teamInput}
+          onChange={(e) => setTeamInput(e.target.value.toUpperCase())}
         />
         <button
           className="rounded border border-neutral-700 px-2 py-1"
@@ -176,8 +194,11 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         </button>
       </div>
 
-      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation to start.</p>}
+      {!teamKey && <p className="text-neutral-400">Enter a team abbreviation and press Set.</p>}
+      {teamInput && teamInput !== teamKey && <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p>}
       {warning && <p className="text-amber-300">{warning}</p>}
+      {loading && <p className="text-neutral-400">Loading platoon matchup...</p>}
+      {!loading && teamKey && !data && !warning && <p className="text-neutral-400">No platoon matchup data is available for this team right now.</p>}
 
       {data && (
         <div className="space-y-2">
@@ -188,21 +209,32 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
             <p className="text-neutral-400">{data.game.officialDate}</p>
           </div>
 
-          {data.analysisMode === "splits" ? (
-            <div className="flex items-center gap-2">
-              <AdvantageBadge advantage={data.advantage} />
-              {advanced && <span className="text-neutral-500">Score: {data.advantageScore > 0 ? "+" : ""}{data.advantageScore}</span>}
+          <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+            {data.analysisMode === "splits" ? (
+              <div className="mb-2 flex items-center gap-2">
+                <AdvantageBadge advantage={data.advantage} />
+                {advanced && <span className="text-neutral-500">Score: {data.advantageScore > 0 ? "+" : ""}{data.advantageScore}</span>}
+              </div>
+            ) : (
+              <div className="mb-2">
+                <span className="rounded border border-amber-500 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
+                  Handedness Estimate
+                </span>
+              </div>
+            )}
+            <p className="text-neutral-200">{data.explanation}</p>
+            {data.analysisMode === "handedness" && (
+              <p className="mt-1.5 border-t border-neutral-800 pt-1.5 text-[10px] text-neutral-500">
+                Use this as a rough lean until both probable starters have posted split data.
+              </p>
+            )}
+          </div>
+
+          {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 0 && (
+            <div className="rounded border border-neutral-800 bg-neutral-900/40 p-2">
+              <p className="text-[10px] uppercase tracking-wide text-neutral-600">Handedness reasoning</p>
+              <p className="mt-1 text-neutral-400">{data.handednessAnalyses[0].reasoning}</p>
             </div>
-          ) : (
-            <span className="rounded border border-amber-500 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
-              Handedness Read
-            </span>
-          )}
-
-          <p className="text-neutral-300">{data.explanation}</p>
-
-          {data.analysisMode === "handedness" && !advanced && data.handednessAnalyses.length > 1 && (
-            <p className="text-neutral-500">{data.handednessAnalyses[0].reasoning}</p>
           )}
 
           {advanced && data.analysisMode === "splits" && (

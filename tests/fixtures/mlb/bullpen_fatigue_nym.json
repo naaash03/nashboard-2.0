@@ -1,0 +1,40 @@
+{
+  "team": {
+    "id": 121,
+    "name": "New York Mets"
+  },
+  "roster": [
+    {
+      "person": { "id": 673540, "fullName": "Kodai Senga" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "SP" }
+    },
+    {
+      "person": { "id": 656849, "fullName": "David Peterson" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "SP" }
+    },
+    {
+      "person": { "id": 642547, "fullName": "Freddy Peralta" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "SP" }
+    },
+    {
+      "person": { "id": 621345, "fullName": "A.J. Minter" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "RP" }
+    },
+    {
+      "person": { "id": 548384, "fullName": "Brooks Raley" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "RP" }
+    },
+    {
+      "person": { "id": 642207, "fullName": "Devin Williams" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "CL" }
+    },
+    {
+      "person": { "id": 623211, "fullName": "Huascar Brazoban" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "RP" }
+    },
+    {
+      "person": { "id": 472610, "fullName": "Luis Garcia" },
+      "position": { "code": "1", "type": "Pitcher", "abbreviation": "RP" }
+    }
+  ]
+}

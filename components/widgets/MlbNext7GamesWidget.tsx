@@ -130,6 +130,10 @@ export default function MlbNext7GamesWidget(props: WidgetCommonProps) {
         </select>
       </label>
 
+      {props.mode === "BEGINNER" && !loading && !error && data && data.games.length > 0 ? (
+        <p className="text-neutral-500">Upcoming games for {teamKey}. Each card shows the date, home/away, and the pitcher expected to start.</p>
+      ) : null}
+
       {loading ? <p className="text-neutral-300">Loading upcoming games...</p> : null}
       {error ? <p className="text-amber-300">{error}</p> : null}
 

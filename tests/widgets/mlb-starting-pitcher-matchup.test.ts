@@ -258,6 +258,34 @@ describe("MLB Starting Pitcher Matchup resolver", () => {
     expect(out.selected?.gameId).toBe("override");
   });
 
+  it("surfaces labeled past-game contexts in advanced selection options", () => {
+    const now = new Date("2026-03-09T15:00:00.000Z");
+    const out = selectMatchupGame({
+      games: [
+        sampleGame({
+          gameId: "past",
+          dateKey: "2026-03-08",
+          startTime: "2026-03-08T20:00:00.000Z",
+          status: "final",
+        }),
+        sampleGame({
+          gameId: "upcoming",
+          dateKey: "2026-03-10",
+          startTime: "2026-03-10T23:10:00.000Z",
+          status: "scheduled",
+        }),
+      ],
+      now,
+      timeZone: "America/New_York",
+    });
+
+    expect(out.selectableGames).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gameId: "past", contextType: "past" }),
+      expect.objectContaining({ gameId: "upcoming", contextType: "upcoming" }),
+    ]));
+    expect(out.selectableGames.find((row) => row.gameId === "past")?.label.startsWith("Past:")).toBe(true);
+  });
+
   it("edge calculation is stable", () => {
     const away = pitcherCard("Away Ace", {
       era: 2.8,
@@ -399,5 +427,54 @@ describe("MLB Starting Pitcher Matchup resolver", () => {
       "2026-03-11T23:10:00.000Z",
       "2026-03-11T23:10:00.000Z",
     ]);
+  });
+
+  it("allows a custom pitcher selection for the tracked team in advanced mode", async () => {
+    const result = await resolveMlbStartingPitcherMatchup({
+      teamKey: "NYM",
+      pitcherId: "99",
+      mode: "advanced",
+      dataMode: "fixture",
+    }, {
+      fetchTeamIdentity: async () => ({
+        team: { key: "NYM", name: "New York Mets", apiSportsTeamId: "22" },
+        meta: testMeta("mlb"),
+      }),
+      fetchApiSportsGames: async () => ({
+        games: [sampleGame({
+          probableAway: pitcherCard("Away Starter", { playerId: "1" }),
+          probableHome: pitcherCard("Home Starter", { playerId: "2" }),
+        })],
+        meta: testMeta("mlb"),
+        notes: [],
+      }),
+      fetchEspnGameFallback: async () => ({
+        game: null,
+        meta: testMeta("espn"),
+      }),
+      fetchPitcherStats: async (pitcher) => ({
+        pitcher: pitcher.playerId === "99"
+          ? {
+            ...pitcher,
+            fullName: "Custom Mets Pitcher",
+            era: 2.91,
+            statsBasisLabel: "Using 2025 regular season",
+          }
+          : pitcher,
+        meta: testMeta("mlb"),
+      }),
+      now: () => new Date("2026-03-09T15:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.pitcherSelection).toEqual(expect.objectContaining({
+      type: "custom",
+      label: "Custom pitcher selection",
+      selectedPitcherId: "99",
+      selectedPitcherName: "Custom Mets Pitcher",
+      teamKey: "NYM",
+    }));
+    expect(result.data?.pitchers.home?.fullName).toBe("Custom Mets Pitcher");
+    expect(result.data?.pitchers.away?.fullName).toBe("Away Starter");
   });
 });

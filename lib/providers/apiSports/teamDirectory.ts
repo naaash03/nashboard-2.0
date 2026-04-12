@@ -76,12 +76,16 @@ function mapTeamRow(sport: SportKey, row: Record<string, unknown>): TeamSearchRe
     return null;
   }
   const abbreviation = readString(team.code) ?? readString(team.abbreviation) ?? readString(team.short_name);
-  const rawKey = abbreviation ?? displayName;
+  // Require a real abbreviation — never derive a key from the display name, which produces
+  // broken acronyms like "TBJ" (Toronto Blue Jays) or "PP" (Philadelphia Phillies).
+  if (!abbreviation) {
+    return null;
+  }
   return {
-    teamKey: normalizeTeamKey(rawKey, displayName),
+    teamKey: normalizeTeamKey(abbreviation, displayName),
     displayName,
     league: sportLabel(sport),
-    abbreviation: abbreviation?.toUpperCase(),
+    abbreviation: abbreviation.toUpperCase(),
     apiSportsTeamId: teamId,
     logo: readString(team.logo),
   };
