@@ -1,7 +1,6 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
-import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type StandingRow = {
@@ -28,32 +27,61 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+// NBA: top 6 per conference = playoffs, ranks 7–10 = play-in
+const PLAYOFF_CUTOFF = 6;
+
 function ConferenceTable({
   title,
   rows,
-  showTeamKey,
   mode,
 }: {
   title: string;
   rows: StandingRow[];
-  showTeamKey: boolean;
   mode: "BEGINNER" | "ADVANCED";
 }) {
+  const advanced = mode === "ADVANCED";
+
   return (
-    <div className="rounded border border-neutral-700 bg-neutral-950 p-2">
-      <p className="mb-1 font-medium">{title}</p>
-      {rows.length === 0 ? <p className="text-neutral-400">No rows.</p> : null}
-      {rows.map((row) => (
-        <div key={`${title}-${row.rank}-${row.team}`} className="flex items-center justify-between border-b border-neutral-800 py-1 last:border-b-0">
-          <span>
-            {row.rank}. {row.team}
-            {showTeamKey && row.key ? ` (${row.key})` : ""}
-          </span>
-          <span>
-            <StatLabel label="W-L" statKey="w_l_record" sport="NBA" mode={mode} /> {row.wins}-{row.losses} · <StatLabel label="Pct" statKey="win_pct" sport="NBA" mode={mode} /> {row.pct}
-          </span>
-        </div>
-      ))}
+    <div>
+      <p className="mb-1.5 text-[10px] uppercase tracking-wide text-neutral-500">{title}</p>
+      <div className="rounded border border-neutral-800 bg-neutral-950">
+        {rows.length === 0 ? (
+          <p className="p-2.5 text-neutral-400">No standings data.</p>
+        ) : (
+          rows.map((row, index) => (
+            <div key={`${title}-${row.rank}-${row.team}`}>
+              {advanced && row.rank === PLAYOFF_CUTOFF + 1 ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1">
+                  <div className="h-px flex-1 bg-neutral-800" />
+                  <span className="text-[9px] uppercase tracking-wider text-neutral-600">
+                    Play-In
+                  </span>
+                  <div className="h-px flex-1 bg-neutral-800" />
+                </div>
+              ) : null}
+              <div
+                className={`flex items-center justify-between px-2.5 py-1.5 ${
+                  index < rows.length - 1 ? "border-b border-neutral-800/60" : ""
+                }`}
+              >
+                <span className="text-neutral-300">
+                  <span className="mr-1.5 tabular-nums text-neutral-600">{row.rank}.</span>
+                  {row.team}
+                  {advanced && row.key ? (
+                    <span className="ml-1.5 text-[10px] text-neutral-600">{row.key}</span>
+                  ) : null}
+                </span>
+                <span className="text-neutral-400">
+                  {row.wins}-{row.losses}
+                  {advanced ? (
+                    <span className="ml-1.5 text-[10px] text-neutral-600">{row.pct}</span>
+                  ) : null}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -64,19 +92,17 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [endpoint, setEndpoint] = useState("");
+  const advanced = props.mode === "ADVANCED";
 
   const load = useCallback(async () => {
     const mode = props.mode.toLowerCase();
     const url = `/api/widgets/nba-standings?mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
     setEndpoint(url);
     setLoading(true);
-
     try {
       const response = await fetch(url, { cache: "no-store" });
       const json = (await response.json()) as StandingsResponse;
-      if (!response.ok) {
-        throw new Error(json.error ?? "Failed to load NBA standings");
-      }
+      if (!response.ok) throw new Error(json.error ?? "Failed to load NBA standings");
       setData(json.data ?? null);
       setMeta(json.meta ?? null);
       setError(json.error ?? null);
@@ -95,7 +121,7 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
   return (
     <div className="space-y-2 text-xs">
       <div className="flex items-center justify-between">
-        <span className="font-medium">NBA Standings Snapshot</span>
+        <span className="font-medium">NBA Standings</span>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           value={props.mode}
@@ -107,31 +133,40 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
-      {loading ? <p className="text-neutral-300">Loading standings...</p> : null}
+      {!advanced && data ? (
+        <p className="text-neutral-500">
+          Top 5 teams per conference. The top 6 in each make the playoffs.
+        </p>
+      ) : null}
+
+      {loading ? <p className="text-neutral-400">Loading standings...</p> : null}
       {error ? <p className="text-amber-300">{error}</p> : null}
 
       {data ? (
-        <div className="space-y-2">
-          <ConferenceTable title="East" rows={data.east} showTeamKey={props.mode === "ADVANCED"} mode={props.mode} />
-          <ConferenceTable title="West" rows={data.west} showTeamKey={props.mode === "ADVANCED"} mode={props.mode} />
+        <div className="space-y-3">
+          <ConferenceTable title="Eastern Conference" rows={data.east} mode={props.mode} />
+          <ConferenceTable title="Western Conference" rows={data.west} mode={props.mode} />
         </div>
       ) : null}
 
       {meta?.warning ? <p className="text-amber-300">{meta.warning}</p> : null}
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
+        {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
 
       <button
         type="button"
         className="text-[10px] text-neutral-400 underline"
-        onClick={() => props.onReportBug({
-          widgetId: props.widgetId,
-          endpoint,
-          meta,
-          warnings: meta?.warning,
-          endpointUrl: meta?.endpointUrl,
-        })}
+        onClick={() =>
+          props.onReportBug({
+            widgetId: props.widgetId,
+            endpoint,
+            meta,
+            warnings: meta?.warning,
+            endpointUrl: meta?.endpointUrl,
+          })
+        }
       >
         Report a bug
       </button>

@@ -78,6 +78,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Probable starters with season stats for a team's next scheduled game.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    stability: "stable",
+    audience: "mixed",
   },
   {
     key: "mlb_season_stats",
@@ -113,24 +115,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Interactive RE24 matrix — click any base/out state to see expected runs and scoring probability.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-  },
-  {
-    key: "mlb-starting-pitcher-matchup",
-    name: "MLB Starting Pitcher Matchup",
-    description: "Pregame pitching edge card for the next MLB matchup.",
-    sportCategory: "MLB",
-    defaultSize: { w: 1, h: 1 },
-    stability: "experimental",
-    audience: "mixed",
-  },
-  {
-    key: "mlb-series-tracker",
-    name: "MLB Series Tracker",
-    description: "Track active and upcoming MLB series with beginner summary and advanced timeline analytics.",
-    sportCategory: "MLB",
-    defaultSize: { w: 1, h: 1 },
-    stability: "experimental",
-    audience: "mixed",
   },
   {
     key: "nba_tonights_slate",

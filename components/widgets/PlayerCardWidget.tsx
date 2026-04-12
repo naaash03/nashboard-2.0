@@ -757,8 +757,12 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
 
   return (
     <div className="space-y-2 text-xs">
+      {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">Player Card</span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Player Card</span>
+          <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">{sportLabel(sportKey)}</span>
+        </div>
         <select
           className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
           value={props.mode}
@@ -770,7 +774,8 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
-      <div className="space-y-2">
+      {/* Sport tabs + search */}
+      <div className="space-y-1.5">
         <TabsRow
           items={SPORT_TABS.map((item) => ({ key: item.key, label: item.label }))}
           value={sportKey}
@@ -778,7 +783,6 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
           disabled={props.locked}
           size="sm"
         />
-
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
@@ -816,47 +820,85 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
+      {/* Profile card */}
       {isProfileLoading ? (
         <p className="text-neutral-400">Loading player profile...</p>
       ) : data ? (
-        <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
-          <div className="flex items-center gap-2">
-            <img src={data.headshot || "/globe.svg"} alt="headshot" className="h-11 w-11 rounded object-cover" />
-            <div>
-              <p className="font-medium">{data.fullName}</p>
-              <p>{compactLine([data.teamName, data.position])}</p>
-              {physicalLine ? <p className="text-neutral-300">{physicalLine}</p> : null}
-              {statusLine ? <p className="text-neutral-400">{statusLine}</p> : null}
+        <div className="space-y-2">
+          {/* Identity block */}
+          <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+            <div className="flex items-start gap-3">
+              <img src={data.headshot || "/globe.svg"} alt="headshot" className="h-12 w-12 shrink-0 rounded object-cover" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-neutral-100">{data.fullName}</p>
+                <p className="text-neutral-300">{compactLine([data.teamName, data.position])}</p>
+                {physicalLine ? <p className="text-neutral-500">{physicalLine}</p> : null}
+              </div>
             </div>
+            {statusLine ? (
+              <div className="mt-2 border-t border-neutral-800 pt-2">
+                <span className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
+                  statusLine.startsWith("LIVE")
+                    ? "border-red-600 bg-red-950 text-red-300"
+                    : statusLine.startsWith("Final")
+                      ? "border-neutral-600 bg-neutral-900 text-neutral-400"
+                      : statusLine.startsWith("Today")
+                        ? "border-sky-600 bg-sky-950 text-sky-300"
+                        : statusLine.startsWith("Status:")
+                          ? "border-amber-600 bg-amber-950 text-amber-300"
+                          : statusLine.startsWith("Recent:")
+                            ? "border-neutral-700 bg-neutral-900 text-neutral-400"
+                            : "border-neutral-700 bg-neutral-900 text-neutral-400"
+                }`}>
+                  {statusLine}
+                </span>
+              </div>
+            ) : null}
           </div>
 
+          {/* Sport-specific detail rows */}
           {extraRows.length > 0 ? (
-            <div className="rounded border border-neutral-800 bg-black/20 p-2">
-              <p className="mb-1 text-[11px] uppercase tracking-wide text-neutral-400">{sportLabel(sportKey)} Details</p>
+            <div className="rounded border border-neutral-800 bg-neutral-950 p-2">
+              <p className="mb-1.5 text-[10px] uppercase tracking-wide text-neutral-500">{sportLabel(sportKey)} Details</p>
               <div className="space-y-1">
                 {extraRows.map((row) => (
-                  <p key={row.label}><span className="text-neutral-400">{row.label}:</span> {row.value}</p>
+                  <div key={row.label} className="flex items-center justify-between">
+                    <span className="text-neutral-400">{row.label}</span>
+                    <span className="text-neutral-200">{row.value}</span>
+                  </div>
                 ))}
               </div>
             </div>
           ) : null}
 
-          {props.mode === "ADVANCED" && data.whyItMatters ? <p className="text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
-          {props.mode === "ADVANCED" && data.learnMore ? (
-            <a href={data.learnMore} target="_blank" rel="noreferrer" className="text-blue-300 underline">Learn more</a>
-          ) : null}
-          {sportKey === "nfl" ? (
-            <div>
-              <button type="button" onClick={() => void addFavorite()} className="text-[11px] underline text-neutral-300">Favorite Player</button>
+          {/* Beginner: Why it matters callout */}
+          {props.mode === "BEGINNER" && data.whyItMatters ? (
+            <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-neutral-500">Why it matters</p>
+              <p className="text-neutral-300">{data.whyItMatters}</p>
+              {data.learnMore ? (
+                <a href={data.learnMore} target="_blank" rel="noreferrer" className="mt-1 block text-[10px] text-blue-400 underline">Learn more</a>
+              ) : null}
             </div>
+          ) : null}
+
+          {sportKey === "nfl" ? (
+            <button type="button" onClick={() => void addFavorite()} className="text-[11px] underline text-neutral-300">Favorite Player</button>
           ) : null}
         </div>
       ) : (
         <p className="text-neutral-400">No player selected.</p>
       )}
 
+      {/* Advanced insights panel */}
       {props.mode === "ADVANCED" && selectedPlayerId ? (
         <div className="space-y-2 rounded border border-neutral-700 bg-neutral-950 p-2">
+          <p className="text-[10px] uppercase tracking-wide text-neutral-500">Advanced Insights</p>
+          {data?.whyItMatters ? <p className="text-neutral-400" title={data.tooltip}>{data.whyItMatters}</p> : null}
+          {data?.learnMore ? (
+            <a href={data.learnMore} target="_blank" rel="noreferrer" className="text-blue-300 underline">Learn more</a>
+          ) : null}
+
           {isInsightsLoading ? <p className="text-neutral-400">Loading advanced insights...</p> : null}
           {!isInsightsLoading && !hasAnyAdvancedInsights ? (
             <p className="text-neutral-400">Advanced insights unavailable right now.</p>
@@ -924,34 +966,34 @@ export default function PlayerCardWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
-      <details className="rounded border border-neutral-700 bg-black/20 p-2">
-        <summary className="cursor-pointer text-[11px] text-neutral-300">Admin / Debug</summary>
-        <p>Local API URL: {endpoint}</p>
-        <p>Sport: {sportKey.toUpperCase()}</p>
-        <p>Request ID: {activeMeta?.requestId ?? "-"}</p>
-        <p>Final upstream URL: {activeMeta?.endpointUrl ?? "-"}</p>
-        <p>Profile warning: {meta?.warning ?? "-"}</p>
-        <p>Insights warning: {insightsMeta?.warning ?? "-"}</p>
-        <p>Profile stats available: {data?.stats ? "yes" : "no"}</p>
-        <p>Last error: {lastError ?? "none"}</p>
-        {props.mode !== "ADVANCED" ? <p className="text-neutral-400">Switch to Advanced mode for deeper diagnostics.</p> : null}
-        {isDev ? (
-          <label className="mt-1 flex items-center gap-2 text-[11px]">
-            <input
-              type="checkbox"
-              checked={showRawSearch}
-              onChange={(event) => setShowRawSearch(event.target.checked)}
-            />
-            Show raw /api/players/search JSON
-          </label>
-        ) : null}
-        {isDev && showRawSearch ? (
-          <pre className="overflow-auto text-[10px]">{JSON.stringify(lastSearchRaw, null, 2)}</pre>
-        ) : null}
-        {props.mode === "ADVANCED" ? (
+      {/* Admin/Debug — Advanced mode only */}
+      {props.mode === "ADVANCED" ? (
+        <details className="rounded border border-neutral-700 bg-black/20 p-2">
+          <summary className="cursor-pointer text-[11px] text-neutral-300">Admin / Debug</summary>
+          <p>Local API URL: {endpoint}</p>
+          <p>Sport: {sportKey.toUpperCase()}</p>
+          <p>Request ID: {activeMeta?.requestId ?? "-"}</p>
+          <p>Final upstream URL: {activeMeta?.endpointUrl ?? "-"}</p>
+          <p>Profile warning: {meta?.warning ?? "-"}</p>
+          <p>Insights warning: {insightsMeta?.warning ?? "-"}</p>
+          <p>Profile stats available: {data?.stats ? "yes" : "no"}</p>
+          <p>Last error: {lastError ?? "none"}</p>
+          {isDev ? (
+            <label className="mt-1 flex items-center gap-2 text-[11px]">
+              <input
+                type="checkbox"
+                checked={showRawSearch}
+                onChange={(event) => setShowRawSearch(event.target.checked)}
+              />
+              Show raw /api/players/search JSON
+            </label>
+          ) : null}
+          {isDev && showRawSearch ? (
+            <pre className="overflow-auto text-[10px]">{JSON.stringify(lastSearchRaw, null, 2)}</pre>
+          ) : null}
           <pre className="overflow-auto text-[10px]">{JSON.stringify({ profileMeta: meta, insightsMeta, insights, profileStats: data?.stats ?? null }, null, 2)}</pre>
-        ) : null}
-      </details>
+        </details>
+      ) : null}
 
       <button
         type="button"

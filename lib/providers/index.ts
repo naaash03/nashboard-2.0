@@ -155,10 +155,14 @@ function mergeTeamSearchRows(primary: TeamSearchResult[], secondary: TeamSearchR
     if (!secondaryRow) {
       return row;
     }
+    // When the match was found by display name (not by key), the primary teamKey may be a
+    // name-derived fallback (e.g. "TBJ" for Toronto Blue Jays). Prefer the secondary
+    // (ESPN) teamKey in that case so the correct abbreviation wins.
+    const matchedByName = !byKey && Boolean(byName);
     return {
       ...secondaryRow,
       ...row,
-      teamKey: row.teamKey || secondaryRow.teamKey,
+      teamKey: matchedByName ? (secondaryRow.teamKey || row.teamKey) : (row.teamKey || secondaryRow.teamKey),
       displayName: row.displayName || secondaryRow.displayName,
       league: row.league || secondaryRow.league,
       abbreviation: row.abbreviation ?? secondaryRow.abbreviation,

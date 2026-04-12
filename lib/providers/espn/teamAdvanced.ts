@@ -33,24 +33,28 @@ type ScoreboardPayload = {
   }>;
 };
 
+type StandingsEntry = {
+  team?: { abbreviation?: string };
+  stats?: Array<{
+    name?: string;
+    type?: string;
+    abbreviation?: string;
+    value?: number;
+    displayValue?: string;
+  }>;
+};
+
 type StandingsPayload = {
   children?: Array<{
     name?: string;
     abbreviation?: string;
-    standings?: {
-      entries?: Array<{
-        team?: {
-          abbreviation?: string;
-        };
-        stats?: Array<{
-          name?: string;
-          type?: string;
-          abbreviation?: string;
-          value?: number;
-          displayValue?: string;
-        }>;
-      }>;
-    };
+    // MLB/NFL: conference → division children, each with standings.entries
+    children?: Array<{
+      name?: string;
+      standings?: { entries?: StandingsEntry[] };
+    }>;
+    // NBA: entries directly on the conference child
+    standings?: { entries?: StandingsEntry[] };
   }>;
 };
 
@@ -199,43 +203,83 @@ function pickStandingStat(
   return {};
 }
 
+// ESPN standings endpoint returns shortened abbreviations for some teams.
+// Map them to the standard 3-4 letter codes used throughout the app.
+const ESPN_ABBREV_EXPAND: Record<string, string> = {
+  // NBA
+  NY: "NYK",   // New York Knicks
+  GS: "GSW",   // Golden State Warriors
+  NO: "NOP",   // New Orleans Pelicans
+  SA: "SAS",   // San Antonio Spurs
+  // MLB
+  SD: "SDP",   // San Diego Padres
+  SF: "SFG",   // San Francisco Giants
+  KC: "KCR",   // Kansas City Royals
+  TB: "TBR",   // Tampa Bay Rays
+  CWS: "CHW",  // Chicago White Sox
+  WSH: "WSN",  // Washington Nationals
+};
+
+function expandEspnAbbrev(raw: string): string {
+  return ESPN_ABBREV_EXPAND[raw] ?? raw;
+}
+
+function parseStandingsEntries(
+  entries: StandingsEntry[],
+  conference: string | undefined,
+  map: Record<string, TeamStandingInfo>,
+  startIndex: number,
+): void {
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const rawKey = readString(entry.team?.abbreviation)?.toUpperCase();
+    if (!rawKey) {
+      continue;
+    }
+    const teamKey = expandEspnAbbrev(rawKey);
+
+    const wins = pickStandingStat(entry.stats, ["wins", "w"]);
+    const losses = pickStandingStat(entry.stats, ["losses", "l"]);
+    const pct = pickStandingStat(entry.stats, ["winpercent", "pct", "wpct"]);
+    const streak = pickStandingStat(entry.stats, ["streak", "strk"]);
+    const last10 = pickStandingStat(entry.stats, ["lasttengames", "last10", "l10"]);
+    const rank = pickStandingStat(entry.stats, ["rank", "playoffseed", "seed"]);
+
+    map[teamKey] = {
+      record: typeof wins.value === "number" && typeof losses.value === "number"
+        ? {
+          wins: wins.value,
+          losses: losses.value,
+          pct: pct.displayValue ?? (typeof pct.value === "number" ? pct.value.toFixed(3) : undefined),
+          streak: streak.displayValue,
+          last10: last10.displayValue,
+        }
+        : null,
+      standings: {
+        rank: rank.displayValue ?? (typeof rank.value === "number" ? String(rank.value) : String(startIndex + index + 1)),
+        division: undefined,
+        conference,
+      },
+    };
+  }
+}
+
 function parseStandings(payload: StandingsPayload): Record<string, TeamStandingInfo> {
   const map: Record<string, TeamStandingInfo> = {};
 
   for (const child of payload.children ?? []) {
     const conference = readString(child.name);
-    const entries = child.standings?.entries ?? [];
+    const directEntries = child.standings?.entries ?? [];
 
-    for (let index = 0; index < entries.length; index += 1) {
-      const entry = entries[index];
-      const teamKey = readString(entry.team?.abbreviation)?.toUpperCase();
-      if (!teamKey) {
-        continue;
+    if (directEntries.length > 0) {
+      // Flat structure: conference → entries (NBA)
+      parseStandingsEntries(directEntries, conference, map, 0);
+    } else {
+      // Nested structure: conference → division → entries (MLB, NFL)
+      for (const division of child.children ?? []) {
+        const divisionEntries = division.standings?.entries ?? [];
+        parseStandingsEntries(divisionEntries, conference, map, 0);
       }
-
-      const wins = pickStandingStat(entry.stats, ["wins", "w"]);
-      const losses = pickStandingStat(entry.stats, ["losses", "l"]);
-      const pct = pickStandingStat(entry.stats, ["winpercent", "pct", "wpct"]);
-      const streak = pickStandingStat(entry.stats, ["streak", "strk"]);
-      const last10 = pickStandingStat(entry.stats, ["lasttengames", "last10", "l10"]);
-      const rank = pickStandingStat(entry.stats, ["rank", "playoffseed", "seed"]);
-
-      map[teamKey] = {
-        record: typeof wins.value === "number" && typeof losses.value === "number"
-          ? {
-            wins: wins.value,
-            losses: losses.value,
-            pct: pct.displayValue ?? (typeof pct.value === "number" ? pct.value.toFixed(3) : undefined),
-            streak: streak.displayValue,
-            last10: last10.displayValue,
-          }
-          : null,
-        standings: {
-          rank: rank.displayValue ?? (typeof rank.value === "number" ? String(rank.value) : String(index + 1)),
-          division: undefined,
-          conference,
-        },
-      };
     }
   }
 
