@@ -54,6 +54,10 @@ export function envDefaultDataMode(): DataMode {
   return "auto";
 }
 
+export function getBallDontLieKey(): string {
+  return process.env.BALL_DONT_LIE_KEY?.trim() ?? "";
+}
+
 export function resolveDataModeFromRequest(req: Request): DataModeResolution {
   return resolveDataModeFromRequestShared(req);
 }
