@@ -20,6 +20,9 @@ import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidge
 import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
 import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
 import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
+import NbaTeamMatchupProfileWidget from "@/components/widgets/NbaTeamMatchupProfileWidget";
+import NbaRestScheduleSpotWidget from "@/components/widgets/NbaRestScheduleSpotWidget";
+import NbaPlayerRoleFormWidget from "@/components/widgets/NbaPlayerRoleFormWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -32,6 +35,7 @@ import {
   type GuestWidgetInstance,
 } from "@/lib/guest/guestDashboard";
 import { resolveDataMode, type DataMode } from "@/lib/dataMode";
+import { canonicalizeWidgetType, formatWidgetTypeLabel } from "@/lib/widgets/widgetType";
 
 type Sport = "NFL" | "NBA" | "MLB";
 
@@ -78,9 +82,7 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_next_7_games: (props) => <MlbNext7GamesWidget {...props} />,
   mlb_pitcher_arsenal: (props) => <MlbPitcherArsenalWidget {...props} />,
   mlb_series_tracker: (props) => <MlbSeriesTrackerWidget {...props} />,
-  "mlb-series-tracker": (props) => <MlbSeriesTrackerWidget {...props} />,
   mlb_starting_pitcher_matchup: (props) => <MlbStartingPitcherMatchupWidget {...props} />,
-  "mlb-starting-pitcher-matchup": (props) => <MlbStartingPitcherMatchupWidget {...props} />,
   mlb_season_stats: (props) => <MlbSeasonStatsWidget {...props} />,
   mlb_platoon_advantage: (props) => <MlbPlatoonAdvantageWidget {...props} />,
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
@@ -88,6 +90,9 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
+  nba_team_matchup_profile: (props) => <NbaTeamMatchupProfileWidget {...props} />,
+  nba_rest_schedule_spot: (props) => <NbaRestScheduleSpotWidget {...props} />,
+  nba_player_role_form: (props) => <NbaPlayerRoleFormWidget {...props} />,
 };
 
 function to12h(value: string): string {
@@ -213,10 +218,12 @@ export default function DashboardPage({
   }, [authConfigured, loadGuest, loadServerDashboard]);
 
   const addWidget = async (widgetType: string) => {
+    const canonicalWidgetType = canonicalizeWidgetType(widgetType);
+
     if (isGuestMode) {
       const next: DashboardWidget = {
         id: `guest-${Date.now()}`,
-        widgetType,
+        widgetType: canonicalWidgetType,
         mode: "BEGINNER",
         x: widgets.length % 4,
         y: Math.floor(widgets.length / 4),
@@ -237,7 +244,7 @@ export default function DashboardPage({
     const response = await fetch("/api/dashboard/widgets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetType, sport, mode: "BEGINNER", config: {} }),
+      body: JSON.stringify({ widgetType: canonicalWidgetType, sport, mode: "BEGINNER", config: {} }),
     });
 
     const payload = (await response.json()) as { error?: string; widget?: Partial<DashboardWidget> };
@@ -560,12 +567,13 @@ export default function DashboardPage({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sortedWidgets.map((widget) => {
-            const Component = WIDGET_COMPONENTS[widget.widgetType];
+            const resolvedWidgetType = canonicalizeWidgetType(widget.widgetType);
+            const Component = WIDGET_COMPONENTS[resolvedWidgetType];
             return (
               <section key={widget.id} className="rounded-xl border border-neutral-800 bg-[#111827] p-3">
                 <div className="mb-2.5 flex items-center justify-between border-b border-neutral-800/60 pb-2">
                   <p className="text-[10px] font-medium uppercase tracking-widest text-neutral-500">
-                    {widget.widgetType.replaceAll("_", " ")}
+                    {formatWidgetTypeLabel(widget.widgetType)}
                   </p>
                   <div className="flex items-center gap-0.5">
                     <button

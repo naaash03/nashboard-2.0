@@ -27,7 +27,7 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-// NBA: top 6 per conference = playoffs, ranks 7–10 = play-in
+// NBA: top 6 per conference = playoffs, ranks 7-10 = play-in
 const PLAYOFF_CUTOFF = 6;
 
 function ConferenceTable({
@@ -151,7 +151,7 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
 
       {meta?.warning ? <p className="text-amber-300">{meta.warning}</p> : null}
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source{" "}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source{" "}
         {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
 

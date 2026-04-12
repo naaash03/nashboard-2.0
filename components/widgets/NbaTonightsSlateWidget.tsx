@@ -199,7 +199,7 @@ export default function NbaTonightsSlateWidget(props: WidgetCommonProps) {
 
       {meta?.warning ? <p className="text-amber-300">{meta.warning}</p> : null}
       <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
       </div>
 
       <button
