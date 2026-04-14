@@ -91,7 +91,7 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
 
       <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-matchup-scenario`}>
-          Demo matchup
+          Matchup scenario
         </label>
         <select
           id={`${props.widgetId}-matchup-scenario`}

@@ -138,7 +138,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "nba_team_matchup_profile",
     name: "NBA Team Matchup Profile",
-    description: "Teachable matchup board for pace, shot profile, and possession battles. Demo-backed for now.",
+    description: "Teachable matchup board with live team form when available, while deeper matchup pillars stay scaffolded until richer NBA split data is wired in.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
     stability: "experimental",
@@ -147,7 +147,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "nba_rest_schedule_spot",
     name: "NBA Rest / Schedule Spot",
-    description: "Rest edge and game-density context that teaches how schedule spots shape matchup risk. Demo-backed for now.",
+    description: "Rest edge and game-density context with live BALLDONTLIE schedule reads when a team key is selected, plus an honest demo fallback.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
     stability: "experimental",
@@ -156,7 +156,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     key: "nba_player_role_form",
     name: "NBA Player Role + Form",
-    description: "Role-based player context for recent form, usage, and lineup responsibility. Demo-backed for now.",
+    description: "Role-based player context with live BALLDONTLIE player lookup and stat-backed form when available, plus an honest scaffold fallback.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
     stability: "experimental",

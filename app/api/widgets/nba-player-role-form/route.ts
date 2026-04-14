@@ -8,18 +8,22 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
   const scenarioId = (searchParams.get("scenario") ?? "").trim() || undefined;
+  const playerName = (searchParams.get("playerName") ?? "").trim() || undefined;
+  const playerTeamKey = (searchParams.get("playerTeamKey") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
-  const resolved = resolveNbaPlayerRoleForm({
+  const resolved = await resolveNbaPlayerRoleForm({
     scenarioId,
+    playerName,
+    playerTeamKey,
     dataMode: resolvedDataMode,
   });
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,
     meta: resolved.meta,
-    primaryProvider: "espn",
-    notes: ["Player role + form is currently served from curated demo scenarios."],
+    primaryProvider: "balldontlie",
+    notes: ["Player lookup uses BALLDONTLIE when a live player is selected; current-role metrics fall back honestly when the stats tier is unavailable."],
   });
 
   return NextResponse.json({

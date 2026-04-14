@@ -1,13 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NbaPlayerRoleFormUi } from "@/lib/templates/nbaPlayerRoleForm";
+import type { PlayerSearchResult } from "@/lib/types/players";
 
 type PlayerRoleFormResponse = {
   data?: NbaPlayerRoleFormUi;
   meta?: WidgetMeta;
   error?: string | null;
+};
+
+type PlayerSearchResponse = {
+  data?: PlayerSearchResult[] | null;
+  error?: { message?: string } | string | null;
 };
 
 function to12h(value: string): string {
@@ -36,19 +43,97 @@ function TrendChip({ trend }: { trend: "up" | "steady" | "down" }) {
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>;
 }
 
+function searchErrorText(raw: PlayerSearchResponse["error"]): string | null {
+  if (!raw) {
+    return null;
+  }
+  if (typeof raw === "string") {
+    return raw;
+  }
+  return raw.message ?? "Player search unavailable.";
+}
+
 export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
   const configuredScenario = typeof props.config.scenarioId === "string" ? props.config.scenarioId : "";
+  const configuredPlayerName = typeof props.config.playerName === "string" ? props.config.playerName : "";
+  const configuredPlayerTeamKey = typeof props.config.playerTeamKey === "string" ? props.config.playerTeamKey.toUpperCase() : "";
   const [scenarioId, setScenarioId] = useState(configuredScenario);
+  const [query, setQuery] = useState(configuredPlayerName);
+  const [selectedPlayerName, setSelectedPlayerName] = useState(configuredPlayerName);
+  const [selectedPlayerTeamKey, setSelectedPlayerTeamKey] = useState(configuredPlayerTeamKey);
+  const [results, setResults] = useState<PlayerSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchWarning, setSearchWarning] = useState<string | null>(null);
   const [data, setData] = useState<NbaPlayerRoleFormUi | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [endpoint, setEndpoint] = useState("");
   const advanced = props.mode === "ADVANCED";
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
 
   useEffect(() => {
     setScenarioId(configuredScenario);
   }, [configuredScenario]);
+
+  useEffect(() => {
+    setQuery(configuredPlayerName);
+    setSelectedPlayerName(configuredPlayerName);
+    setSelectedPlayerTeamKey(configuredPlayerTeamKey);
+  }, [configuredPlayerName, configuredPlayerTeamKey]);
+
+  useEffect(() => {
+    if (debouncedQuery.length < 3 || debouncedQuery === selectedPlayerName.trim()) {
+      setSearchLoading(false);
+      if (debouncedQuery.length < 3) {
+        setResults([]);
+      }
+      return;
+    }
+
+    const controller = new AbortController();
+    setSearchLoading(true);
+
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          sport: "nba",
+          q: debouncedQuery,
+          limit: "8",
+          dataMode: props.dataMode,
+          cacheBust: String(props.refreshTick),
+        });
+        const response = await fetch(`/api/players/search?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = (await response.json()) as PlayerSearchResponse;
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (!response.ok || json.error) {
+          setSearchWarning(searchErrorText(json.error) ?? "Player search unavailable.");
+          setResults([]);
+          return;
+        }
+        setSearchWarning(null);
+        setResults(json.data ?? []);
+      } catch (searchError) {
+        if (!controller.signal.aborted) {
+          setSearchWarning(String(searchError));
+          setResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearchLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedQuery, props.dataMode, props.refreshTick, selectedPlayerName]);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({
@@ -56,7 +141,12 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
       dataMode: props.dataMode,
       cacheBust: String(props.refreshTick),
     });
-    if (scenarioId) {
+    if (selectedPlayerName) {
+      params.set("playerName", selectedPlayerName);
+      if (selectedPlayerTeamKey) {
+        params.set("playerTeamKey", selectedPlayerTeamKey);
+      }
+    } else if (scenarioId) {
       params.set("scenario", scenarioId);
     }
     const url = `/api/widgets/nba-player-role-form?${params.toString()}`;
@@ -76,13 +166,14 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
     } finally {
       setLoading(false);
     }
-  }, [props.dataMode, props.mode, props.refreshTick, scenarioId]);
+  }, [props.dataMode, props.mode, props.refreshTick, scenarioId, selectedPlayerName, selectedPlayerTeamKey]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const currentScenario = scenarioId || data?.selectedScenarioId || "";
+  const currentPlayerName = selectedPlayerName || data?.player.fullName || "";
 
   return (
     <div className="space-y-2 text-xs">
@@ -100,8 +191,84 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
       </div>
 
       <div className="space-y-1">
+        <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-player-search`}>
+          Live player search
+        </label>
+        <div className="flex gap-2">
+          <input
+            id={`${props.widgetId}-player-search`}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search NBA player (3+ chars)"
+            className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+            disabled={props.locked}
+          />
+          <button
+            type="button"
+            className="rounded border border-neutral-700 px-2 py-1 text-neutral-400 disabled:text-neutral-600"
+            disabled={props.locked || (!selectedPlayerName && query.trim().length === 0)}
+            onClick={() => {
+              setQuery("");
+              setSelectedPlayerName("");
+              setSelectedPlayerTeamKey("");
+              setResults([]);
+              void props.onPersist({ config: { ...props.config, playerName: "", playerTeamKey: "" } });
+            }}
+          >
+            Clear
+          </button>
+        </div>
+        {!selectedPlayerName && query.trim().length < 3 ? <p className="text-[10px] text-neutral-500">Type at least 3 characters to search live NBA players.</p> : null}
+        {selectedPlayerName ? (
+          <p className="text-[10px] text-neutral-500">
+            Live selection: {selectedPlayerName}
+            {selectedPlayerTeamKey ? ` (${selectedPlayerTeamKey})` : ""}. Clear to return to the saved demo scenario.
+          </p>
+        ) : null}
+        {searchLoading ? <p className="text-[10px] text-neutral-400">Searching players...</p> : null}
+        {searchWarning ? <p className="text-[10px] text-amber-300">{searchWarning}</p> : null}
+        {!searchLoading && debouncedQuery.length >= 3 && results.length === 0 && !searchWarning && debouncedQuery !== selectedPlayerName.trim()
+          ? <p className="text-[10px] text-neutral-500">No NBA players found for that search.</p>
+          : null}
+        {results.length > 0 ? (
+          <div className="max-h-44 space-y-1 overflow-auto rounded border border-neutral-700 bg-neutral-950 p-1">
+            {results.map((result) => (
+              <button
+                key={`nba-player-${result.playerId}`}
+                type="button"
+                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left hover:bg-neutral-800"
+                onClick={() => {
+                  const nextTeamKey = result.teamAbbr?.toUpperCase() ?? "";
+                  setQuery(result.fullName);
+                  setSelectedPlayerName(result.fullName);
+                  setSelectedPlayerTeamKey(nextTeamKey);
+                  setResults([]);
+                  setSearchWarning(null);
+                  void props.onPersist({
+                    config: {
+                      ...props.config,
+                      playerName: result.fullName,
+                      playerTeamKey: nextTeamKey,
+                    },
+                  });
+                }}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-neutral-100">{result.fullName}</span>
+                  <span className="block truncate text-[11px] text-neutral-400">
+                    {[result.teamName, result.position].filter(Boolean).join(" · ") || "NBA player"}
+                  </span>
+                </span>
+                {result.teamAbbr ? <span className="text-[10px] text-neutral-500">{result.teamAbbr}</span> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-player-scenario`}>
-          Demo player profile
+          Demo fallback scenario
         </label>
         <select
           id={`${props.widgetId}-player-scenario`}
@@ -110,7 +277,11 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
           onChange={(event) => {
             const next = event.target.value;
             setScenarioId(next);
-            void props.onPersist({ config: { ...props.config, scenarioId: next } });
+            setQuery("");
+            setSelectedPlayerName("");
+            setSelectedPlayerTeamKey("");
+            setResults([]);
+            void props.onPersist({ config: { ...props.config, scenarioId: next, playerName: "", playerTeamKey: "" } });
           }}
           disabled={props.locked}
         >
@@ -197,19 +368,23 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
 
             <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-neutral-500">Recent games</p>
-              <div className="mt-2 space-y-2">
-                {data.recentGames.map((game) => (
-                  <div key={`${game.dateLabel}-${game.opponent}`} className="rounded border border-neutral-800 bg-neutral-900/60 p-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium text-neutral-200">
-                        {game.dateLabel} vs {game.opponent}
-                      </p>
-                      <span className="text-[10px] text-neutral-500">{game.line}</span>
+              {data.recentGames.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  {data.recentGames.map((game) => (
+                    <div key={`${game.dateLabel}-${game.opponent}`} className="rounded border border-neutral-800 bg-neutral-900/60 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-neutral-200">
+                          {game.dateLabel} vs {game.opponent}
+                        </p>
+                        <span className="text-[10px] text-neutral-500">{game.line}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-neutral-500">{game.roleNote}</p>
                     </div>
-                    <p className="mt-1 text-[11px] text-neutral-500">{game.roleNote}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-[11px] text-neutral-500">Recent game logs are not available on the current live data path.</p>
+              )}
             </div>
           </div>
 
@@ -237,6 +412,8 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
             endpoint,
             meta,
             scenarioId: currentScenario,
+            playerName: currentPlayerName,
+            playerTeamKey: selectedPlayerTeamKey,
           })
         }
       >

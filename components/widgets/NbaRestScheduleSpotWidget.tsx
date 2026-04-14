@@ -38,7 +38,10 @@ function FactorBadge({ edge }: { edge: "team" | "opponent" | "even" }) {
 
 export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
   const configuredScenario = typeof props.config.scenarioId === "string" ? props.config.scenarioId : "";
+  const configuredTeamKey = typeof props.config.teamKey === "string" ? props.config.teamKey.toUpperCase() : "";
   const [scenarioId, setScenarioId] = useState(configuredScenario);
+  const [teamInput, setTeamInput] = useState(configuredTeamKey);
+  const [activeTeamKey, setActiveTeamKey] = useState(configuredTeamKey);
   const [data, setData] = useState<NbaRestScheduleSpotUi | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,13 +53,20 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
     setScenarioId(configuredScenario);
   }, [configuredScenario]);
 
+  useEffect(() => {
+    setTeamInput(configuredTeamKey);
+    setActiveTeamKey(configuredTeamKey);
+  }, [configuredTeamKey]);
+
   const load = useCallback(async () => {
     const params = new URLSearchParams({
       mode: props.mode.toLowerCase(),
       dataMode: props.dataMode,
       cacheBust: String(props.refreshTick),
     });
-    if (scenarioId) {
+    if (activeTeamKey) {
+      params.set("teamKey", activeTeamKey);
+    } else if (scenarioId) {
       params.set("scenario", scenarioId);
     }
     const url = `/api/widgets/nba-rest-schedule-spot?${params.toString()}`;
@@ -76,13 +86,14 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
     } finally {
       setLoading(false);
     }
-  }, [props.dataMode, props.mode, props.refreshTick, scenarioId]);
+  }, [activeTeamKey, props.dataMode, props.mode, props.refreshTick, scenarioId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const currentScenario = scenarioId || data?.selectedScenarioId || "";
+  const currentTeamKey = activeTeamKey || data?.team.key || "";
 
   return (
     <div className="space-y-2 text-xs">
@@ -100,8 +111,52 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
       </div>
 
       <div className="space-y-1">
+        <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-rest-team-key`}>
+          Live team key
+        </label>
+        <div className="flex gap-2">
+          <input
+            id={`${props.widgetId}-rest-team-key`}
+            value={teamInput}
+            onChange={(event) => setTeamInput(event.target.value.toUpperCase())}
+            placeholder="e.g. MIN"
+            className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+            maxLength={8}
+            disabled={props.locked}
+          />
+          <button
+            type="button"
+            className="rounded border border-neutral-700 px-2 py-1 text-neutral-200 disabled:text-neutral-500"
+            disabled={props.locked || teamInput.trim().length === 0}
+            onClick={() => {
+              const nextTeamKey = teamInput.trim().toUpperCase();
+              setTeamInput(nextTeamKey);
+              setActiveTeamKey(nextTeamKey);
+              void props.onPersist({ config: { ...props.config, teamKey: nextTeamKey } });
+            }}
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            className="rounded border border-neutral-700 px-2 py-1 text-neutral-400 disabled:text-neutral-600"
+            disabled={props.locked || (!activeTeamKey && teamInput.trim().length === 0)}
+            onClick={() => {
+              setTeamInput("");
+              setActiveTeamKey("");
+              void props.onPersist({ config: { ...props.config, teamKey: "" } });
+            }}
+          >
+            Clear
+          </button>
+        </div>
+        {teamInput && teamInput !== activeTeamKey ? <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p> : null}
+        {activeTeamKey ? <p className="text-[10px] text-neutral-500">Live mode will try BALLDONTLIE for {activeTeamKey}; the saved scenario remains the fallback.</p> : null}
+      </div>
+
+      <div className="space-y-1">
         <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-rest-scenario`}>
-          Demo schedule spot
+          Demo fallback scenario
         </label>
         <select
           id={`${props.widgetId}-rest-scenario`}
@@ -110,7 +165,9 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
           onChange={(event) => {
             const next = event.target.value;
             setScenarioId(next);
-            void props.onPersist({ config: { ...props.config, scenarioId: next } });
+            setTeamInput("");
+            setActiveTeamKey("");
+            void props.onPersist({ config: { ...props.config, scenarioId: next, teamKey: "" } });
           }}
           disabled={props.locked}
         >
@@ -247,6 +304,7 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
             endpoint,
             meta,
             scenarioId: currentScenario,
+            teamKey: currentTeamKey,
           })
         }
       >

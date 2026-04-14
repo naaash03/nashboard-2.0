@@ -8,18 +8,20 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
   const scenarioId = (searchParams.get("scenario") ?? "").trim() || undefined;
+  const teamKey = (searchParams.get("teamKey") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
-  const resolved = resolveNbaRestScheduleSpot({
+  const resolved = await resolveNbaRestScheduleSpot({
     scenarioId,
+    teamKey,
     dataMode: resolvedDataMode,
   });
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,
     meta: resolved.meta,
-    primaryProvider: "espn",
-    notes: ["Rest / schedule spot is currently served from curated demo scenarios."],
+    primaryProvider: "balldontlie",
+    notes: ["Rest / schedule context is sourced from BALLDONTLIE when a team key is selected; otherwise the widget stays on its demo scaffold."],
   });
 
   return NextResponse.json({

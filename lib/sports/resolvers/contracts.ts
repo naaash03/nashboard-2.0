@@ -1,7 +1,7 @@
 import type { Meta } from "@/lib/providers/types";
 import type { WidgetPayload } from "@/lib/sports/models";
 
-type PrimaryProvider = "apiSports" | "espn" | "mlb";
+type PrimaryProvider = "apiSports" | "espn" | "mlb" | "balldontlie";
 
 function effectiveProvider(meta: Meta, primary: PrimaryProvider): string {
   if (meta.sourceUsed === "cache") {

@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const scenarioId = (searchParams.get("scenario") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
-  const resolved = resolveNbaTeamMatchupProfile({
+  const resolved = await resolveNbaTeamMatchupProfile({
     scenarioId,
     dataMode: resolvedDataMode,
   });
@@ -18,8 +18,8 @@ export async function GET(req: Request) {
     data: resolved.data,
     error: null,
     meta: resolved.meta,
-    primaryProvider: "espn",
-    notes: ["Team matchup profile is currently served from curated demo scenarios."],
+    primaryProvider: "balldontlie",
+    notes: ["Live team context comes from BALLDONTLIE when available; matchup pillar cards remain scaffolded until richer team split data is connected."],
   });
 
   return NextResponse.json({
