@@ -108,6 +108,17 @@ function playerSearchScore(query: string, player: BallDontLiePlayer, teamKey?: s
   return score;
 }
 
+function searchFallbackTerms(query: string): string[] {
+  const trimmed = query.trim();
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  const candidates = [
+    trimmed,
+    parts.at(-1),
+    parts[0],
+  ];
+  return Array.from(new Set(candidates.filter((value): value is string => Boolean(value && value.trim().length > 0))));
+}
+
 export async function searchNbaPlayers(
   query: string,
   args?: {
@@ -150,14 +161,30 @@ export async function findBestNbaPlayerMatch(
     cacheBust?: CacheBustArg;
   },
 ): Promise<{ data: BallDontLiePlayer | null; meta: Meta }> {
-  const response = await searchNbaPlayers(query, {
-    activeOnly: true,
-    teamId: args?.teamId,
-    dataMode: args?.dataMode,
-    cacheBust: args?.cacheBust,
-  });
+  let response: { data: BallDontLiePlayer[]; meta: Meta } | null = null;
+  const aggregated = new Map<number, BallDontLiePlayer>();
 
-  const ranked = [...response.data].sort((left, right) => {
+  for (const term of searchFallbackTerms(query)) {
+    const next = await searchNbaPlayers(term, {
+      activeOnly: false,
+      teamId: args?.teamId,
+      dataMode: args?.dataMode,
+      cacheBust: args?.cacheBust,
+    });
+    response = response ?? next;
+    for (const player of next.data) {
+      aggregated.set(player.id, player);
+    }
+    if (aggregated.size > 0) {
+      break;
+    }
+  }
+
+  if (!response) {
+    throw new Error("BALLDONTLIE player search query is required.");
+  }
+
+  const ranked = [...aggregated.values()].sort((left, right) => {
     return playerSearchScore(query, right, args?.teamKey) - playerSearchScore(query, left, args?.teamKey);
   });
 

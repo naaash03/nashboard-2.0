@@ -129,19 +129,25 @@ export type NbaPlayerRoleFormRaw = {
 export type TeamMatchupDemoData = NbaTeamMatchupProfileRaw & {
   selectedScenarioId: string;
   availableScenarios: NbaScenarioOption[];
+  sourceState: "live" | "partial" | "hybrid" | "demo";
   sourceLabel: string;
+  sourceDetail: string;
 };
 
 export type RestScheduleDemoData = NbaRestScheduleSpotRaw & {
   selectedScenarioId: string;
   availableScenarios: NbaScenarioOption[];
+  sourceState: "live" | "partial" | "hybrid" | "demo";
   sourceLabel: string;
+  sourceDetail: string;
 };
 
 export type PlayerRoleFormDemoData = NbaPlayerRoleFormRaw & {
   selectedScenarioId: string;
   availableScenarios: NbaScenarioOption[];
+  sourceState: "live" | "partial" | "hybrid" | "demo";
   sourceLabel: string;
+  sourceDetail: string;
 };
 
 function buildMeta(dataMode: DemoDataMode, note: string, warning?: string): Meta {
@@ -153,8 +159,8 @@ function buildMeta(dataMode: DemoDataMode, note: string, warning?: string): Meta
     warning,
     notes: [
       note,
-      "Demo-backed scaffold so the widget renders without extra NBA provider setup.",
-      "Live enrichment is intentionally deferred for a later NBA data pass.",
+      "Demo-backed scaffold so the widget still renders when live NBA data is unavailable or not selected.",
+      "Use a live team or player selection to attempt BALLDONTLIE enrichment where supported.",
     ],
   };
 }
@@ -804,7 +810,9 @@ export function getNbaTeamMatchupProfileDemo(
       ...selected,
       selectedScenarioId: selected.id,
       availableScenarios: scenarioOptions(TEAM_MATCHUP_SCENARIOS),
+      sourceState: "demo",
       sourceLabel: "Demo scouting scenario",
+      sourceDetail: "This matchup board is using curated demo scenarios. No live team data is active on this card yet.",
     },
     meta: buildMeta(dataMode, "Team matchup profile is currently using curated NBA demo scenarios.", warning),
   };
@@ -820,7 +828,9 @@ export function getNbaRestScheduleSpotDemo(
       ...selected,
       selectedScenarioId: selected.id,
       availableScenarios: scenarioOptions(REST_SCENARIOS),
+      sourceState: "demo",
       sourceLabel: "Demo schedule scenario",
+      sourceDetail: "This rest/schedule card is using a saved demo scenario. Set a live NBA team key to switch to BALLDONTLIE schedule data.",
     },
     meta: buildMeta(dataMode, "Rest / schedule spot is currently using curated NBA demo scenarios.", warning),
   };
@@ -836,7 +846,9 @@ export function getNbaPlayerRoleFormDemo(
       ...selected,
       selectedScenarioId: selected.id,
       availableScenarios: scenarioOptions(PLAYER_ROLE_SCENARIOS),
+      sourceState: "demo",
       sourceLabel: "Demo player role scenario",
+      sourceDetail: "This player card is using a curated demo role/form scenario. Search for a live player to attempt BALLDONTLIE enrichment.",
     },
     meta: buildMeta(dataMode, "Player role + form is currently using curated NBA demo scenarios.", warning),
   };

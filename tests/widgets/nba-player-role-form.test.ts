@@ -7,7 +7,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock("@/lib/providers/balldontlie");
+  vi.doUnmock("@/lib/providers/apiSports/playerDirectory");
+  vi.doUnmock("@/lib/providers/apiSports/playerInsights");
   delete process.env.BALL_DONT_LIE_KEY;
+  delete process.env.SPORTS_API_KEY;
+  delete process.env.NBA_LEAGUE_ID;
+  delete process.env.NBA_SEASON;
 });
 
 describe("NBA player role + form route", () => {
@@ -25,6 +30,8 @@ describe("NBA player role + form route", () => {
       selectedScenarioId: expect.any(String),
       availableScenarios: expect.any(Array),
       sourceLabel: expect.any(String),
+      sourceState: "demo",
+      sourceDetail: expect.any(String),
     }));
     expect(body.data.player).toEqual(expect.objectContaining({
       fullName: expect.any(String),
@@ -180,7 +187,197 @@ describe("NBA player role + form route", () => {
     expect(res.status).toBe(200);
     expect(body.meta?.sourceUsed).toBe("balldontlie");
     expect(body.data?.sourceLabel).toContain("Live");
+    expect(body.data?.sourceState).toBe("live");
+    expect(body.data?.sourceDetail).toMatch(/box-score/i);
     expect(body.data?.player?.fullName).toBe("Stephen Curry");
     expect(body.data?.metrics.length).toBeGreaterThan(0);
+  });
+
+  it("falls through to API-Sports when BALLDONTLIE finds the player but stats are unavailable", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.BALL_DONT_LIE_KEY = "test-key";
+    process.env.SPORTS_API_KEY = "live-nba-api-key-2025xx";
+    process.env.NBA_LEAGUE_ID = "12";
+    process.env.NBA_SEASON = "2025";
+
+    const ballMeta = {
+      sourceUsed: "balldontlie" as const,
+      updatedAt: "2026-04-12T12:00:00.000Z",
+      requestId: "partial-player-role",
+      dataMode: "live" as const,
+      dataModeEffective: "live" as const,
+    };
+    const player = {
+      id: 115,
+      first_name: "Stephen",
+      last_name: "Curry",
+      position: "G",
+      jersey_number: "30",
+      team: {
+        id: 10,
+        conference: "West",
+        division: "Pacific",
+        city: "Golden State",
+        name: "Warriors",
+        full_name: "Golden State Warriors",
+        abbreviation: "GSW",
+      },
+    };
+
+    vi.doMock("@/lib/providers/balldontlie", () => ({
+      currentNbaSeason: () => 2025,
+      isBallDontLieConfigured: () => true,
+      findBestNbaPlayerMatch: async () => ({ data: player, meta: ballMeta }),
+      findNbaTeamByKey: async () => ({ data: null, meta: ballMeta }),
+      getNbaPlayerSeasonStats: async () => ({ data: [], meta: ballMeta }),
+      getNbaTeamSeasonGames: async () => ({ data: [], meta: ballMeta }),
+      getNbaTeams: async () => ({ data: [player.team], meta: ballMeta }),
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/playerDirectory", () => ({
+      searchPlayers: async () => ({
+        data: [
+          {
+            playerId: "115",
+            fullName: "Stephen Curry",
+            teamName: "Golden State Warriors",
+            teamAbbr: "GSW",
+            position: "G",
+          },
+        ],
+        meta: {
+          sourceUsed: "apiSports" as const,
+          updatedAt: "2026-04-12T12:00:00.000Z",
+          requestId: "api-player-search-partial",
+          dataMode: "live" as const,
+          dataModeEffective: "live" as const,
+        },
+      }),
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/playerInsights", () => ({
+      getPlayerInsights: async () => ({
+        data: {
+          sport: "nba",
+          playerId: "115",
+          fullName: "Stephen Curry",
+          teamAbbrev: "GSW",
+          teamName: "Golden State Warriors",
+          season: {
+            headline: "PPG 27.2 | RPG 4.8 | APG 6.1",
+            metrics: [
+              { key: "ppg", label: "PPG", value: "27.2" },
+              { key: "rpg", label: "RPG", value: "4.8" },
+              { key: "apg", label: "APG", value: "6.1" },
+            ],
+            source: "derived" as const,
+          },
+          recent: null,
+          injury: null,
+          live: null,
+        },
+        meta: {
+          sourceUsed: "apiSports" as const,
+          updatedAt: "2026-04-12T12:00:00.000Z",
+          requestId: "api-player-insights-partial",
+          dataMode: "live" as const,
+          dataModeEffective: "live" as const,
+        },
+      }),
+    }));
+
+    const mod = await import("@/app/api/widgets/nba-player-role-form/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nba-player-role-form?mode=advanced&dataMode=live&playerName=Stephen%20Curry&playerTeamKey=GSW"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("apiSports");
+    expect(body.data?.sourceState).toBe("partial");
+    expect(body.data?.sourceDetail).toMatch(/API-Sports NBA/i);
+    expect(body.data?.player?.fullName).toBe("Stephen Curry");
+  });
+
+  it("falls back to API-Sports player context before demo when BALLDONTLIE fails", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.BALL_DONT_LIE_KEY = "test-key";
+    process.env.SPORTS_API_KEY = "live-nba-api-key-2025xx";
+    process.env.NBA_LEAGUE_ID = "12";
+    process.env.NBA_SEASON = "2025";
+
+    vi.doMock("@/lib/providers/balldontlie", () => ({
+      currentNbaSeason: () => 2025,
+      isBallDontLieConfigured: () => true,
+      findBestNbaPlayerMatch: async () => {
+        throw new Error("BALLDONTLIE 401: unauthorized");
+      },
+      findNbaTeamByKey: async () => ({ data: null, meta: null }),
+      getNbaPlayerSeasonStats: async () => {
+        throw new Error("BALLDONTLIE 401: unauthorized");
+      },
+      getNbaTeamSeasonGames: async () => ({ data: [], meta: null }),
+      getNbaTeams: async () => ({ data: [], meta: null }),
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/playerDirectory", () => ({
+      searchPlayers: async () => ({
+        data: [
+          {
+            playerId: "115",
+            fullName: "Stephen Curry",
+            teamName: "Golden State Warriors",
+            teamAbbr: "GSW",
+            position: "G",
+          },
+        ],
+        meta: {
+          sourceUsed: "apiSports" as const,
+          updatedAt: "2026-04-12T12:00:00.000Z",
+          requestId: "api-player-search",
+          dataMode: "live" as const,
+          dataModeEffective: "live" as const,
+        },
+      }),
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/playerInsights", () => ({
+      getPlayerInsights: async () => ({
+        data: {
+          sport: "nba",
+          playerId: "115",
+          fullName: "Stephen Curry",
+          teamAbbrev: "GSW",
+          teamName: "Golden State Warriors",
+          season: {
+            headline: "PPG 27.2 | RPG 4.8 | APG 6.1",
+            metrics: [
+              { key: "ppg", label: "PPG", value: "27.2" },
+              { key: "rpg", label: "RPG", value: "4.8" },
+              { key: "apg", label: "APG", value: "6.1" },
+            ],
+            source: "derived" as const,
+          },
+          recent: null,
+          injury: null,
+          live: null,
+        },
+        meta: {
+          sourceUsed: "apiSports" as const,
+          updatedAt: "2026-04-12T12:00:00.000Z",
+          requestId: "api-player-insights",
+          dataMode: "live" as const,
+          dataModeEffective: "live" as const,
+        },
+      }),
+    }));
+
+    const mod = await import("@/app/api/widgets/nba-player-role-form/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nba-player-role-form?mode=advanced&dataMode=live&playerName=Stephen%20Curry&playerTeamKey=GSW"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("apiSports");
+    expect(body.data?.sourceState).toBe("partial");
+    expect(body.data?.sourceDetail).toMatch(/API-Sports NBA/i);
+    expect(body.data?.player?.fullName).toBe("Stephen Curry");
   });
 });

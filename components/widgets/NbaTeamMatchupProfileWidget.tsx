@@ -10,10 +10,41 @@ type TeamMatchupProfileResponse = {
   error?: string | null;
 };
 
+const NBA_TEAM_KEYS = [
+  "ATL", "BOS", "NOP", "CHI", "CLE", "DAL", "DEN", "DET", "GSW", "HOU",
+  "IND", "LAC", "LAL", "MIA", "MIL", "MIN", "BKN", "NYK", "ORL", "PHI",
+  "PHX", "POR", "SAC", "SAS", "OKC", "UTA", "WAS", "TOR", "MEM", "CHA",
+] as const;
+
 function to12h(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
+}
+
+function sourceBadge(
+  sourceState: "live" | "partial" | "hybrid" | "demo",
+  sourceUsed?: WidgetMeta["sourceUsed"],
+): { label: string; className: string } {
+  if (sourceState === "demo" || sourceUsed === "demo" || sourceUsed === "fixture") {
+    return { label: "Demo fallback", className: "border-amber-700 bg-amber-950 text-amber-300" };
+  }
+  if (sourceState === "partial") {
+    return {
+      label: sourceUsed === "cache" ? "Cached partial live" : "Partial live",
+      className: "border-yellow-700 bg-yellow-950 text-yellow-300",
+    };
+  }
+  if (sourceState === "hybrid") {
+    return {
+      label: sourceUsed === "cache" ? "Cached hybrid" : "Hybrid",
+      className: "border-sky-700 bg-sky-950 text-sky-300",
+    };
+  }
+  return {
+    label: sourceUsed === "cache" ? "Cached live" : "Live",
+    className: "border-emerald-700 bg-emerald-950 text-emerald-300",
+  };
 }
 
 function EdgeBadge({ edge }: { edge: "away" | "home" | "even" }) {
@@ -28,7 +59,11 @@ function EdgeBadge({ edge }: { edge: "away" | "home" | "even" }) {
 
 export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
   const configuredScenario = typeof props.config.scenarioId === "string" ? props.config.scenarioId : "";
+  const configuredAwayKey = typeof props.config.awayKey === "string" ? props.config.awayKey.toUpperCase() : "";
+  const configuredHomeKey = typeof props.config.homeKey === "string" ? props.config.homeKey.toUpperCase() : "";
   const [scenarioId, setScenarioId] = useState(configuredScenario);
+  const [awayKey, setAwayKey] = useState(configuredAwayKey);
+  const [homeKey, setHomeKey] = useState(configuredHomeKey);
   const [data, setData] = useState<NbaTeamMatchupProfileUi | null>(null);
   const [meta, setMeta] = useState<WidgetMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +75,11 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
     setScenarioId(configuredScenario);
   }, [configuredScenario]);
 
+  useEffect(() => {
+    setAwayKey(configuredAwayKey);
+    setHomeKey(configuredHomeKey);
+  }, [configuredAwayKey, configuredHomeKey]);
+
   const load = useCallback(async () => {
     const params = new URLSearchParams({
       mode: props.mode.toLowerCase(),
@@ -48,6 +88,10 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
     });
     if (scenarioId) {
       params.set("scenario", scenarioId);
+    }
+    if (awayKey && homeKey) {
+      params.set("awayKey", awayKey);
+      params.set("homeKey", homeKey);
     }
     const url = `/api/widgets/nba-team-matchup-profile?${params.toString()}`;
     setEndpoint(url);
@@ -66,13 +110,14 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
     } finally {
       setLoading(false);
     }
-  }, [props.dataMode, props.mode, props.refreshTick, scenarioId]);
+  }, [awayKey, homeKey, props.dataMode, props.mode, props.refreshTick, scenarioId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const currentScenario = scenarioId || data?.selectedScenarioId || "";
+  const trustBadge = sourceBadge(data?.sourceState ?? "demo", meta?.sourceUsed);
 
   return (
     <div className="space-y-2 text-xs">
@@ -112,6 +157,60 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-matchup-away`}>
+            Away Team Override
+          </label>
+          <select
+            id={`${props.widgetId}-matchup-away`}
+            className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+            value={awayKey}
+            onChange={(event) => {
+              const nextAwayKey = event.target.value;
+              setAwayKey(nextAwayKey);
+              void props.onPersist({ config: { ...props.config, awayKey: nextAwayKey, homeKey } });
+            }}
+            disabled={props.locked}
+          >
+            <option value="">Use scenario away team</option>
+            {NBA_TEAM_KEYS.map((teamKey) => (
+              <option key={`away-${teamKey}`} value={teamKey}>
+                {teamKey}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-matchup-home`}>
+            Home Team Override
+          </label>
+          <select
+            id={`${props.widgetId}-matchup-home`}
+            className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1"
+            value={homeKey}
+            onChange={(event) => {
+              const nextHomeKey = event.target.value;
+              setHomeKey(nextHomeKey);
+              void props.onPersist({ config: { ...props.config, awayKey, homeKey: nextHomeKey } });
+            }}
+            disabled={props.locked}
+          >
+            <option value="">Use scenario home team</option>
+            {NBA_TEAM_KEYS.map((teamKey) => (
+              <option key={`home-${teamKey}`} value={teamKey}>
+                {teamKey}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {awayKey && homeKey ? (
+        <p className="text-[10px] text-neutral-500">Live enrichment is targeting {awayKey} at {homeKey}. Clear either selector to return to the scenario matchup.</p>
+      ) : null}
+
       {loading ? <p className="text-neutral-400">Loading matchup profile...</p> : null}
       {error ? <p className="text-amber-300">{error}</p> : null}
       {meta?.warning ? <p className="text-amber-300">{meta.warning}</p> : null}
@@ -123,10 +222,16 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
               <div>
                 <p className="font-medium text-neutral-100">{data.matchup}</p>
                 <p className="mt-1 text-neutral-400">{data.context}</p>
+                <p className="mt-2 text-[11px] text-neutral-500">{data.sourceDetail}</p>
               </div>
-              <span className="rounded border border-amber-700 bg-amber-950 px-2 py-0.5 text-[10px] font-medium uppercase text-amber-300">
-                {data.sourceLabel}
-              </span>
+              <div className="flex flex-wrap gap-1">
+                <span className={`rounded border px-2 py-0.5 text-[10px] font-medium uppercase ${trustBadge.className}`}>
+                  {trustBadge.label}
+                </span>
+                <span className="rounded border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-[10px] font-medium uppercase text-neutral-300">
+                  {data.sourceLabel}
+                </span>
+              </div>
             </div>
 
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -207,6 +312,8 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
             endpoint,
             meta,
             scenarioId: currentScenario,
+            awayKey,
+            homeKey,
           })
         }
       >

@@ -23,6 +23,31 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+function sourceBadge(
+  sourceState: "live" | "partial" | "hybrid" | "demo",
+  sourceUsed?: WidgetMeta["sourceUsed"],
+): { label: string; className: string } {
+  if (sourceState === "demo" || sourceUsed === "demo" || sourceUsed === "fixture") {
+    return { label: "Demo fallback", className: "border-amber-700 bg-amber-950 text-amber-300" };
+  }
+  if (sourceState === "partial") {
+    return {
+      label: sourceUsed === "cache" ? "Cached partial live" : "Partial live",
+      className: "border-yellow-700 bg-yellow-950 text-yellow-300",
+    };
+  }
+  if (sourceState === "hybrid") {
+    return {
+      label: sourceUsed === "cache" ? "Cached hybrid" : "Hybrid",
+      className: "border-sky-700 bg-sky-950 text-sky-300",
+    };
+  }
+  return {
+    label: sourceUsed === "cache" ? "Cached live" : "Live",
+    className: "border-emerald-700 bg-emerald-950 text-emerald-300",
+  };
+}
+
 function FormBadge({ form }: { form: "hot" | "steady" | "cool" }) {
   const label = form === "hot" ? "Heating up" : form === "steady" ? "Steady role" : "Cooling off";
   const cls = form === "hot"
@@ -174,6 +199,7 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
 
   const currentScenario = scenarioId || data?.selectedScenarioId || "";
   const currentPlayerName = selectedPlayerName || data?.player.fullName || "";
+  const trustBadge = sourceBadge(data?.sourceState ?? "demo", meta?.sourceUsed);
 
   return (
     <div className="space-y-2 text-xs">
@@ -306,10 +332,14 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
                 <p className="mt-1 text-neutral-400">
                   {data.player.teamName} - {data.player.position} - {data.player.role}
                 </p>
+                <p className="mt-2 text-[11px] text-neutral-500">{data.sourceDetail}</p>
               </div>
               <div className="flex flex-wrap gap-1">
                 <FormBadge form={data.form} />
-                <span className="rounded border border-amber-700 bg-amber-950 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-300">
+                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase ${trustBadge.className}`}>
+                  {trustBadge.label}
+                </span>
+                <span className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-[10px] font-medium uppercase text-neutral-300">
                   {data.sourceLabel}
                 </span>
               </div>

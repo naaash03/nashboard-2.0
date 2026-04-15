@@ -10,6 +10,7 @@ export async function GET(req: Request) {
   const scenarioId = (searchParams.get("scenario") ?? "").trim() || undefined;
   const playerName = (searchParams.get("playerName") ?? "").trim() || undefined;
   const playerTeamKey = (searchParams.get("playerTeamKey") ?? "").trim() || undefined;
+  const cacheBust = (searchParams.get("cacheBust") ?? "").trim() || undefined;
   const { resolvedDataMode } = resolveDataModeFromRequest(req);
 
   const resolved = await resolveNbaPlayerRoleForm({
@@ -17,13 +18,17 @@ export async function GET(req: Request) {
     playerName,
     playerTeamKey,
     dataMode: resolvedDataMode,
+    cacheBust,
   });
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,
     meta: resolved.meta,
     primaryProvider: "balldontlie",
-    notes: ["Player lookup uses BALLDONTLIE when a live player is selected; current-role metrics fall back honestly when the stats tier is unavailable."],
+    notes: [
+      resolved.data.sourceDetail,
+      "Player lookup and box-score form use BALLDONTLIE as the primary live path, with API-Sports NBA as the fallback identity/season-context layer before the widget drops to demo.",
+    ],
   });
 
   return NextResponse.json({

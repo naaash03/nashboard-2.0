@@ -21,9 +21,16 @@ import {
   getNbaTeams,
   isBallDontLieConfigured,
 } from "@/lib/providers/balldontlie";
+import { getApiSportsConfig, resolveApiSportsKey } from "@/lib/providers/apiSports/config";
+import { searchPlayers as searchApiSportsPlayers } from "@/lib/providers/apiSports/playerDirectory";
+import { getPlayerInsights as getApiSportsPlayerInsights } from "@/lib/providers/apiSports/playerInsights";
+import { getTeamsAdvanced as getApiSportsTeamsAdvanced } from "@/lib/providers/apiSports/teamAdvanced";
+import type { PlayerSearchResult as ApiSportsPlayerSearchResult } from "@/lib/types/players";
+import type { PlayerInsights, TeamAdvanced } from "@/lib/types/playerInsights";
 
 type DataMode = "auto" | "live" | "fixture";
 type TrendSignal = "up" | "steady" | "down";
+type ApiSportsMode = "live" | "fixture";
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -53,6 +60,20 @@ function teamSide(game: BallDontLieGame, teamId: number): "home" | "away" {
 
 function opponentForTeam(game: BallDontLieGame, teamId: number): BallDontLieTeam {
   return game.home_team.id === teamId ? game.visitor_team : game.home_team;
+}
+
+function matchBallDontLieTeam(teams: BallDontLieTeam[], teamKey: string): BallDontLieTeam | null {
+  const normalizedKey = teamKey.trim().toUpperCase();
+  const normalizedName = normalizeText(teamKey);
+  return teams.find((team) => {
+    if (team.abbreviation.trim().toUpperCase() === normalizedKey) {
+      return true;
+    }
+    if (normalizeText(team.full_name) === normalizedName) {
+      return true;
+    }
+    return normalizeText(`${team.city} ${team.name}`) === normalizedName;
+  }) ?? null;
 }
 
 function teamScore(game: BallDontLieGame, teamId: number): number {
@@ -263,7 +284,7 @@ function withDemoFallback<T>(
   };
 }
 
-function liveAvailability(dataMode: DataMode): { enabled: boolean; warning?: string } {
+function ballDontLieAvailability(dataMode: DataMode): { enabled: boolean; warning?: string } {
   if (dataMode === "fixture") {
     return { enabled: false };
   }
@@ -276,6 +297,134 @@ function liveAvailability(dataMode: DataMode): { enabled: boolean; warning?: str
     };
   }
   return { enabled: true };
+}
+
+function apiSportsAvailability(dataMode: DataMode): { enabled: boolean; warning?: string } {
+  if (dataMode === "fixture") {
+    return { enabled: false };
+  }
+
+  const config = getApiSportsConfig("nba");
+  const apiKey = resolveApiSportsKey()?.trim() ?? "";
+  const invalidApiKey = apiKey.length < 20
+    || /^(YOUR|REPLACE|INSERT|PLACEHOLDER|TEST|SAMPLE|DEMO|FAKE)/i.test(apiKey);
+
+  if (!apiKey || invalidApiKey || !config.baseUrl || !config.league || !config.season) {
+    return {
+      enabled: false,
+      warning: dataMode === "live"
+        ? "API-Sports NBA is not fully configured. Showing the demo-backed NBA scaffold instead."
+        : undefined,
+    };
+  }
+
+  return { enabled: true };
+}
+
+function toApiSportsMode(dataMode: DataMode): ApiSportsMode {
+  return dataMode === "fixture" ? "fixture" : "live";
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s]|_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function seemsTeamKey(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().toUpperCase();
+  if (!trimmed || !/^[A-Z]{2,4}$/.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function formatRecordString(record?: TeamAdvanced["record"] | null): string {
+  if (!record) {
+    return "Record unavailable";
+  }
+  const base = `${record.wins}-${record.losses}`;
+  return record.last10 ? `${base} (${record.last10} last 10)` : base;
+}
+
+function formatStandingsContext(team: TeamAdvanced | null | undefined): string | undefined {
+  if (!team) {
+    return undefined;
+  }
+  const parts = [
+    team.standings?.rank ? `Rank ${team.standings.rank}` : undefined,
+    team.standings?.division,
+    team.record?.streak ? `Streak ${team.record.streak}` : undefined,
+  ];
+  const compact = dedupe(parts);
+  return compact.length > 0 ? compact.join(" | ") : undefined;
+}
+
+function scheduleRestDays(lastWhen?: string, nextWhen?: string): number | undefined {
+  if (!lastWhen || !nextWhen) {
+    return undefined;
+  }
+  const diff = Math.round((new Date(nextWhen).getTime() - new Date(lastWhen).getTime()) / 86_400_000) - 1;
+  return Number.isFinite(diff) ? Math.max(0, diff) : undefined;
+}
+
+function pickTeamByKey(teams: TeamAdvanced[] | undefined, teamKey: string): TeamAdvanced | null {
+  if (!teams || teams.length === 0) {
+    return null;
+  }
+  const normalized = teamKey.trim().toUpperCase();
+  return teams.find((team) => team.teamKey.trim().toUpperCase() === normalized) ?? null;
+}
+
+function hasMeaningfulTeamContext(team: TeamAdvanced | null | undefined): boolean {
+  if (!team) {
+    return false;
+  }
+  return Boolean(team.record || team.standings || team.lastGame || team.nextGame);
+}
+
+function playerSearchScore(query: string, player: ApiSportsPlayerSearchResult, teamKey?: string): number {
+  const normalizedQuery = normalizeText(query);
+  const normalizedPlayer = normalizeText(player.fullName);
+  let score = 0;
+
+  if (normalizedPlayer === normalizedQuery) {
+    score += 150;
+  } else if (normalizedPlayer.startsWith(normalizedQuery)) {
+    score += 100;
+  } else if (normalizedPlayer.includes(normalizedQuery)) {
+    score += 70;
+  }
+
+  if (teamKey && player.teamAbbr?.toUpperCase() === teamKey.toUpperCase()) {
+    score += 35;
+  }
+
+  if (player.teamAbbr) {
+    score += 10;
+  }
+  if (player.position) {
+    score += 5;
+  }
+
+  return score;
+}
+
+async function findBestApiSportsPlayerMatch(
+  query: string,
+  args?: { teamKey?: string; dataMode?: DataMode; cacheBust?: string },
+): Promise<{ data: ApiSportsPlayerSearchResult | null; meta: Meta }> {
+  const response = await searchApiSportsPlayers("nba", query, 8, toApiSportsMode(args?.dataMode ?? "auto"), args?.cacheBust);
+  const ranked = [...(response.data ?? [])].sort((left, right) => {
+    return playerSearchScore(query, right, args?.teamKey) - playerSearchScore(query, left, args?.teamKey);
+  });
+
+  return {
+    data: ranked[0] ?? null,
+    meta: response.meta,
+  };
 }
 
 function playerFullName(player: BallDontLiePlayer): string {
@@ -367,14 +516,409 @@ function roleFromPositionOnly(player: BallDontLiePlayer): { role: string; archet
   };
 }
 
+function roleFromPositionValue(positionRaw?: string): { role: string; archetype: string } {
+  const position = (positionRaw ?? "").toUpperCase();
+  if (position.includes("PG") || position === "G") {
+    return {
+      role: "Guard rotation context",
+      archetype: "Backcourt role read based on roster position only until live game stats are enabled",
+    };
+  }
+  if (position.includes("C")) {
+    return {
+      role: "Frontcourt anchor context",
+      archetype: "Interior role read based on roster position only until live game stats are enabled",
+    };
+  }
+  return {
+    role: "Wing / forward context",
+    archetype: "Wing/forward role read based on roster position only until live game stats are enabled",
+  };
+}
+
+async function resolveApiSportsTeamMatchupProfile(
+  base: { data: TeamMatchupDemoData; meta: Meta },
+  dataMode: DataMode,
+  cacheBust?: string,
+): Promise<{ data: TeamMatchupDemoData; meta: Meta }> {
+  const response = await getApiSportsTeamsAdvanced(
+    "nba",
+    [
+      { teamKey: base.data.away.key, teamName: base.data.away.name },
+      { teamKey: base.data.home.key, teamName: base.data.home.name },
+    ],
+    "advanced",
+    toApiSportsMode(dataMode),
+    cacheBust,
+  );
+
+  const away = pickTeamByKey(response.data?.teams, base.data.away.key);
+  const home = pickTeamByKey(response.data?.teams, base.data.home.key);
+  if (!away || !home || !hasMeaningfulTeamContext(away) || !hasMeaningfulTeamContext(home)) {
+    throw new Error("API-Sports could not resolve both matchup teams.");
+  }
+
+  const awayIdentity = dedupe([base.data.away.identity, formatStandingsContext(away)]).join(" | ");
+  const homeIdentity = dedupe([base.data.home.identity, formatStandingsContext(home)]).join(" | ");
+  const awayRecord = formatRecordString(away.record);
+  const homeRecord = formatRecordString(home.record);
+  const awayLastGame = away.lastGame?.when && away.lastGame?.vs
+    ? `${formatDateLabel(away.lastGame.when)} ${away.lastGame.result ?? ""} vs ${away.lastGame.vs}`.trim()
+    : undefined;
+  const homeLastGame = home.lastGame?.when && home.lastGame?.vs
+    ? `${formatDateLabel(home.lastGame.when)} ${home.lastGame.result ?? ""} vs ${home.lastGame.vs}`.trim()
+    : undefined;
+  const meetingContext = away.nextGame?.vs && seemsTeamKey(away.nextGame.vs) === home.teamKey
+    ? `${away.teamKey} has the next tracked meeting on ${formatDateLabel(away.nextGame.when ?? "")}.`
+    : awayLastGame && homeLastGame
+      ? `Recent schedule context: ${away.teamKey} last saw ${away.lastGame?.vs ?? "-"} on ${formatDateLabel(away.lastGame?.when ?? "")}, while ${home.teamKey} last saw ${home.lastGame?.vs ?? "-"} on ${formatDateLabel(home.lastGame?.when ?? "")}.`
+      : "API-Sports is providing live team context, while the matchup pillars remain scaffolded.";
+
+  return {
+    data: {
+      ...base.data,
+      matchup: `${away.teamName ?? base.data.away.name} at ${home.teamName ?? base.data.home.name}`,
+      context: `API-Sports NBA is supplying the live team context for this matchup. The pillar board remains scaffolded until team split data is connected cleanly.`,
+      beginnerSummary:
+        `${away.teamName ?? base.data.away.name} enters ${awayRecord}. ${home.teamName ?? base.data.home.name} enters ${homeRecord}. `
+        + "The live layer is updating record and schedule context, while the teaching pillars stay scaffolded.",
+      advancedSummary:
+        `${away.teamKey} context: ${formatStandingsContext(away) ?? "standings context limited"}. `
+        + `${home.teamKey} context: ${formatStandingsContext(home) ?? "standings context limited"}. `
+        + "The pillar board is still scaffolded because API-Sports is not giving this widget a clean shot-profile / turnover split feed.",
+      away: {
+        ...base.data.away,
+        key: away.teamKey,
+        name: away.teamName ?? base.data.away.name,
+        record: awayRecord,
+        identity: awayIdentity || base.data.away.identity,
+      },
+      home: {
+        ...base.data.home,
+        key: home.teamKey,
+        name: home.teamName ?? base.data.home.name,
+        record: homeRecord,
+        identity: homeIdentity || base.data.home.identity,
+      },
+      swingFactor: {
+        title: "Live team context, scaffolded pillars",
+        summary: meetingContext,
+      },
+      sourceState: "hybrid",
+      sourceLabel: "Hybrid live matchup board",
+      sourceDetail: "Team records, standings, and last/next game context are live from API-Sports NBA. The pillar board is still scaffolded because richer team split data is not wired cleanly.",
+      teachingPoints: dedupe([
+        ...base.data.teachingPoints,
+        "API-Sports can strengthen the live team context even when the deeper matchup pillars are still scaffolded.",
+        ...(awayLastGame ? [`${away.teamKey} last game: ${awayLastGame}.`] : []),
+        ...(homeLastGame ? [`${home.teamKey} last game: ${homeLastGame}.`] : []),
+      ]),
+    },
+    meta: mergeMeta([response.meta], {
+      notes: [
+        "API-Sports NBA provided the live team record and schedule context for this matchup.",
+        "Matchup pillar cards remain scaffolded because deeper team split data is still unavailable.",
+      ],
+      hydrationUsed: true,
+    }),
+  };
+}
+
+async function resolveApiSportsRestScheduleSpot(
+  base: { data: RestScheduleDemoData; meta: Meta },
+  teamKey: string,
+  dataMode: DataMode,
+  cacheBust?: string,
+): Promise<{ data: RestScheduleDemoData; meta: Meta }> {
+  const teamResponse = await getApiSportsTeamsAdvanced("nba", [teamKey], "advanced", toApiSportsMode(dataMode), cacheBust);
+  const team = pickTeamByKey(teamResponse.data?.teams, teamKey);
+  if (!team || !hasMeaningfulTeamContext(team)) {
+    throw new Error(`API-Sports could not resolve team ${teamKey}.`);
+  }
+
+  const opponentKey = seemsTeamKey(team.nextGame?.vs);
+  const opponentResponse = opponentKey
+    ? await getApiSportsTeamsAdvanced("nba", [opponentKey], "advanced", toApiSportsMode(dataMode), cacheBust)
+    : null;
+  const opponent = opponentKey ? pickTeamByKey(opponentResponse?.data?.teams, opponentKey) : null;
+
+  const teamRest = scheduleRestDays(team.lastGame?.when, team.nextGame?.when);
+  const opponentRest = scheduleRestDays(opponent?.lastGame?.when, opponent?.nextGame?.when);
+  const restEdge = typeof teamRest === "number" && typeof opponentRest === "number"
+    ? compareAdvantage(teamRest, opponentRest)
+    : "even";
+
+  if (!team.nextGame?.when) {
+    return {
+      data: {
+        ...base.data,
+        team: {
+          key: team.teamKey,
+          name: team.teamName ?? base.data.team.name,
+          record: formatRecordString(team.record),
+        },
+        opponent: {
+          key: opponent?.teamKey ?? "-",
+          name: opponent?.teamName ?? "No upcoming opponent",
+          record: opponent ? formatRecordString(opponent.record) : "Schedule not posted",
+        },
+        spotLabel: "Sparse live schedule",
+        signal: "neutral",
+        context: `API-Sports NBA resolved ${team.teamName ?? team.teamKey}, but there is no posted next game in the current schedule window.`,
+        beginnerSummary: `${team.teamName ?? team.teamKey} has no posted next game right now, so this card stays on last-known schedule context instead of inventing a matchup edge.`,
+        advancedSummary:
+          `${team.teamKey} is ${formatRecordString(team.record)}. API-Sports can confirm the team's recent schedule state, but there is no posted next game to support a real rest-vs-opponent comparison.`,
+        factors: [
+          {
+            label: "Schedule status",
+            teamValue: "No next game posted",
+            opponentValue: team.lastGame?.when ? `Last game ${formatDateLabel(team.lastGame.when)}` : "Recent game unavailable",
+            edge: "even",
+            takeaway: "There is no trustworthy next-game rest spot to compare right now.",
+            whyItMatters: "A schedule widget should stay explicit when the next opponent window is missing.",
+          },
+          {
+            label: "Standings context",
+            teamValue: formatStandingsContext(team) ?? formatRecordString(team.record),
+            opponentValue: opponent ? (formatStandingsContext(opponent) ?? formatRecordString(opponent.record)) : "Opponent unavailable",
+            edge: "even",
+            takeaway: "The live layer can still confirm the team's current context without pretending a rest edge exists.",
+            whyItMatters: "Sparse windows are a real NBA product state, especially around schedule gaps and offseason edges.",
+          },
+        ],
+        recentWindow: [{
+          dateLabel: team.lastGame?.when ? formatDateLabel(team.lastGame.when) : "Waiting",
+          site: team.nextGame?.homeAway === "away" ? "@" as const : "vs" as const,
+          opponent: team.lastGame?.vs ?? "-",
+          result: team.lastGame?.result ? `${team.lastGame.result} ${team.lastGame.score ?? ""}`.trim() : undefined,
+          note: "Last known API-Sports NBA schedule context.",
+        }],
+        nextWindow: [{
+          dateLabel: "Waiting",
+          site: "vs" as const,
+          opponent: "-",
+          note: "No upcoming NBA game is posted on the current API-Sports fallback path.",
+        }],
+        teachingPoints: [
+          "API-Sports can confirm live team context even when the next-game window is still sparse.",
+          "A sparse live state is more trustworthy than swapping to a confident demo matchup without telling the user.",
+        ],
+        sourceState: "partial",
+        sourceLabel: "Partial live schedule context",
+        sourceDetail: "API-Sports NBA confirmed the team's current schedule state, but there is no posted next game to support a full rest-vs-opponent comparison.",
+      },
+      meta: mergeMeta([teamResponse.meta], {
+        notes: [
+          "API-Sports NBA provided the fallback schedule context after BALLDONTLIE was unavailable.",
+        ],
+        hydrationUsed: true,
+      }),
+    };
+  }
+
+  const signal = restEdge === "team" ? "positive" : restEdge === "opponent" ? "warning" : "neutral";
+  return {
+    data: {
+      ...base.data,
+      team: {
+        key: team.teamKey,
+        name: team.teamName ?? base.data.team.name,
+        record: formatRecordString(team.record),
+      },
+      opponent: {
+        key: opponent?.teamKey ?? (opponentKey ?? "-"),
+        name: opponent?.teamName ?? (team.nextGame?.vs ?? "Upcoming opponent"),
+        record: opponent ? formatRecordString(opponent.record) : "Opponent record unavailable",
+      },
+      spotLabel: typeof teamRest === "number" && typeof opponentRest === "number"
+        ? (restEdge === "team" ? "Rest edge" : restEdge === "opponent" ? "Stress spot" : "Neutral rest")
+        : "Schedule context",
+      signal,
+      context: `API-Sports NBA fallback resolved the next game for ${team.teamName ?? team.teamKey} on ${formatDateLabel(team.nextGame.when)}.`,
+      beginnerSummary:
+        typeof teamRest === "number" && typeof opponentRest === "number"
+          ? `${team.teamName ?? team.teamKey} has ${teamRest} day(s) off before ${team.nextGame.vs ?? "the next game"}, while the opponent is at ${opponentRest} day(s).`
+          : `${team.teamName ?? team.teamKey} has a posted next game on ${formatDateLabel(team.nextGame.when)}, but the fallback path cannot support the full rest-density-travel read.`,
+      advancedSummary:
+        `${team.teamKey} next game: ${team.nextGame.homeAway === "away" ? "@" : "vs"} ${team.nextGame.vs ?? "-"}. `
+        + `Last game: ${team.lastGame?.result ?? "-"} ${team.lastGame?.score ?? ""}`.trim()
+        + ". This is an API-Sports fallback view, so rest is grounded where dates exist, but density and travel remain limited.",
+      factors: [
+        {
+          label: "Rest days",
+          teamValue: typeof teamRest === "number" ? `${teamRest} day${teamRest === 1 ? "" : "s"} off` : "Unavailable",
+          opponentValue: typeof opponentRest === "number" ? `${opponentRest} day${opponentRest === 1 ? "" : "s"} off` : "Unavailable",
+          edge: restEdge,
+          takeaway:
+            restEdge === "team"
+              ? `${team.teamKey} has the cleaner layoff on the API-Sports fallback path.`
+              : restEdge === "opponent"
+                ? `${opponent?.teamKey ?? "Opponent"} has the cleaner layoff on the fallback path.`
+                : "The fallback path does not show a strong rest edge.",
+          whyItMatters: "Rest can still be grounded from last-game and next-game dates even when deeper schedule modeling is unavailable.",
+        },
+        {
+          label: "Last game",
+          teamValue: team.lastGame?.when ? `${formatDateLabel(team.lastGame.when)} ${team.lastGame.result ?? ""}`.trim() : "Unavailable",
+          opponentValue: opponent?.lastGame?.when ? `${formatDateLabel(opponent.lastGame.when)} ${opponent.lastGame.result ?? ""}`.trim() : "Unavailable",
+          edge: "even",
+          takeaway: "Last-game timing helps explain how much true recovery time each side had.",
+          whyItMatters: "Fallback schedule reads are stronger when they stay anchored to posted game dates instead of guessing travel or fatigue.",
+        },
+        {
+          label: "Standings context",
+          teamValue: formatStandingsContext(team) ?? formatRecordString(team.record),
+          opponentValue: opponent ? (formatStandingsContext(opponent) ?? formatRecordString(opponent.record)) : "Opponent unavailable",
+          edge: "even",
+          takeaway: "The fallback layer can still ground team context even when the full BALLDONTLIE schedule model is unavailable.",
+          whyItMatters: "Schedule spots are easier to interpret when you also know the baseline team context.",
+        },
+      ],
+      recentWindow: [{
+        dateLabel: team.lastGame?.when ? formatDateLabel(team.lastGame.when) : "Waiting",
+        site: team.nextGame?.homeAway === "away" ? "@" as const : "vs" as const,
+        opponent: team.lastGame?.vs ?? "-",
+        result: team.lastGame?.result ? `${team.lastGame.result} ${team.lastGame.score ?? ""}`.trim() : undefined,
+        note: "Last known API-Sports NBA schedule context.",
+      }],
+      nextWindow: [{
+        dateLabel: formatDateLabel(team.nextGame.when),
+        site: team.nextGame.homeAway === "away" ? "@" as const : "vs" as const,
+        opponent: team.nextGame.vs ?? "-",
+        note: "Upcoming game from the API-Sports NBA fallback path.",
+      }],
+      teachingPoints: [
+        "API-Sports fallback can still anchor next-game timing and basic rest without pretending to know more than the dates support.",
+        "When BALLDONTLIE is unavailable, the right fallback is partial live schedule context, not a silent jump to demo.",
+      ],
+      sourceState: "partial",
+      sourceLabel: "Partial live schedule context",
+      sourceDetail: "API-Sports NBA is supplying the fallback next-game and team-context read. Rest can be grounded from posted dates, but density and travel remain limited on this path.",
+    },
+    meta: mergeMeta([teamResponse.meta, ...(opponentResponse ? [opponentResponse.meta] : [])], {
+      notes: [
+        "API-Sports NBA provided the fallback schedule context after BALLDONTLIE was unavailable.",
+      ],
+      hydrationUsed: true,
+    }),
+  };
+}
+
+async function resolveApiSportsPlayerRoleForm(
+  base: { data: PlayerRoleFormDemoData; meta: Meta },
+  args: { playerName: string; playerTeamKey?: string; dataMode: DataMode; cacheBust?: string },
+): Promise<{ data: PlayerRoleFormDemoData; meta: Meta }> {
+  const playerMatch = await findBestApiSportsPlayerMatch(args.playerName, {
+    teamKey: args.playerTeamKey,
+    dataMode: args.dataMode,
+    cacheBust: args.cacheBust,
+  });
+
+  if (!playerMatch.data) {
+    throw new Error(`API-Sports NBA did not return a player match for '${args.playerName}'.`);
+  }
+
+  const livePlayer = playerMatch.data;
+  const insightsResponse = await getApiSportsPlayerInsights(
+    "nba",
+    livePlayer.playerId,
+    "advanced",
+    toApiSportsMode(args.dataMode),
+    args.cacheBust,
+  );
+  const insights: PlayerInsights | null = insightsResponse.data;
+  const position = livePlayer.position ?? base.data.player.position;
+  const fallbackRole = roleFromPositionValue(position);
+  const seasonMetrics = insights?.season?.metrics ?? [];
+  const recentGames = (insights?.recent?.games ?? []).slice(0, 3);
+
+  return {
+    data: {
+      ...base.data,
+      player: {
+        fullName: insights?.fullName ?? livePlayer.fullName,
+        teamKey: insights?.teamAbbrev ?? livePlayer.teamAbbr ?? args.playerTeamKey ?? base.data.player.teamKey,
+        teamName: insights?.teamName ?? livePlayer.teamName ?? base.data.player.teamName,
+        position,
+        role: fallbackRole.role,
+        archetype: fallbackRole.archetype,
+      },
+      form: recentGames.length > 0 ? "steady" : "steady",
+      context: `API-Sports NBA confirmed ${insights?.fullName ?? livePlayer.fullName} and provided season-level player context for this fallback live read.`,
+      beginnerSummary:
+        `${insights?.fullName ?? livePlayer.fullName} is being shown through an API-Sports fallback live profile. `
+        + "Identity and season context are grounded, but this path does not claim a full recent-form model unless recent game data is actually present.",
+      advancedSummary:
+        `${insights?.fullName ?? livePlayer.fullName} is on ${insights?.teamName ?? livePlayer.teamName ?? "an NBA roster"}. `
+        + `${insights?.season?.headline ?? "Season metric detail is limited on the current fallback path."} `
+        + (recentGames.length > 0
+          ? "Recent game context is present, but this still is not a deeper role-modeling layer."
+          : "Recent game context is not available on this fallback path, so the widget stays partial instead of implying live form certainty."),
+      metrics: seasonMetrics.slice(0, 3).map((metric) => ({
+        label: metric.label,
+        seasonValue: metric.value,
+        recentValue: insights?.recent?.headline ?? "Recent split unavailable",
+        trend: "steady" as const,
+        takeaway: "API-Sports is supplying season context here, not a full recent-role model.",
+      })).concat(seasonMetrics.length >= 3 ? [] : [{
+        label: "Live data status",
+        seasonValue: insights?.season?.headline ?? "Season context limited",
+        recentValue: recentGames.length > 0 ? "Recent games available" : "Recent games unavailable",
+        trend: "steady" as const,
+        takeaway: "This fallback path keeps the player card live-backed without overstating recent-form precision.",
+      }]).slice(0, 3),
+      roleSignals: [
+        {
+          label: "Roster context",
+          value: fallbackRole.role,
+          explanation: "The fallback role tag stays grounded in position and live identity rather than pretending deeper role modeling exists.",
+        },
+        {
+          label: "Team",
+          value: insights?.teamAbbrev ?? livePlayer.teamAbbr ?? args.playerTeamKey ?? "-",
+          explanation: "API-Sports still confirms the current team context for this player.",
+        },
+        {
+          label: "Data shape",
+          value: recentGames.length > 0 ? "Season + recent context" : "Season context only",
+          explanation: "This widget only claims the recent-form layer when upstream recent-game data is actually present.",
+        },
+      ],
+      recentGames: recentGames.map((game) => ({
+        dateLabel: game.date ? formatDateLabel(game.date) : "Recent",
+        opponent: game.opponent ?? "-",
+        line: game.line,
+        roleNote: "Recent game context from the API-Sports NBA fallback path.",
+      })),
+      teachingPoints: [
+        "A live player card can still be useful when it stays honest about whether it has season context, recent context, or both.",
+        "Fallback live data should downgrade confidence before it downgrades truthfulness.",
+      ],
+      sourceState: recentGames.length > 0 ? "hybrid" : "partial",
+      sourceLabel: recentGames.length > 0 ? "Hybrid live player context" : "Partial live player context",
+      sourceDetail: recentGames.length > 0
+        ? "API-Sports NBA confirmed the player, team, season context, and a limited recent-game layer. This is still not a full box-score trend model."
+        : "API-Sports NBA confirmed the player identity and season context, but recent game data remains limited. This stays a partial live read instead of implying a full recent-form model.",
+    },
+    meta: mergeMeta([playerMatch.meta, insightsResponse.meta], {
+      notes: [
+        "API-Sports NBA provided the fallback player identity and season-context layer after BALLDONTLIE was unavailable or incomplete.",
+      ],
+      hydrationUsed: true,
+    }),
+  };
+}
+
 async function resolveLiveTeamMatchupProfile(
   base: { data: TeamMatchupDemoData; meta: Meta },
   dataMode: DataMode,
+  cacheBust?: string,
 ): Promise<{ data: TeamMatchupDemoData; meta: Meta }> {
-  const awayTeamLookup = await findNbaTeamByKey(base.data.away.key, dataMode);
-  const homeTeamLookup = await findNbaTeamByKey(base.data.home.key, dataMode);
+  const teamsResponse = await getNbaTeams(dataMode, cacheBust);
+  const awayTeam = matchBallDontLieTeam(teamsResponse.data, base.data.away.key);
+  const homeTeam = matchBallDontLieTeam(teamsResponse.data, base.data.home.key);
 
-  if (!awayTeamLookup.data || !homeTeamLookup.data) {
+  if (!awayTeam || !homeTeam) {
     return withDemoFallback(base, {
       warning: "Live matchup enrichment could not map both NBA teams, so the widget stayed on the demo matchup board.",
       notes: ["BALLDONTLIE team lookup failed for one or both matchup teams."],
@@ -382,31 +926,52 @@ async function resolveLiveTeamMatchupProfile(
   }
 
   const season = currentNbaSeason();
-  const [awaySeason, homeSeason] = await Promise.all([
-    getNbaTeamSeasonGames(awayTeamLookup.data.id, season, dataMode),
-    getNbaTeamSeasonGames(homeTeamLookup.data.id, season, dataMode),
-  ]);
+  let awaySeason: { data: BallDontLieGame[]; meta: Meta };
+  let homeSeason: { data: BallDontLieGame[]; meta: Meta };
+  try {
+    [awaySeason, homeSeason] = await Promise.all([
+      getNbaTeamSeasonGames(awayTeam.id, season, dataMode, cacheBust),
+      getNbaTeamSeasonGames(homeTeam.id, season, dataMode, cacheBust),
+    ]);
+  } catch {
+    return {
+      data: {
+        ...base.data,
+        away: { ...base.data.away, key: awayTeam.abbreviation, name: awayTeam.full_name, record: "Record unavailable" },
+        home: { ...base.data.home, key: homeTeam.abbreviation, name: homeTeam.full_name, record: "Record unavailable" },
+        context: `${awayTeam.full_name} and ${homeTeam.full_name} were confirmed via BALLDONTLIE, but game record data was temporarily unavailable.`,
+        beginnerSummary: `Both teams were confirmed as valid NBA teams, but season record data could not be loaded right now. Try refreshing in a moment.`,
+        advancedSummary: `${awayTeam.abbreviation} and ${homeTeam.abbreviation} confirmed via BALLDONTLIE. Record and form data unavailable — game schedule endpoint was unreachable at this time.`,
+        sourceState: "partial",
+        sourceLabel: "Live team identity, records unavailable",
+        sourceDetail: "Team identities confirmed via BALLDONTLIE. Season record and form data could not be loaded at this time.",
+      },
+      meta: mergeMeta([teamsResponse.meta], {
+        warning: `${awayTeam.abbreviation} and ${homeTeam.abbreviation} confirmed but game record data was unavailable from BALLDONTLIE.`,
+      }),
+    };
+  }
 
-  const awayRecord = buildRecord(awaySeason.data, awayTeamLookup.data.id);
-  const homeRecord = buildRecord(homeSeason.data, homeTeamLookup.data.id);
-  const awayLast10 = buildRecord(awaySeason.data, awayTeamLookup.data.id, 10);
-  const homeLast10 = buildRecord(homeSeason.data, homeTeamLookup.data.id, 10);
-  const awayMargin = averageMargin(awaySeason.data, awayTeamLookup.data.id, 10);
-  const homeMargin = averageMargin(homeSeason.data, homeTeamLookup.data.id, 10);
-  const awayPoints = averagePoints(awaySeason.data, awayTeamLookup.data.id, 10);
-  const homePoints = averagePoints(homeSeason.data, homeTeamLookup.data.id, 10);
+  const awayRecord = buildRecord(awaySeason.data, awayTeam.id);
+  const homeRecord = buildRecord(homeSeason.data, homeTeam.id);
+  const awayLast10 = buildRecord(awaySeason.data, awayTeam.id, 10);
+  const homeLast10 = buildRecord(homeSeason.data, homeTeam.id, 10);
+  const awayMargin = averageMargin(awaySeason.data, awayTeam.id, 10);
+  const homeMargin = averageMargin(homeSeason.data, homeTeam.id, 10);
+  const awayPoints = averagePoints(awaySeason.data, awayTeam.id, 10);
+  const homePoints = averagePoints(homeSeason.data, homeTeam.id, 10);
   const headToHead = awaySeason.data.find((game) => {
-    const opponent = opponentForTeam(game, awayTeamLookup.data!.id);
-    return opponent.id === homeTeamLookup.data!.id && !isFinal(game);
+    const opponent = opponentForTeam(game, awayTeam.id);
+    return opponent.id === homeTeam.id && !isFinal(game);
   }) ?? awaySeason.data
     .filter((game) => {
-      const opponent = opponentForTeam(game, awayTeamLookup.data!.id);
-      return opponent.id === homeTeamLookup.data!.id && isFinal(game);
+      const opponent = opponentForTeam(game, awayTeam.id);
+      return opponent.id === homeTeam.id && isFinal(game);
     })
     .sort((left, right) => new Date(right.datetime ?? right.date).getTime() - new Date(left.datetime ?? left.date).getTime())[0];
 
   const context = headToHead
-    ? `Live records and recent form are pulled from BALLDONTLIE. ${awayTeamLookup.data.abbreviation} and ${homeTeamLookup.data.abbreviation} also have a scheduled or recent head-to-head marker on ${formatDateLabel(headToHead.date)}.`
+    ? `Live records and recent form are pulled from BALLDONTLIE. ${awayTeam.abbreviation} and ${homeTeam.abbreviation} also have a scheduled or recent head-to-head marker on ${formatDateLabel(headToHead.date)}.`
     : "Live records and recent form are pulled from BALLDONTLIE. The matchup pillars below remain a teachable scaffold until richer team split data is wired in.";
 
   return {
@@ -414,24 +979,24 @@ async function resolveLiveTeamMatchupProfile(
       ...base.data,
       context,
       beginnerSummary:
-        `${awayTeamLookup.data.full_name} enters ${awayRecord} overall and ${awayLast10} over the last 10 games. `
-        + `${homeTeamLookup.data.full_name} is ${homeRecord} overall and ${homeLast10} over the same window. `
+        `${awayTeam.full_name} enters ${awayRecord} overall and ${awayLast10} over the last 10 games. `
+        + `${homeTeam.full_name} is ${homeRecord} overall and ${homeLast10} over the same window. `
         + "The live layer updates team form context; the pillar cards stay focused on the teaching angle.",
       advancedSummary:
-        `${awayTeamLookup.data.abbreviation} carries a ${formatSigned(awayMargin)} average margin and ${awayPoints.toFixed(1)} points per game over its last 10. `
-        + `${homeTeamLookup.data.abbreviation} sits at ${formatSigned(homeMargin)} and ${homePoints.toFixed(1)}. `
+        `${awayTeam.abbreviation} carries a ${formatSigned(awayMargin)} average margin and ${awayPoints.toFixed(1)} points per game over its last 10. `
+        + `${homeTeam.abbreviation} sits at ${formatSigned(homeMargin)} and ${homePoints.toFixed(1)}. `
         + "The possession-pillar board remains scaffolded because the current BALLDONTLIE path does not expose team shot-profile splits cleanly.",
       away: {
         ...base.data.away,
-        key: awayTeamLookup.data.abbreviation,
-        name: awayTeamLookup.data.full_name,
+        key: awayTeam.abbreviation,
+        name: awayTeam.full_name,
         record: awayRecord,
         identity: `${base.data.away.identity} · ${awayLast10} last 10`,
       },
       home: {
         ...base.data.home,
-        key: homeTeamLookup.data.abbreviation,
-        name: homeTeamLookup.data.full_name,
+        key: homeTeam.abbreviation,
+        name: homeTeam.full_name,
         record: homeRecord,
         identity: `${base.data.home.identity} · ${homeLast10} last 10`,
       },
@@ -439,20 +1004,22 @@ async function resolveLiveTeamMatchupProfile(
         ? {
             title: `Recent meeting marker: ${formatDateLabel(headToHead.date)}`,
             summary: isFinal(headToHead)
-              ? `The latest tracked meeting ended ${teamScore(headToHead, awayTeamLookup.data.id)}-${opponentScore(headToHead, awayTeamLookup.data.id)} for ${awayTeamLookup.data.abbreviation}. Use it as context, not a full predictive answer.`
+              ? `The latest tracked meeting ended ${teamScore(headToHead, awayTeam.id)}-${opponentScore(headToHead, awayTeam.id)} for ${awayTeam.abbreviation}. Use it as context, not a full predictive answer.`
               : `The next tracked meeting lands on ${formatDateLabel(headToHead.date)}. Current records and last-10 form help frame the spot before richer team split data is connected.`,
           }
         : {
             ...base.data.swingFactor,
-            summary: `${base.data.swingFactor.summary} Live form context: ${awayTeamLookup.data.abbreviation} ${awayLast10} last 10, ${homeTeamLookup.data.abbreviation} ${homeLast10} last 10.`,
+            summary: `${base.data.swingFactor.summary} Live form context: ${awayTeam.abbreviation} ${awayLast10} last 10, ${homeTeam.abbreviation} ${homeLast10} last 10.`,
           },
-      sourceLabel: "Live records + scaffolded matchup board",
+      sourceState: "hybrid",
+      sourceLabel: "Hybrid live matchup board",
+      sourceDetail: "Team records, recent form, and meeting context are live from BALLDONTLIE. The pillar board is still scaffolded because deeper team split data is not connected yet.",
       teachingPoints: dedupe([
         ...base.data.teachingPoints,
         "This live pass updates team records and recent form, but the matchup pillars remain scaffolded until team-level shot and turnover splits are connected.",
       ]),
     },
-    meta: mergeMeta([awayTeamLookup.meta, homeTeamLookup.meta, awaySeason.meta, homeSeason.meta], {
+    meta: mergeMeta([teamsResponse.meta, awaySeason.meta, homeSeason.meta], {
       notes: [
         "Live team records and recent-form context are sourced from BALLDONTLIE.",
         "Matchup pillar cards remain scaffolded because deeper team split data is not wired yet.",
@@ -466,8 +1033,9 @@ async function resolveLiveRestScheduleSpot(
   base: { data: RestScheduleDemoData; meta: Meta },
   teamKey: string,
   dataMode: DataMode,
+  cacheBust?: string,
 ): Promise<{ data: RestScheduleDemoData; meta: Meta }> {
-  const teamLookup = await findNbaTeamByKey(teamKey, dataMode);
+  const teamLookup = await findNbaTeamByKey(teamKey, dataMode, cacheBust);
   if (!teamLookup.data) {
     return withDemoFallback(base, {
       warning: `Unknown NBA team key '${teamKey.toUpperCase()}'. Showing the demo schedule spot instead.`,
@@ -477,17 +1045,109 @@ async function resolveLiveRestScheduleSpot(
 
   const teamInfo = teamLookup.data;
   const season = currentNbaSeason();
-  const teamSeason = await getNbaTeamSeasonGames(teamInfo.id, season, dataMode);
+  let teamSeason: { data: BallDontLieGame[]; meta: Meta };
+  try {
+    teamSeason = await getNbaTeamSeasonGames(teamInfo.id, season, dataMode, cacheBust);
+  } catch {
+    teamSeason = { data: [], meta: teamLookup.meta };
+  }
   const nextGame = upcomingGames(teamSeason.data)[0] ?? null;
   if (!nextGame) {
-    return withDemoFallback(base, {
-      warning: `No upcoming NBA game was found for ${teamInfo.abbreviation}, so the widget stayed on the demo schedule spot.`,
-      notes: ["BALLDONTLIE returned no upcoming game for the requested team."],
-    });
+    const recentCompleted = completedGames(teamSeason.data)
+      .sort((left, right) => new Date(right.datetime ?? right.date).getTime() - new Date(left.datetime ?? left.date).getTime())
+      .slice(0, 3);
+    const teamRecord = buildRecord(teamSeason.data, teamInfo.id);
+
+    return {
+      data: {
+        ...base.data,
+        team: {
+          key: teamInfo.abbreviation,
+          name: teamInfo.full_name,
+          record: recentCompleted.length > 0 ? teamRecord : "No completed games found",
+        },
+        opponent: {
+          key: "-",
+          name: "No upcoming opponent",
+          record: recentCompleted.length > 0 ? "Schedule not posted" : "No live sample",
+        },
+        spotLabel: recentCompleted.length > 0 ? "No upcoming game" : "Sparse live schedule",
+        signal: "neutral",
+        context: `Live schedule lookup found ${teamInfo.full_name}, but no upcoming NBA game is posted in the current BALLDONTLIE season window.`,
+        beginnerSummary: recentCompleted.length > 0
+          ? `${teamInfo.full_name} has no upcoming game posted right now, so this card shifts from matchup prep to last-known schedule context.`
+          : `${teamInfo.full_name} has no upcoming game and no recent live sample in the current season window, so there is no trustworthy rest edge to show.`,
+        advancedSummary: recentCompleted.length > 0
+          ? `${teamInfo.abbreviation} is ${teamRecord} in the current live season sample, but BALLDONTLIE does not show a next scheduled game right now. Use the recent cadence below instead of reading this as a matchup edge.`
+          : `BALLDONTLIE resolved ${teamInfo.abbreviation}, but the current season window does not include a recent or upcoming game sample. The widget stays honest by showing a sparse live state instead of a fake opponent board.`,
+        factors: [
+          {
+            label: "Schedule status",
+            teamValue: recentCompleted.length > 0 ? "No next game posted" : "No live game sample",
+            opponentValue: recentCompleted.length > 0 ? "Recent team context only" : "Not enough live context",
+            edge: "even",
+            takeaway: "There is no live next-game spot to compare right now.",
+            whyItMatters: "A schedule widget should not pretend to have a rest edge when the next opponent or next game window is missing.",
+          },
+          {
+            label: "Current sample",
+            teamValue: recentCompleted.length > 0 ? `${recentCompleted.length} recent finals` : "0 recent finals",
+            opponentValue: recentCompleted.length > 0 ? teamRecord : "No current record",
+            edge: "even",
+            takeaway: recentCompleted.length > 0
+              ? "The most recent finished games still provide cadence context."
+              : "The live sample is too thin to support a matchup-style schedule read.",
+            whyItMatters: "Sparse windows happen in offseason and schedule gaps, so the fallback state needs to be explicit.",
+          },
+        ],
+        recentWindow: recentCompleted.length > 0
+          ? recentCompleted
+            .slice()
+            .reverse()
+            .map((game) => ({
+              dateLabel: formatDateLabel(game.date),
+              site: teamSide(game, teamInfo.id) === "home" ? "vs" as const : "@" as const,
+              opponent: opponentForTeam(game, teamInfo.id).abbreviation,
+              result: `${teamScore(game, teamInfo.id) > opponentScore(game, teamInfo.id) ? "W" : "L"} ${teamScore(game, teamInfo.id)}-${opponentScore(game, teamInfo.id)}`,
+              note: "Last known live game in the current season window.",
+            }))
+          : [{
+              dateLabel: "No games",
+              site: "vs" as const,
+              opponent: "-",
+              note: "No completed games were returned in the current live season window.",
+            }],
+        nextWindow: [{
+          dateLabel: "Waiting",
+          site: "vs" as const,
+          opponent: "-",
+          note: "No upcoming NBA game is posted for this team on the current live path.",
+        }],
+        teachingPoints: [
+          "A missing next game is a real product state, not a signal to fake a rest edge.",
+          "When the live schedule is sparse, the safest read is to show the last known cadence and explain the gap clearly.",
+        ],
+        sourceState: "partial",
+        sourceLabel: "Live sparse schedule state",
+        sourceDetail: "This card is using live BALLDONTLIE team schedule data, but there is no upcoming game posted right now. It shows last-known cadence instead of a fake matchup edge.",
+      },
+      meta: mergeMeta([teamLookup.meta, teamSeason.meta], {
+        warning: `No upcoming NBA game was found for ${teamInfo.abbreviation}. Showing an explicit sparse-schedule state instead of a demo matchup board.`,
+        notes: [
+          "BALLDONTLIE resolved the team successfully, but no upcoming game was returned in the current season window.",
+          "The widget is intentionally rendering a sparse live state rather than switching to a fake opponent scenario.",
+        ],
+      }),
+    };
   }
 
   const opponent = opponentForTeam(nextGame, teamInfo.id);
-  const opponentSeason = await getNbaTeamSeasonGames(opponent.id, season, dataMode);
+  let opponentSeason: { data: BallDontLieGame[]; meta: Meta };
+  try {
+    opponentSeason = await getNbaTeamSeasonGames(opponent.id, season, dataMode, cacheBust);
+  } catch {
+    opponentSeason = { data: [], meta: teamLookup.meta };
+  }
   const previousTeamGame = completedGames(teamSeason.data)
     .filter((game) => new Date(game.datetime ?? game.date).getTime() < new Date(nextGame.datetime ?? nextGame.date).getTime())
     .sort((left, right) => new Date(right.datetime ?? right.date).getTime() - new Date(left.datetime ?? left.date).getTime())[0] ?? null;
@@ -622,7 +1282,9 @@ async function resolveLiveRestScheduleSpot(
         "The cleanest schedule reads compare rest, game density, and travel together instead of treating every back-to-back the same.",
         "This live path teaches where the hidden schedule stress sits, even before deeper rotation data is connected.",
       ],
+      sourceState: "live",
       sourceLabel: "Live schedule context",
+      sourceDetail: "Next game, rest days, game density, and recent travel path are all coming from live BALLDONTLIE team schedule data.",
     },
     meta: mergeMeta([teamLookup.meta, teamSeason.meta, opponentSeason.meta], {
       notes: [
@@ -634,11 +1296,12 @@ async function resolveLiveRestScheduleSpot(
 
 async function resolveLivePlayerRoleForm(
   base: { data: PlayerRoleFormDemoData; meta: Meta },
-  args: { playerName: string; playerTeamKey?: string; dataMode: DataMode },
+  args: { playerName: string; playerTeamKey?: string; dataMode: DataMode; cacheBust?: string },
 ): Promise<{ data: PlayerRoleFormDemoData; meta: Meta }> {
   const playerMatch = await findBestNbaPlayerMatch(args.playerName, {
     teamKey: args.playerTeamKey,
     dataMode: args.dataMode,
+    cacheBust: args.cacheBust,
   });
 
   if (!playerMatch.data) {
@@ -656,8 +1319,9 @@ async function resolveLivePlayerRoleForm(
       getNbaPlayerSeasonStats(livePlayer.id, {
         season: currentNbaSeason(),
         dataMode: args.dataMode,
+        cacheBust: args.cacheBust,
       }),
-      getNbaTeams(args.dataMode),
+      getNbaTeams(args.dataMode, args.cacheBust),
     ]);
 
     if (statsResponse.data.length === 0) {
@@ -693,11 +1357,12 @@ async function resolveLivePlayerRoleForm(
         form,
         context: `Live player lookup and current-season game stats are sourced from BALLDONTLIE for ${playerFullName(livePlayer)}.`,
         beginnerSummary:
-          `${playerFullName(livePlayer)} is now running through a live role + form read. `
+          `${playerFullName(livePlayer)} is now running through a live box-score trend read. `
           + `Recent scoring sits at ${recentPts.toFixed(1)} points versus a ${seasonPts.toFixed(1)} season baseline, which frames the current form signal.`,
         advancedSummary:
           `${playerFullName(livePlayer)} carries ${seasonPts.toFixed(1)} PTS, ${seasonAst.toFixed(1)} AST, `
-          + `and ${seasonMin.toFixed(1)} MIN on the season, versus ${recentPts.toFixed(1)}, ${recentAst.toFixed(1)}, and ${recentMin.toFixed(1)} over the latest five-game window.`,
+          + `and ${seasonMin.toFixed(1)} MIN on the season, versus ${recentPts.toFixed(1)}, ${recentAst.toFixed(1)}, and ${recentMin.toFixed(1)} over the latest five-game window. `
+          + "This is a live box-score trend read, not a full play-type or on/off role model.",
         metrics: [
           {
             label: "Scoring load",
@@ -759,11 +1424,14 @@ async function resolveLivePlayerRoleForm(
           "Live role reads get more trustworthy when recent production is compared to the season baseline instead of raw game highs.",
           "Minutes and secondary stats help explain whether a scoring spike came from a real role change or just shot variance.",
         ],
+        sourceState: "live",
         sourceLabel: "Live player form",
+        sourceDetail: "Player identity plus season and recent box-score trends are live from BALLDONTLIE. This is a trustworthy box-score role/form read, not a deeper play-type model.",
       },
       meta: mergeMeta([playerMatch.meta, statsResponse.meta, teamsResponse.meta], {
         notes: [
           "Player lookup and current-season game stats are sourced live from BALLDONTLIE.",
+          "Recent form is based on season and last-five box-score averages rather than a full possession-level role model.",
         ],
       }),
     };
@@ -832,7 +1500,9 @@ async function resolveLivePlayerRoleForm(
           "Roster context and form are different things. A player can be identified live without the stats access needed to measure recent trend.",
           "This honest fallback keeps the widget usable while showing exactly what the current data tier cannot support yet.",
         ],
-        sourceLabel: "Live player lookup",
+        sourceState: "partial",
+        sourceLabel: "Partial live player context",
+        sourceDetail: "BALLDONTLIE confirmed the player and current team context, but the current data tier did not return the game-log stats needed for a real recent-form model.",
       },
       meta: mergeMeta([playerMatch.meta], {
         warning: String(error),
@@ -846,57 +1516,117 @@ async function resolveLivePlayerRoleForm(
 
 export async function resolveNbaTeamMatchupProfile(args: {
   scenarioId?: string;
+  awayKey?: string;
+  homeKey?: string;
   dataMode: DataMode;
+  cacheBust?: string;
 }) {
   const base = getNbaTeamMatchupProfileDemo(args.scenarioId, args.dataMode);
-  const live = liveAvailability(args.dataMode);
-  if (!live.enabled) {
-    return live.warning
-      ? withDemoFallback(base, {
-          warning: live.warning,
-          notes: ["The NBA matchup profile stayed on the scaffold because BALLDONTLIE was not available."],
-        })
-      : base;
+  const overrideAwayKey = args.awayKey?.trim().toUpperCase();
+  const overrideHomeKey = args.homeKey?.trim().toUpperCase();
+  if (overrideAwayKey && overrideHomeKey) {
+    base.data.away.key = overrideAwayKey;
+    base.data.home.key = overrideHomeKey;
+  }
+  const ball = ballDontLieAvailability(args.dataMode);
+  const apiSports = apiSportsAvailability(args.dataMode);
+
+  // Track whether BALLDONTLIE attempted enrichment but could not match the team abbreviations.
+  // This lets the final fallback explain why demo is shown even when BALLDONTLIE is configured.
+  let ballTeamMismatch = false;
+
+  if (ball.enabled) {
+    try {
+      const resolved = await resolveLiveTeamMatchupProfile(base, args.dataMode, args.cacheBust);
+      if (resolved.meta.sourceUsed !== "demo") {
+        return resolved;
+      }
+      ballTeamMismatch = true;
+    } catch (error) {
+      if (!apiSports.enabled) {
+        return withDemoFallback(base, {
+          warning: `Live matchup enrichment failed, so the widget fell back to the demo board. ${String(error)}`,
+          notes: ["BALLDONTLIE live matchup enrichment failed during resolver execution."],
+        });
+      }
+    }
   }
 
-  try {
-    return await resolveLiveTeamMatchupProfile(base, args.dataMode);
-  } catch (error) {
-    return withDemoFallback(base, {
-      warning: `Live matchup enrichment failed, so the widget fell back to the demo board. ${String(error)}`,
-      notes: ["BALLDONTLIE live matchup enrichment failed during resolver execution."],
-    });
+  if (apiSports.enabled) {
+    try {
+      return await resolveApiSportsTeamMatchupProfile(base, args.dataMode, args.cacheBust);
+    } catch (error) {
+      return withDemoFallback(base, {
+        warning: `Live matchup enrichment failed on both NBA providers, so the widget fell back to the demo board. ${String(error)}`,
+        notes: [
+          ...(ball.enabled ? ["BALLDONTLIE live matchup enrichment failed during resolver execution."] : []),
+          "API-Sports NBA matchup fallback also failed during resolver execution.",
+        ],
+      });
+    }
   }
+
+  const demoWarning = ball.warning
+    ?? apiSports.warning
+    ?? (ballTeamMismatch
+      ? `BALLDONTLIE could not match the team abbreviations for this matchup. Try selecting teams via the Away/Home dropdowns using standard NBA keys (e.g. LAL, GSW, NYK). Showing the demo board.`
+      : `No live NBA provider is configured. Showing the demo matchup board.`);
+
+  return withDemoFallback(base, {
+    warning: demoWarning,
+    notes: ["The NBA matchup profile stayed on the scaffold because no live NBA provider was available."],
+  });
 }
 
 export async function resolveNbaRestScheduleSpot(args: {
   scenarioId?: string;
   teamKey?: string;
   dataMode: DataMode;
+  cacheBust?: string;
 }) {
   const base = getNbaRestScheduleSpotDemo(args.scenarioId, args.dataMode);
-  const live = liveAvailability(args.dataMode);
+  const ball = ballDontLieAvailability(args.dataMode);
+  const apiSports = apiSportsAvailability(args.dataMode);
   const requestedTeamKey = args.teamKey?.trim().toUpperCase();
 
   if (!requestedTeamKey) {
     return base;
   }
 
-  if (!live.enabled) {
-    return withDemoFallback(base, {
-      warning: live.warning ?? `BALL_DONT_LIE_KEY is not configured, so live schedule data is unavailable for ${requestedTeamKey}. Showing the demo schedule spot instead.`,
-      notes: ["The NBA rest/schedule widget stayed on the scaffold because BALLDONTLIE was not available."],
-    });
+  if (ball.enabled) {
+    try {
+      const resolved = await resolveLiveRestScheduleSpot(base, requestedTeamKey, args.dataMode, args.cacheBust);
+      if (resolved.meta.sourceUsed !== "demo") {
+        return resolved;
+      }
+    } catch (error) {
+      if (!apiSports.enabled) {
+        return withDemoFallback(base, {
+          warning: `Live schedule enrichment failed for ${requestedTeamKey}, so the widget fell back to the demo spot. ${String(error)}`,
+          notes: ["BALLDONTLIE live rest/schedule enrichment failed during resolver execution."],
+        });
+      }
+    }
   }
 
-  try {
-    return await resolveLiveRestScheduleSpot(base, requestedTeamKey, args.dataMode);
-  } catch (error) {
-    return withDemoFallback(base, {
-      warning: `Live schedule enrichment failed for ${requestedTeamKey}, so the widget fell back to the demo spot. ${String(error)}`,
-      notes: ["BALLDONTLIE live rest/schedule enrichment failed during resolver execution."],
-    });
+  if (apiSports.enabled) {
+    try {
+      return await resolveApiSportsRestScheduleSpot(base, requestedTeamKey, args.dataMode, args.cacheBust);
+    } catch (error) {
+      return withDemoFallback(base, {
+        warning: `Live schedule enrichment failed for ${requestedTeamKey} on both NBA providers, so the widget fell back to the demo spot. ${String(error)}`,
+        notes: [
+          ...(ball.enabled ? ["BALLDONTLIE live rest/schedule enrichment failed during resolver execution."] : []),
+          "API-Sports NBA rest/schedule fallback also failed during resolver execution.",
+        ],
+      });
+    }
   }
+
+  return withDemoFallback(base, {
+    warning: ball.warning ?? apiSports.warning ?? `No live NBA provider is configured for ${requestedTeamKey}. Showing the demo schedule spot instead.`,
+    notes: ["The NBA rest/schedule widget stayed on the scaffold because no live NBA provider was available."],
+  });
 }
 
 export async function resolveNbaPlayerRoleForm(args: {
@@ -904,32 +1634,75 @@ export async function resolveNbaPlayerRoleForm(args: {
   playerName?: string;
   playerTeamKey?: string;
   dataMode: DataMode;
+  cacheBust?: string;
 }) {
   const base = getNbaPlayerRoleFormDemo(args.scenarioId, args.dataMode);
-  const live = liveAvailability(args.dataMode);
+  const ball = ballDontLieAvailability(args.dataMode);
+  const apiSports = apiSportsAvailability(args.dataMode);
   const requestedPlayerName = args.playerName?.trim();
 
   if (!requestedPlayerName) {
     return base;
   }
 
-  if (!live.enabled) {
-    return withDemoFallback(base, {
-      warning: live.warning ?? `BALL_DONT_LIE_KEY is not configured, so live player data is unavailable for ${requestedPlayerName}. Showing the demo player card instead.`,
-      notes: ["The NBA player-role widget stayed on the scaffold because BALLDONTLIE was not available."],
-    });
+  // Save a partial result from BALLDONTLIE (player found, stats unavailable) so it can be
+  // returned as a fallback when API-Sports is also unavailable. Partial is better than demo
+  // because it carries real player identity, team, and position.
+  let ballPartialResult: { data: PlayerRoleFormDemoData; meta: Meta } | null = null;
+
+  if (ball.enabled) {
+    try {
+      const resolved = await resolveLivePlayerRoleForm(base, {
+        playerName: requestedPlayerName,
+        playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
+        dataMode: args.dataMode,
+        cacheBust: args.cacheBust,
+      });
+      if (resolved.data.sourceState === "live") {
+        return resolved;
+      }
+      if (resolved.data.sourceState === "partial") {
+        ballPartialResult = resolved;
+      }
+    } catch (error) {
+      if (!apiSports.enabled) {
+        return withDemoFallback(base, {
+          warning: `Live player enrichment failed for ${requestedPlayerName}, so the widget fell back to the demo profile. ${String(error)}`,
+          notes: ["BALLDONTLIE live player-role enrichment failed during resolver execution."],
+        });
+      }
+    }
   }
 
-  try {
-    return await resolveLivePlayerRoleForm(base, {
-      playerName: requestedPlayerName,
-      playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
-      dataMode: args.dataMode,
-    });
-  } catch (error) {
-    return withDemoFallback(base, {
-      warning: `Live player enrichment failed for ${requestedPlayerName}, so the widget fell back to the demo profile. ${String(error)}`,
-      notes: ["BALLDONTLIE live player-role enrichment failed during resolver execution."],
-    });
+  if (apiSports.enabled) {
+    try {
+      return await resolveApiSportsPlayerRoleForm(base, {
+        playerName: requestedPlayerName,
+        playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
+        dataMode: args.dataMode,
+        cacheBust: args.cacheBust,
+      });
+    } catch (error) {
+      if (ballPartialResult) {
+        return ballPartialResult;
+      }
+      return withDemoFallback(base, {
+        warning: `Live player enrichment failed for ${requestedPlayerName} on both NBA providers, so the widget fell back to the demo profile. ${String(error)}`,
+        notes: [
+          ...(ball.enabled ? ["BALLDONTLIE live player-role enrichment failed during resolver execution."] : []),
+          "API-Sports NBA player fallback also failed during resolver execution.",
+        ],
+      });
+    }
   }
+
+  // Prefer the partial live result (real player identity + team context) over a pure demo fallback.
+  if (ballPartialResult) {
+    return ballPartialResult;
+  }
+
+  return withDemoFallback(base, {
+    warning: ball.warning ?? apiSports.warning ?? `No live NBA provider is configured for ${requestedPlayerName}. Showing the demo player card instead.`,
+    notes: ["The NBA player-role widget stayed on the scaffold because no live NBA provider was available."],
+  });
 }
