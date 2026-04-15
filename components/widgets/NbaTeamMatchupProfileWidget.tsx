@@ -84,8 +84,10 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
     const params = new URLSearchParams({
       mode: props.mode.toLowerCase(),
       dataMode: props.dataMode,
-      cacheBust: String(props.refreshTick),
     });
+    if (props.refreshTick > 0) {
+      params.set("cacheBust", String(props.refreshTick));
+    }
     if (scenarioId) {
       params.set("scenario", scenarioId);
     }

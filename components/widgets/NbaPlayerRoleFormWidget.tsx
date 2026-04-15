@@ -126,8 +126,10 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
           q: debouncedQuery,
           limit: "8",
           dataMode: props.dataMode,
-          cacheBust: String(props.refreshTick),
         });
+        if (props.refreshTick > 0) {
+          params.set("cacheBust", String(props.refreshTick));
+        }
         const response = await fetch(`/api/players/search?${params.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
@@ -164,8 +166,10 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
     const params = new URLSearchParams({
       mode: props.mode.toLowerCase(),
       dataMode: props.dataMode,
-      cacheBust: String(props.refreshTick),
     });
+    if (props.refreshTick > 0) {
+      params.set("cacheBust", String(props.refreshTick));
+    }
     if (selectedPlayerName) {
       params.set("playerName", selectedPlayerName);
       if (selectedPlayerTeamKey) {

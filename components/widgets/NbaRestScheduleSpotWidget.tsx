@@ -87,8 +87,10 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
     const params = new URLSearchParams({
       mode: props.mode.toLowerCase(),
       dataMode: props.dataMode,
-      cacheBust: String(props.refreshTick),
     });
+    if (props.refreshTick > 0) {
+      params.set("cacheBust", String(props.refreshTick));
+    }
     if (activeTeamKey) {
       params.set("teamKey", activeTeamKey);
     } else if (scenarioId) {
