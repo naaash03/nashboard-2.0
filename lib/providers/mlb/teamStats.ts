@@ -38,6 +38,9 @@ export type MlbRecentForm = {
 export type MlbPlayerSearchResult = {
   playerId: string;
   fullName: string;
+  teamName?: string;
+  position?: string;
+  isPitcher?: boolean;
 };
 
 export type MlbRecentResult = {
@@ -329,7 +332,16 @@ function gameTypeLabel(gameType?: string): string | undefined {
 // ── searchPlayers ────────────────────────────────────────────────────────────
 
 type MlbPeopleSearchResponse = {
-  people?: Array<{ id?: number; fullName?: string }>;
+  people?: Array<{
+    id?: number;
+    fullName?: string;
+    currentTeam?: { name?: string };
+    primaryPosition?: {
+      name?: string;
+      type?: string;
+      abbreviation?: string;
+    };
+  }>;
 };
 
 export async function mlbSearchPlayers(
@@ -354,8 +366,19 @@ export async function mlbSearchPlayers(
 
   const people = (response.data.people ?? []).slice(0, cappedLimit);
   const data = people
-    .filter((p): p is { id: number; fullName: string } => Boolean(p.id && p.fullName))
-    .map((p) => ({ playerId: String(p.id), fullName: p.fullName }));
+    .filter((p): p is { id: number; fullName: string; currentTeam?: { name?: string }; primaryPosition?: { name?: string; type?: string; abbreviation?: string } } => Boolean(p.id && p.fullName))
+    .map((p) => {
+      const position = p.primaryPosition?.abbreviation ?? p.primaryPosition?.name ?? p.primaryPosition?.type;
+      const type = (p.primaryPosition?.type ?? p.primaryPosition?.name ?? p.primaryPosition?.abbreviation ?? "").toLowerCase();
+      const isPitcher = type.includes("pitcher") || p.primaryPosition?.abbreviation === "P";
+      return {
+        playerId: String(p.id),
+        fullName: p.fullName,
+        teamName: p.currentTeam?.name,
+        position,
+        isPitcher,
+      };
+    });
 
   return { data: data.length > 0 ? data : null, meta: response.meta };
 }

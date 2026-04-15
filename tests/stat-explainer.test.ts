@@ -13,6 +13,10 @@ describe("stat explainer glossary lookup", () => {
     expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { key: "kPer9", sport: "MLB" })?.key).toBe("k_per_9");
     expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { key: "inningsPitched", sport: "MLB" })?.key).toBe("innings_pitched");
     expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { label: "Team OBP", sport: "MLB" })?.key).toBe("obp");
+    expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { label: "Usage %", sport: "MLB" })?.key).toBe("pitch_usage_pct");
+    expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { label: "usage percent", sport: "MLB" })?.key).toBe("pitch_usage_pct");
+    expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { label: "Mix Share", sport: "MLB" })?.key).toBe("pitch_usage_pct");
+    expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { label: "Velo", sport: "MLB" })?.key).toBe("velocity_mph");
     expect(lookupGlossaryTerm(BUILTIN_GLOSSARY_TERMS, { key: "pass_ypg", sport: "NFL" })?.key).toBe("pass_ypg");
   });
 
@@ -67,9 +71,9 @@ describe("stat explainer rollout wiring", () => {
       "components/widgets/MlbSeriesTrackerWidget.tsx",
       "components/widgets/MlbPlatoonAdvantageWidget.tsx",
       "components/widgets/MlbRecentFormWidget.tsx",
+      "components/widgets/MlbPitcherArsenalWidget.tsx",
       "components/widgets/MlbBullpenFatigueWidget.tsx",
       "components/widgets/MlbRunExpectancyWidget.tsx",
-      "components/widgets/NbaStandingsWidget.tsx",
       "components/widgets/PlayerCardWidget.tsx",
       "components/widgets/WatchlistWidget.tsx",
     ];

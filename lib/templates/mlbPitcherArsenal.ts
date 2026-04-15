@@ -11,11 +11,29 @@ export type MlbPitcherArsenalUi = {
   }>;
 };
 
+function sortArsenalPitches(pitches: PitcherArsenal["pitches"]): PitcherArsenal["pitches"] {
+  return [...pitches].sort((left, right) => {
+    const usageDelta = (right.usagePct ?? -1) - (left.usagePct ?? -1);
+    if (usageDelta !== 0) {
+      return usageDelta;
+    }
+
+    const velocityDelta = (right.velocityMph ?? -1) - (left.velocityMph ?? -1);
+    if (velocityDelta !== 0) {
+      return velocityDelta;
+    }
+
+    return left.type.localeCompare(right.type);
+  });
+}
+
 export function shapeMlbPitcherArsenal(data: PitcherArsenal, mode: Mode): MlbPitcherArsenalUi {
+  const pitches = sortArsenalPitches(data.pitches);
+
   return {
     playerId: data.playerId,
     playerName: data.playerName,
-    pitches: data.pitches.map((pitch) => {
+    pitches: pitches.map((pitch) => {
       if (mode === "advanced") {
         return {
           type: pitch.type,

@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeEach(() => {
   vi.resetModules();
@@ -35,44 +35,87 @@ describe("MLB pitcher arsenal route", () => {
       type: expect.any(String),
       usagePct: expect.any(Number),
     }));
+    expect(body.data.playerName).toBe("Corbin Burnes");
+    expect(body.data.pitches[0].type).toBe("Four-Seam Fastball");
   });
 
-  it("resolves a pitcher name input to numeric playerId", async () => {
+  it("resolves a pitcher name input to the MLB pitcher personId before loading arsenal", async () => {
+    const searchPlayers = vi.fn(async () => ({
+      data: [
+        { playerId: "605280", fullName: "Clay Holmes", position: "P", isPitcher: true },
+      ],
+      meta: {
+        sourceUsed: "fixture",
+        updatedAt: new Date().toISOString(),
+        requestId: "mock-search",
+        dataMode: "fixture",
+      },
+    }));
+    const getPitcherArsenal = vi.fn(async () => ({
+      data: {
+        playerId: "605280",
+        playerName: "Clay Holmes",
+        pitches: [
+          { type: "Sinker", usagePct: 41.2, velocityMph: 96.8 },
+        ],
+      },
+      meta: {
+        sourceUsed: "fixture",
+        updatedAt: new Date().toISOString(),
+        requestId: "mock-arsenal",
+        dataMode: "fixture",
+      },
+    }));
+
+    vi.doMock("@/lib/providers/mlb", () => ({
+      mlbProvider: {
+        searchPlayers,
+        getPitcherArsenal,
+      },
+    }));
+
     const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
-    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=Juan%20Soto&mode=advanced&dataMode=fixture"));
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=Clay%20Holmes&mode=advanced&dataMode=fixture"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
     expect(body.error).toBeNull();
+    expect(searchPlayers).toHaveBeenCalledWith("Clay Holmes", 8, "fixture");
+    expect(getPitcherArsenal).toHaveBeenCalledWith("605280", "fixture", undefined);
     expect(body.data).toEqual(expect.objectContaining({
-      playerId: expect.any(String),
+      playerId: "605280",
       pitches: expect.any(Array),
     }));
   });
 
-  it("returns clean 400 when name cannot be resolved to numeric id", async () => {
-    vi.doMock("@/lib/providers", () => ({
-      resolvePlayersSearch: vi.fn(async () => ({
-        data: [],
-        meta: {
-          sourceUsed: "fixture",
-          updatedAt: new Date().toISOString(),
-          requestId: "mock-no-player",
-          dataMode: "fixture",
-        },
-      })),
+  it("returns honest 400 when the selected player is not a supported pitcher", async () => {
+    vi.doMock("@/lib/providers/mlb", () => ({
+      mlbProvider: {
+        searchPlayers: vi.fn(async () => ({
+          data: [
+            { playerId: "665742", fullName: "Juan Soto", position: "RF", isPitcher: false },
+          ],
+          meta: {
+            sourceUsed: "fixture",
+            updatedAt: new Date().toISOString(),
+            requestId: "mock-non-pitcher",
+            dataMode: "fixture",
+          },
+        })),
+        getPitcherArsenal: vi.fn(),
+      },
     }));
 
     const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
-    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=No%20Such%20Pitcher&mode=advanced&dataMode=fixture"));
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=Juan%20Soto&mode=advanced&dataMode=fixture"));
     const body = await res.json();
 
     expect(res.status).toBe(400);
-    expect(body.error).toBe("Could not resolve a valid MLB pitcher id from the provided input.");
+    expect(body.error).toBe("Selected player is not a supported MLB pitcher for arsenal data.");
     expect(body.data).toBeNull();
   });
 
-  it("returns a graceful partial response for unsupported numeric pitcher ids", async () => {
+  it("returns honest 400 when a numeric id cannot be mapped to an MLB pitcher identity", async () => {
     vi.doMock("@/lib/providers/mlb/client", async () => {
       const actual = await vi.importActual<typeof import("@/lib/providers/mlb/client")>("@/lib/providers/mlb/client");
       return {
@@ -88,26 +131,40 @@ describe("MLB pitcher arsenal route", () => {
     const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=32827&mode=advanced&dataMode=live"));
     const body = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(body.error).toBeNull();
+    expect(res.status).toBe(400);
+    expect(body.error).toBe("Could not map the selected player to a valid MLB pitcher id.");
     expect(body.data).toBeNull();
-    expect(body.meta?.warning).toBe("Pitch arsenal is not available from MLB Stats API for this pitcher id.");
   });
 
-  it("treats unsupported pitchArsenal upstream errors as partial instead of failed", async () => {
-    vi.doMock("@/lib/providers/mlb/client", async () => {
-      const actual = await vi.importActual<typeof import("@/lib/providers/mlb/client")>("@/lib/providers/mlb/client");
-      return {
-        ...actual,
-        getMlbDataMode: vi.fn(() => "live"),
-        fetchMlbJson: vi.fn(async () => {
-          throw new Error("422 Unprocessable Entity: pitchArsenal unsupported for this player");
-        }),
-      };
-    });
+  it("keeps unsupported arsenal feeds honest after a valid pitcher name maps correctly", async () => {
+    vi.doMock("@/lib/providers/mlb", () => ({
+      mlbProvider: {
+        searchPlayers: vi.fn(async () => ({
+          data: [
+            { playerId: "605280", fullName: "Clay Holmes", position: "P", isPitcher: true },
+          ],
+          meta: {
+            sourceUsed: "live",
+            updatedAt: new Date().toISOString(),
+            requestId: "mock-search-live",
+            dataMode: "live",
+          },
+        })),
+        getPitcherArsenal: vi.fn(async () => ({
+          data: null,
+          meta: {
+            sourceUsed: "mlb",
+            updatedAt: new Date().toISOString(),
+            requestId: "mock-no-arsenal",
+            dataMode: "live",
+            warning: "Pitch arsenal is not available from MLB Stats API for this pitcher id.",
+          },
+        })),
+      },
+    }));
 
     const mod = await import("@/app/api/widgets/mlb-pitcher-arsenal/route");
-    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=32827&mode=advanced&dataMode=live"));
+    const res = await mod.GET(new Request("http://localhost/api/widgets/mlb-pitcher-arsenal?playerId=Clay%20Holmes&mode=advanced&dataMode=live"));
     const body = await res.json();
 
     expect(res.status).toBe(200);
