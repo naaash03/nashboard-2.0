@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     error: null,
     meta: resolved.meta,
     primaryProvider: "espn",
-    notes: ["NFL team context uses ESPN team profile and schedule data when available, with a demo fallback when no live team key is selected or ESPN is unavailable."],
+    notes: ["NFL team context uses ESPN first, then API-Sports NFL fallback when ESPN is unavailable, then demo when no live team key is selected or both live providers fail."],
   });
 
   return NextResponse.json({

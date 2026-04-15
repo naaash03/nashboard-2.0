@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     error: null,
     meta: resolved.meta,
     primaryProvider: "espn",
-    notes: ["NFL recent form uses ESPN team schedules plus opponent record lookups when available, and falls back to a demo trend card if needed."],
+    notes: ["NFL recent form uses ESPN first, then API-Sports NFL fallback when ESPN is unavailable, then a demo trend card as the last resort."],
   });
 
   return NextResponse.json({

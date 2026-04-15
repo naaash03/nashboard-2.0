@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { getNflTeamProfile, getNflTeamSchedule, type EspnNflTeamProfile, type EspnNflTeamSchedule } from "@/lib/providers/espn/nfl";
+import { fetchApiSportsJson } from "@/lib/providers/apiSports/client";
+import { getApiSportsConfig, resolveApiSportsKey } from "@/lib/providers/apiSports/config";
+import { getTeamsAdvanced as getApiSportsTeamsAdvanced } from "@/lib/providers/apiSports/teamAdvanced";
 import type { Meta } from "@/lib/providers/types";
+import type { TeamAdvanced } from "@/lib/types/playerInsights";
 import type {
   NflConference,
   NflDivision,
@@ -18,6 +22,7 @@ import type {
 } from "@/lib/types/nfl";
 
 type DataMode = "auto" | "live" | "fixture";
+type ApiSportsMode = "live" | "fixture";
 
 type TeamDirectoryRow = {
   teamKey: string;
@@ -140,6 +145,44 @@ function mergeMeta(sourceUsed: Meta["sourceUsed"], dataMode: DataMode, metas: Me
   };
 }
 
+function appendMeta(meta: Meta, warning?: string, notes: string[] = [], attemptedSources?: Meta["attemptedSources"]): Meta {
+  const warnings = dedupe([...(meta.warnings ?? []), meta.warning, warning]);
+  const mergedNotes = dedupe([...(meta.notes ?? []), ...notes]);
+  return {
+    ...meta,
+    warning: warnings[0],
+    warnings: warnings.length > 0 ? warnings : undefined,
+    notes: mergedNotes.length > 0 ? mergedNotes : undefined,
+    attemptedSources: attemptedSources ?? meta.attemptedSources,
+  };
+}
+
+function toApiSportsMode(dataMode: DataMode): ApiSportsMode {
+  return dataMode === "fixture" ? "fixture" : "live";
+}
+
+function apiSportsAvailability(dataMode: DataMode): { enabled: boolean; warning?: string } {
+  if (dataMode === "fixture") {
+    return { enabled: false };
+  }
+
+  const config = getApiSportsConfig("nfl");
+  const apiKey = resolveApiSportsKey()?.trim() ?? "";
+  const invalidApiKey = apiKey.length < 20
+    || /^(YOUR|REPLACE|INSERT|PLACEHOLDER|TEST|SAMPLE|DEMO|FAKE)/i.test(apiKey);
+
+  if (!apiKey || invalidApiKey || !config.baseUrl || !config.league || !config.season) {
+    return {
+      enabled: false,
+      warning: dataMode === "live"
+        ? "API-Sports NFL is not fully configured, so NFL widgets can only use ESPN before falling back to demo."
+        : undefined,
+    };
+  }
+
+  return { enabled: true };
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -151,6 +194,16 @@ function readNumber(value: unknown): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function readString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function parseRecordSummary(summary: string | undefined): { wins: number; losses: number; ties: number } | null {
@@ -180,6 +233,28 @@ function streakFromNumeric(value: number | null): string {
 
 function isOffseasonProfile(profile: EspnNflTeamProfile): boolean {
   return profile.season?.type === 4;
+}
+
+function profileHasNoUpcomingEvent(profile: EspnNflTeamProfile): boolean {
+  return (profile.team?.nextEvent?.length ?? 0) === 0;
+}
+
+function profileLooksLikeCompletedSeasonStandings(profile: EspnNflTeamProfile): boolean {
+  return profileHasNoUpcomingEvent(profile)
+    && profileRecord(profile) !== null
+    && Boolean(profile.team?.standingSummary);
+}
+
+function aggregatedMeta(meta: Meta, notes: string[] = []): Meta {
+  return appendMeta(
+    {
+      ...meta,
+      endpointUrl: undefined,
+    },
+    undefined,
+    notes,
+    meta.attemptedSources,
+  );
 }
 
 const DEMO_DIVISION_ROWS: Record<string, Array<Omit<NflTeamStandingRow, "teamId" | "name" | "abbreviation"> & { teamKey: string }>> = {
@@ -327,6 +402,189 @@ function buildStandingRow(profile: EspnNflTeamProfile, directory: TeamDirectoryR
     divisionLeader: divisionRank === 1,
     playoffSeed: typeof playoffSeed === "number" && playoffSeed > 0 ? playoffSeed : null,
   };
+}
+
+function apiSportsRows(payload: unknown): Record<string, unknown>[] {
+  const typed = asObject(payload);
+  const rows = Array.isArray(typed?.response) ? typed.response : [];
+  return rows
+    .map((row) => asObject(row))
+    .filter((row): row is Record<string, unknown> => Boolean(row));
+}
+
+function apiSportsTeamId(team: Record<string, unknown> | null): string | null {
+  return readString(team?.id) ?? readNumber(team?.id)?.toString() ?? readString(team?.team_id) ?? readNumber(team?.team_id)?.toString() ?? null;
+}
+
+function apiSportsTeamCode(team: Record<string, unknown> | null): string | null {
+  return readString(team?.code)?.toUpperCase()
+    ?? readString(team?.abbreviation)?.toUpperCase()
+    ?? readString(team?.short_name)?.toUpperCase()
+    ?? null;
+}
+
+function apiSportsTeamName(team: Record<string, unknown> | null): string | null {
+  const direct = readString(team?.name) ?? readString(team?.display_name);
+  if (direct) return direct;
+  const city = readString(team?.city);
+  const nickname = readString(team?.nickname) ?? readString(team?.mascot);
+  return [city, nickname].filter(Boolean).join(" ").trim() || null;
+}
+
+function apiSportsStatus(rawState: string | null, rawDetail: string | null): NflGameStatus {
+  const normalizedState = (rawState ?? "").toLowerCase();
+  const normalizedDetail = (rawDetail ?? "").toLowerCase();
+  if (normalizedDetail.includes("postpon")) return "postponed";
+  if (normalizedState.includes("post") || normalizedState.includes("final") || normalizedState.includes("finish") || normalizedState === "ft") return "final";
+  if (normalizedState.includes("in") || normalizedState.includes("progress") || normalizedState.includes("live")) return "in_progress";
+  return "scheduled";
+}
+
+function apiSportsScore(value: unknown): number | null {
+  const direct = readNumber(value);
+  if (typeof direct === "number") return direct;
+  const typed = asObject(value);
+  return readNumber(typed?.total ?? typed?.points ?? typed?.value);
+}
+
+function inferWeekFromGameDate(dateValue: string): number {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return 0;
+  const kickoff = Date.UTC(date.getUTCFullYear(), 8, 1);
+  const diff = Math.max(0, Math.floor((date.getTime() - kickoff) / 86_400_000));
+  return Math.max(1, Math.floor(diff / 7) + 1);
+}
+
+function parseApiSportsGameRef(row: Record<string, unknown>, teamKey: string): NflGameRef | null {
+  const teams = asObject(row.teams);
+  const homeTeam = asObject(teams?.home);
+  const awayTeam = asObject(teams?.away) ?? asObject(teams?.visitors);
+  const homeKey = apiSportsTeamCode(homeTeam);
+  const awayKey = apiSportsTeamCode(awayTeam);
+  if (!homeKey || !awayKey) return null;
+
+  const dateNode = asObject(row.date);
+  const dateValue = readString(dateNode?.date)
+    ?? readString(dateNode?.start)
+    ?? readString(dateNode?.iso)
+    ?? readString(row.date);
+  if (!dateValue) return null;
+
+  const statusNode = asObject(row.status);
+  const longStatus = readString(statusNode?.long) ?? readString(statusNode?.status);
+  const shortStatus = readString(statusNode?.short);
+  const weekNode = asObject(row.week) ?? asObject(asObject(row.game)?.week);
+  const seasonNode = asObject(row.season);
+  const leagueNode = asObject(row.league);
+  const venueNode = asObject(row.venue);
+  const scoresNode = asObject(row.scores);
+  const homeScore = apiSportsScore(scoresNode?.home);
+  const awayScore = apiSportsScore(scoresNode?.away) ?? apiSportsScore(scoresNode?.visitors);
+
+  const homeRef = {
+    teamId: apiSportsTeamId(homeTeam) ?? homeKey,
+    teamKey: homeKey,
+    name: apiSportsTeamName(homeTeam) ?? TEAM_BY_KEY.get(homeKey)?.name ?? homeKey,
+    abbreviation: homeKey,
+    logo: readString(homeTeam?.logo),
+  };
+  const awayRef = {
+    teamId: apiSportsTeamId(awayTeam) ?? awayKey,
+    teamKey: awayKey,
+    name: apiSportsTeamName(awayTeam) ?? TEAM_BY_KEY.get(awayKey)?.name ?? awayKey,
+    abbreviation: awayKey,
+    logo: readString(awayTeam?.logo),
+  };
+
+  if (homeRef.teamKey !== teamKey && awayRef.teamKey !== teamKey) {
+    return null;
+  }
+
+  return {
+    gameId: readString(row.id) ?? readNumber(row.id)?.toString() ?? `${teamKey}-${dateValue}`,
+    status: apiSportsStatus(shortStatus, longStatus),
+    date: new Date(dateValue).toISOString(),
+    homeTeam: homeRef,
+    awayTeam: awayRef,
+    homeScore,
+    awayScore,
+    venue: readString(venueNode?.name) ?? readString(venueNode?.city) ?? null,
+    week: readNumber(weekNode?.number) ?? readNumber(weekNode?.week) ?? readNumber(leagueNode?.week) ?? inferWeekFromGameDate(dateValue),
+    isPlayoff: (readString(seasonNode?.type) ?? readString(leagueNode?.round) ?? "").toLowerCase().includes("playoff"),
+  };
+}
+
+function parseApiSportsPct(value: string | number | null | undefined): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value > 1 ? value / 100 : value;
+  if (typeof value !== "string") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed > 1 ? parsed / 100 : parsed;
+}
+
+function pickApiSportsTeam(teams: TeamAdvanced[] | undefined, teamKey: string): TeamAdvanced | null {
+  return teams?.find((team) => team.teamKey.trim().toUpperCase() === teamKey.trim().toUpperCase()) ?? null;
+}
+
+function apiSportsRecordString(record?: TeamAdvanced["record"] | null): string | null {
+  if (!record) return null;
+  return `${record.wins}-${record.losses}`;
+}
+
+function pctFromAdvancedRecord(record?: TeamAdvanced["record"] | null): number | null {
+  if (!record) return null;
+  if (record.pct) {
+    return parseApiSportsPct(record.pct);
+  }
+  const total = record.wins + record.losses;
+  return total > 0 ? record.wins / total : null;
+}
+
+async function loadApiSportsTeamAdvanced(
+  teamRefs: Array<{ teamKey: string; teamName?: string }>,
+  dataMode: DataMode,
+  cacheBust?: string,
+): Promise<{ teams: TeamAdvanced[]; meta: Meta }> {
+  const envelope = await getApiSportsTeamsAdvanced("nfl", teamRefs, "advanced", toApiSportsMode(dataMode), cacheBust);
+  const teams = envelope.data?.teams ?? [];
+  if (teams.length === 0) {
+    throw new Error("API-Sports NFL returned no team context.");
+  }
+  return { teams, meta: envelope.meta };
+}
+
+async function loadApiSportsGamesForTeam(
+  teamKey: string,
+  apiSportsTeamId: string,
+  dataMode: DataMode,
+  cacheBust?: string,
+  season?: number,
+): Promise<{ games: NflGameRef[]; meta: Meta }> {
+  const config = getApiSportsConfig("nfl");
+  const resolvedSeason = season ?? readNumber(config.season) ?? currentSeasonYear();
+  const response = await fetchApiSportsJson<unknown>({
+    sport: "nfl",
+    endpoint: "games",
+    params: {
+      league: config.league,
+      season: resolvedSeason,
+      team: apiSportsTeamId,
+    },
+    dataMode: toApiSportsMode(dataMode),
+    ttlSeconds: 180,
+    cacheBust,
+  });
+
+  const games = apiSportsRows(response.data)
+    .map((row) => parseApiSportsGameRef(row, teamKey))
+    .filter((game): game is NflGameRef => game !== null)
+    .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
+
+  if (games.length === 0) {
+    throw new Error(`API-Sports NFL returned no season games for ${teamKey}.`);
+  }
+
+  return { games, meta: response.meta };
 }
 
 function demoDivisionSnapshot(
@@ -618,6 +876,252 @@ function difficultyLabel(value: number): string {
   return "Mixed";
 }
 
+async function resolveApiSportsDivisionSnapshot(
+  conference: NflConference | undefined,
+  division: NflDivision | undefined,
+  dataMode: DataMode,
+  cacheBust?: string,
+): Promise<{ data: NflDivisionSnapshotData; meta: Meta }> {
+  const teams = filterTeams(conference, division);
+  const advanced = await loadApiSportsTeamAdvanced(
+    teams.map((team) => ({ teamKey: team.teamKey, teamName: team.name })),
+    dataMode,
+    cacheBust,
+  );
+
+  const season = readNumber(getApiSportsConfig("nfl").season) ?? OFFSEASON_FINAL_STANDINGS_SEASON;
+  const enriched = await Promise.all(teams.map(async (directory) => {
+    const team = pickApiSportsTeam(advanced.teams, directory.teamKey);
+    if (!team?.apiSportsTeamId) {
+      throw new Error(`API-Sports team id missing for ${directory.teamKey}.`);
+    }
+
+    const gamesResponse = await loadApiSportsGamesForTeam(directory.teamKey, team.apiSportsTeamId, dataMode, cacheBust, season);
+    const regularGames = regularSeasonGames(gamesResponse.games);
+    const record = recordFromGames(regularGames, directory.teamKey);
+    const divisionRank = readNumber(team.standings?.rank);
+    const standingsRow = {
+      teamId: team.apiSportsTeamId,
+      teamKey: directory.teamKey,
+      name: team.teamName ?? directory.name,
+      abbreviation: directory.teamKey,
+      wins: record.wins,
+      losses: record.losses,
+      ties: record.ties,
+      pct: winPctFromRecord(record),
+      pointsFor: record.pointsFor,
+      pointsAgainst: record.pointsAgainst,
+      streak: computeStreak(regularGames, directory.teamKey),
+      clinched: false,
+      divisionLeader: divisionRank === 1,
+      playoffSeed: null,
+    } satisfies NflTeamStandingRow;
+
+    return {
+      directory,
+      row: standingsRow,
+      isOffseason: chooseNextGame(gamesResponse.games) === null && chooseMostRecentGame(regularGames) !== null,
+      meta: gamesResponse.meta,
+    };
+  }));
+
+  const groupsByKey = new Map<string, NflDivisionGroup>();
+  for (const item of enriched) {
+    const key = `${item.directory.conference}-${item.directory.division}`;
+    const existing = groupsByKey.get(key) ?? {
+      conference: item.directory.conference,
+      division: item.directory.division,
+      teams: [],
+    };
+    existing.teams.push(item.row);
+    groupsByKey.set(key, existing);
+  }
+
+  const divisions = Array.from(groupsByKey.values())
+    .sort((left, right) => `${left.conference}-${left.division}`.localeCompare(`${right.conference}-${right.division}`))
+    .map((group) => {
+      const sorted = sortDivisionStandingRows(group.teams).map((row, index) => ({
+        ...row,
+        divisionLeader: row.divisionLeader || index === 0,
+      }));
+      return { ...group, teams: sorted };
+    });
+
+  const metas = [advanced.meta, ...enriched.map((item) => item.meta)];
+  const meta = mergeMeta(
+    metas.some((item) => item.sourceUsed === "cache") ? "cache" : "apiSports",
+    dataMode,
+    metas,
+    "ESPN NFL standings were unavailable or sparse, so this division snapshot is using API-Sports NFL as the fallback source.",
+    [
+      "API-Sports NFL supplied the fallback season schedule data used to rebuild division records and point differential.",
+      "Division leader badges come from fallback standings context when available, then from sorted record order.",
+      "Playoff seed and clinch badges stay conservative on the API-Sports fallback path unless those fields are explicitly available.",
+    ],
+  );
+
+  return {
+    data: {
+      source: toWidgetSource(meta),
+      season,
+      week: null,
+      isOffseason: enriched.every((item) => item.isOffseason),
+      divisions,
+      updatedAt: meta.updatedAt,
+    },
+    meta,
+  };
+}
+
+async function resolveApiSportsTeamContextCard(
+  teamKey: string,
+  dataMode: DataMode,
+  cacheBust?: string,
+  season?: number,
+): Promise<{ data: NflTeamContextCardData; meta: Meta }> {
+  const directory = TEAM_BY_KEY.get(teamKey);
+  if (!directory) {
+    throw new Error(`Unknown NFL team key ${teamKey}.`);
+  }
+
+  const advanced = await loadApiSportsTeamAdvanced([{ teamKey, teamName: directory.name }], dataMode, cacheBust);
+  const team = pickApiSportsTeam(advanced.teams, teamKey);
+  if (!team?.apiSportsTeamId) {
+    throw new Error(`API-Sports team context missing id for ${teamKey}.`);
+  }
+
+  const resolvedSeason = season ?? readNumber(getApiSportsConfig("nfl").season) ?? currentSeasonYear();
+  const gamesResponse = await loadApiSportsGamesForTeam(teamKey, team.apiSportsTeamId, dataMode, cacheBust, resolvedSeason);
+  const allGames = gamesResponse.games;
+  const seasonGames = season ? regularSeasonGames(allGames) : allGames;
+  const nextGame = season ? null : chooseNextGame(allGames);
+  const mostRecentGame = chooseMostRecentGame(seasonGames) ?? chooseMostRecentGame(allGames);
+  const record = recordFromGames(seasonGames, teamKey);
+  const isHistoricalSeason = Boolean(season);
+  const isOffseason = isHistoricalSeason || (!nextGame && Boolean(mostRecentGame));
+  const windowDays = scheduleWindowDays(mostRecentGame, nextGame);
+  const isByeWeek = !isHistoricalSeason && !isOffseason && Boolean(nextGame) && typeof windowDays === "number" && windowDays >= 10;
+  const meta = mergeMeta(
+    [advanced.meta, gamesResponse.meta].some((item) => item.sourceUsed === "cache") ? "cache" : "apiSports",
+    dataMode,
+    [advanced.meta, gamesResponse.meta],
+    "ESPN NFL team context was unavailable, so this card is using API-Sports NFL fallback context.",
+    [
+      isHistoricalSeason
+        ? `API-Sports NFL rebuilt the ${resolvedSeason} season context from team schedule results because ESPN historical context was unavailable.`
+        : "API-Sports NFL supplied the fallback record and next/last game context for this team.",
+      "Conference seed remains conservative on the fallback path when only division-rank context is available.",
+    ],
+  );
+
+  return {
+    data: {
+      source: toWidgetSource(meta),
+      teamKey,
+      teamName: team.teamName ?? directory.name,
+      season: resolvedSeason,
+      isHistoricalSeason,
+      currentRecord: { wins: record.wins, losses: record.losses, ties: record.ties },
+      currentRank: null,
+      divisionRank: readNumber(team.standings?.rank),
+      nextGame,
+      mostRecentGame,
+      isOffseason,
+      isByeWeek,
+      updatedAt: meta.updatedAt,
+    },
+    meta,
+  };
+}
+
+async function resolveApiSportsRecentForm(
+  teamKey: string,
+  dataMode: DataMode,
+  cacheBust?: string,
+): Promise<{ data: NflRecentFormData; meta: Meta }> {
+  const directory = TEAM_BY_KEY.get(teamKey);
+  if (!directory) {
+    throw new Error(`Unknown NFL team key ${teamKey}.`);
+  }
+
+  const advanced = await loadApiSportsTeamAdvanced([{ teamKey, teamName: directory.name }], dataMode, cacheBust);
+  const team = pickApiSportsTeam(advanced.teams, teamKey);
+  if (!team?.apiSportsTeamId) {
+    throw new Error(`API-Sports team context missing id for ${teamKey}.`);
+  }
+
+  const resolvedSeason = readNumber(getApiSportsConfig("nfl").season) ?? currentSeasonYear();
+  const gamesResponse = await loadApiSportsGamesForTeam(teamKey, team.apiSportsTeamId, dataMode, cacheBust, resolvedSeason);
+  const allGames = gamesResponse.games;
+  const recentFinals = allGames.filter((game) => game.status === "final").slice(-5);
+  if (recentFinals.length === 0) {
+    throw new Error(`API-Sports NFL returned no recent completed games for ${teamKey}.`);
+  }
+
+  const opponentKeys = Array.from(new Set(recentFinals.map((game) => (
+    game.homeTeam.teamKey === teamKey ? game.awayTeam.teamKey : game.homeTeam.teamKey
+  )))).filter((key) => TEAM_BY_KEY.has(key));
+  const opponentAdvanced = opponentKeys.length > 0
+    ? await loadApiSportsTeamAdvanced(
+        opponentKeys.map((key) => ({ teamKey: key, teamName: TEAM_BY_KEY.get(key)?.name })),
+        dataMode,
+        cacheBust,
+      )
+    : null;
+  const opponentMap = new Map((opponentAdvanced?.teams ?? []).map((item) => [item.teamKey, item]));
+
+  const recentGames: NflFormGame[] = recentFinals.map((game) => {
+    const opponent = game.homeTeam.teamKey === teamKey ? game.awayTeam : game.homeTeam;
+    const opponentTeam = opponentMap.get(opponent.teamKey);
+    return {
+      gameId: game.gameId,
+      week: game.week,
+      result: resultFromGame(game, teamKey),
+      opponentKey: opponent.teamKey,
+      opponentName: opponent.name,
+      score: scoreLabel(game, teamKey),
+      isHome: game.homeTeam.teamKey === teamKey,
+      opponentRecord: apiSportsRecordString(opponentTeam?.record),
+      opponentWinPct: pctFromAdvancedRecord(opponentTeam?.record),
+    };
+  });
+
+  const difficultyValues = recentGames
+    .map((game) => game.opponentWinPct)
+    .filter((value): value is number => typeof value === "number");
+  const scheduleDifficulty = difficultyValues.length > 0
+    ? clamp(difficultyValues.reduce((sum, value) => sum + value, 0) / difficultyValues.length, 0, 1)
+    : 0.5;
+  const isOffseason = chooseNextGame(allGames) === null && recentFinals.length > 0;
+  const metas = [advanced.meta, gamesResponse.meta, ...(opponentAdvanced ? [opponentAdvanced.meta] : [])];
+  const meta = mergeMeta(
+    metas.some((item) => item.sourceUsed === "cache") ? "cache" : "apiSports",
+    dataMode,
+    metas,
+    "ESPN NFL recent-form data was unavailable, so this card is using API-Sports NFL fallback context.",
+    [
+      "API-Sports NFL supplied the fallback last-five game sample and opponent record context for this recent-form card.",
+      "Difficulty stays conservative when opponent standings context is limited on the fallback path.",
+    ],
+  );
+
+  return {
+    data: {
+      source: toWidgetSource(meta),
+      teamKey,
+      teamName: team.teamName ?? directory.name,
+      season: resolvedSeason,
+      recentGames,
+      currentStreak: computeStreak(allGames, teamKey),
+      scheduleLabel: difficultyLabel(scheduleDifficulty),
+      scheduleDifficulty,
+      isOffseason,
+      updatedAt: meta.updatedAt,
+    },
+    meta,
+  };
+}
+
 async function loadProfilesForDivisionSnapshot(
   conference?: NflConference,
   division?: NflDivision,
@@ -653,11 +1157,43 @@ export async function resolveNflDivisionSnapshot(args: {
     return demoDivisionSnapshot(args.conference, args.division, undefined, args.dataMode);
   }
 
+  const apiSports = apiSportsAvailability(args.dataMode);
+
   try {
     const loaded = await loadProfilesForDivisionSnapshot(args.conference, args.division, args.dataMode, args.cacheBust);
-    const isOffseason = loaded.rows.every((row) => isOffseasonProfile(row.profile));
+    const explicitOffseason = loaded.rows.every((row) => isOffseasonProfile(row.profile));
+    const completedSeasonStandings = loaded.rows.every((row) => profileLooksLikeCompletedSeasonStandings(row.profile));
+    const priorSeason = Math.max(
+      2000,
+      (loaded.rows[0]?.profile.season?.year ?? currentSeasonYear()) - 1,
+    );
 
-    if (isOffseason) {
+    if (explicitOffseason) {
+      if (apiSports.enabled) {
+        try {
+          const fallback = await resolveApiSportsDivisionSnapshot(args.conference, args.division, args.dataMode, args.cacheBust);
+          return { data: fallback.data, meta: aggregatedMeta(fallback.meta) };
+        } catch (fallbackError) {
+          const historical = await loadHistoricalOffseasonDivisionRows(args.conference, args.division, args.dataMode, args.cacheBust);
+          return {
+            data: {
+              source: toWidgetSource(historical.meta),
+              season: OFFSEASON_FINAL_STANDINGS_SEASON,
+              week: null,
+              isOffseason: true,
+              divisions: historical.divisions,
+              updatedAt: historical.meta.updatedAt,
+            },
+            meta: aggregatedMeta(appendMeta(
+              historical.meta,
+              `ESPN offseason standings were sparse and API-Sports NFL fallback did not complete, so the widget is using the historical ${OFFSEASON_FINAL_STANDINGS_SEASON} fallback. ${String(fallbackError)}`,
+              ["API-Sports NFL was attempted before falling back to the historical ESPN-derived offseason snapshot."],
+              ["espn", "apiSports", "fixture"],
+            )),
+          };
+        }
+      }
+
       const historical = await loadHistoricalOffseasonDivisionRows(args.conference, args.division, args.dataMode, args.cacheBust);
       return {
         data: {
@@ -668,7 +1204,12 @@ export async function resolveNflDivisionSnapshot(args: {
           divisions: historical.divisions,
           updatedAt: historical.meta.updatedAt,
         },
-        meta: historical.meta,
+        meta: aggregatedMeta(appendMeta(
+          historical.meta,
+          apiSports.warning,
+          apiSports.warning ? ["API-Sports NFL was not available, so the resolver stayed on the historical ESPN offseason fallback."] : [],
+          apiSports.warning ? ["espn", "fixture"] : historical.meta.attemptedSources,
+        )),
       };
     }
 
@@ -703,35 +1244,48 @@ export async function resolveNflDivisionSnapshot(args: {
         }),
       }));
 
-    const season = loaded.rows[0]?.profile.season?.year ?? currentSeasonYear();
-    const meta = mergeMeta(
+    const season = completedSeasonStandings ? priorSeason : (loaded.rows[0]?.profile.season?.year ?? currentSeasonYear());
+    const meta = aggregatedMeta(mergeMeta(
       loaded.rows.some((row) => row.meta.sourceUsed === "cache") ? "cache" : "espn",
       args.dataMode,
       loaded.rows.map((row) => row.meta),
       undefined,
       [
-        isOffseason
-          ? "Live NFL standings endpoint was sparse in offseason, so division rows were assembled from team profiles."
+        completedSeasonStandings
+          ? `These standings represent the completed ${priorSeason} season. ESPN team profiles were available, but no upcoming games were posted, so the snapshot is being labeled as final standings rather than current-season live rows.`
           : "Live NFL division rows were assembled from ESPN team profile data.",
       ],
-    );
+    ));
 
     return {
       data: {
         source: toWidgetSource(meta),
         season,
         week: null,
-        isOffseason: false,
+        isOffseason: completedSeasonStandings,
         divisions,
         updatedAt: meta.updatedAt,
       },
       meta,
     };
   } catch (error) {
+    if (apiSports.enabled) {
+      try {
+        return await resolveApiSportsDivisionSnapshot(args.conference, args.division, args.dataMode, args.cacheBust);
+      } catch (fallbackError) {
+        return demoDivisionSnapshot(
+          args.conference,
+          args.division,
+          `Live NFL division data was unavailable on both ESPN and API-Sports NFL, so the widget fell back to demo standings. ${String(fallbackError)}`,
+          args.dataMode,
+        );
+      }
+    }
+
     return demoDivisionSnapshot(
       args.conference,
       args.division,
-      `Live NFL division data was unavailable, so the widget fell back to demo standings. ${String(error)}`,
+      `${apiSports.warning ?? "Live NFL division data was unavailable, so the widget fell back to demo standings."} ${String(error)}`,
       args.dataMode,
     );
   }
@@ -753,6 +1307,8 @@ export async function resolveNflTeamContextCard(args: {
   if (args.dataMode === "fixture") {
     return demoTeamContext(requestedTeamKey, undefined, args.dataMode, args.season ?? 2025);
   }
+
+  const apiSports = apiSportsAvailability(args.dataMode);
 
   try {
     const profileResponse = await getNflTeamProfile(requestedTeamKey, args.dataMode, args.cacheBust);
@@ -805,9 +1361,22 @@ export async function resolveNflTeamContextCard(args: {
       meta,
     };
   } catch (error) {
+    if (apiSports.enabled) {
+      try {
+        return await resolveApiSportsTeamContextCard(requestedTeamKey, args.dataMode, args.cacheBust, args.season);
+      } catch (fallbackError) {
+        return demoTeamContext(
+          requestedTeamKey,
+          `Live NFL team context was unavailable on both ESPN and API-Sports NFL for ${requestedTeamKey}, so the widget fell back to a demo card. ${String(fallbackError)}`,
+          args.dataMode,
+          args.season ?? 2025,
+        );
+      }
+    }
+
     return demoTeamContext(
       requestedTeamKey,
-      `Live NFL team context was unavailable for ${requestedTeamKey}, so the widget fell back to a demo card. ${String(error)}`,
+      `${apiSports.warning ?? `Live NFL team context was unavailable for ${requestedTeamKey}, so the widget fell back to a demo card.`} ${String(error)}`,
       args.dataMode,
       args.season ?? 2025,
     );
@@ -829,6 +1398,8 @@ export async function resolveNflRecentForm(args: {
   if (args.dataMode === "fixture") {
     return demoRecentForm(requestedTeamKey, undefined, args.dataMode);
   }
+
+  const apiSports = apiSportsAvailability(args.dataMode);
 
   try {
     const [profileResponse, scheduleResponse] = await Promise.all([
@@ -902,9 +1473,21 @@ export async function resolveNflRecentForm(args: {
       meta,
     };
   } catch (error) {
+    if (apiSports.enabled) {
+      try {
+        return await resolveApiSportsRecentForm(requestedTeamKey, args.dataMode, args.cacheBust);
+      } catch (fallbackError) {
+        return demoRecentForm(
+          requestedTeamKey,
+          `Live NFL recent-form data was unavailable on both ESPN and API-Sports NFL for ${requestedTeamKey}, so the widget fell back to a demo card. ${String(fallbackError)}`,
+          args.dataMode,
+        );
+      }
+    }
+
     return demoRecentForm(
       requestedTeamKey,
-      `Live NFL recent-form data was unavailable for ${requestedTeamKey}, so the widget fell back to a demo card. ${String(error)}`,
+      `${apiSports.warning ?? `Live NFL recent-form data was unavailable for ${requestedTeamKey}, so the widget fell back to a demo card.`} ${String(error)}`,
       args.dataMode,
     );
   }

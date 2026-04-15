@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     error: null,
     meta: resolved.meta,
     primaryProvider: "espn",
-    notes: ["NFL division standings use ESPN team profile data when live standings are sparse, and fall back to demo standings if needed."],
+    notes: ["NFL division standings use ESPN first, then API-Sports NFL fallback when ESPN is unavailable or offseason data is too sparse, then demo as the last resort."],
   });
 
   return NextResponse.json({

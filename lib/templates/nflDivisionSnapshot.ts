@@ -26,7 +26,7 @@ export function shapeNflDivisionSnapshot(
   return {
     ...data,
     title: `${filterLabel} Standings`,
-    seasonLabel: data.isOffseason ? "2024 Final Standings" : null,
+    seasonLabel: data.isOffseason ? `${data.season} Final Standings` : null,
     summary: data.isOffseason
       ? `Final ${data.season} standings snapshot for ${filterLabel}. ${leaderCount} visible division leader${leaderCount === 1 ? "" : "s"} are shown.${pointDiffNote}`
       : `${leaderNote}${pointDiffNote}`,

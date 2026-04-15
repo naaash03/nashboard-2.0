@@ -7,6 +7,11 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock("@/lib/providers/espn/nfl");
+  vi.doUnmock("@/lib/providers/apiSports/teamAdvanced");
+  vi.doUnmock("@/lib/providers/apiSports/client");
+  delete process.env.API_SPORTS_KEY;
+  delete process.env.NFL_LEAGUE_ID;
+  delete process.env.NFL_SEASON;
 });
 
 describe("NFL team context card route", () => {
@@ -194,5 +199,94 @@ describe("NFL team context card route", () => {
     expect(body.data?.seasonLabel).toBe("2025 Season");
     expect(body.data?.currentRecord).toEqual({ wins: 2, losses: 0, ties: 0 });
     expect(body.data?.nextGame).toBeNull();
+  });
+
+  it("falls back to API-Sports NFL team context before demo when ESPN fails", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.API_SPORTS_KEY = "api-sports-key-long-enough-12345";
+    process.env.NFL_LEAGUE_ID = "1";
+    process.env.NFL_SEASON = "2026";
+
+    const apiMeta = {
+      sourceUsed: "apiSports" as const,
+      updatedAt: "2026-04-15T12:00:00.000Z",
+      requestId: "nfl-team-context-api",
+      dataMode: "live" as const,
+      dataModeEffective: "live" as const,
+    };
+
+    vi.doMock("@/lib/providers/espn/nfl", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/providers/espn/nfl")>("@/lib/providers/espn/nfl");
+      return {
+        ...actual,
+        getNflTeamProfile: async () => {
+          throw new Error("ESPN 503");
+        },
+      };
+    });
+
+    vi.doMock("@/lib/providers/apiSports/teamAdvanced", () => ({
+      getTeamsAdvanced: async () => ({
+        data: {
+          sport: "nfl",
+          teams: [{
+            teamKey: "PHI",
+            teamName: "Philadelphia Eagles",
+            apiSportsTeamId: "21",
+            record: { wins: 12, losses: 5, pct: "0.706", streak: "W2" },
+            standings: { rank: "1", division: "East", conference: "NFC" },
+            lastGame: { when: "2026-01-04T21:25:00.000Z", vs: "DAL", result: "W", score: "27-20" },
+            nextGame: { when: "2099-09-08T20:20:00.000Z", vs: "WSH", homeAway: "away" },
+            status: { sport: "nfl", teamKey: "PHI", hasGameToday: false },
+          }],
+        },
+        meta: apiMeta,
+      }),
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/client", () => ({
+      fetchApiSportsJson: async () => ({
+        data: {
+          response: [
+            {
+              id: "api-prev",
+              date: { date: "2026-01-04T21:25:00.000Z" },
+              status: { short: "Final", long: "Final" },
+              week: { number: 18 },
+              teams: {
+                home: { id: "21", code: "PHI", name: "Philadelphia Eagles" },
+                away: { id: "6", code: "DAL", name: "Dallas Cowboys" },
+              },
+              scores: { home: { total: 27 }, away: { total: 20 } },
+              venue: { name: "Lincoln Financial Field" },
+            },
+            {
+              id: "api-next",
+              date: { date: "2099-09-08T20:20:00.000Z" },
+              status: { short: "Scheduled", long: "Scheduled" },
+              week: { number: 2 },
+              teams: {
+                home: { id: "28", code: "WSH", name: "Washington Commanders" },
+                away: { id: "21", code: "PHI", name: "Philadelphia Eagles" },
+              },
+              scores: { home: { total: 0 }, away: { total: 0 } },
+              venue: { name: "FedExField" },
+            },
+          ],
+        },
+        meta: apiMeta,
+      }),
+    }));
+
+    const mod = await import("@/app/api/widgets/nfl-team-context-card/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nfl-team-context-card?mode=advanced&dataMode=live&teamKey=PHI"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("apiSports");
+    expect(body.meta?.warning).toMatch(/API-Sports NFL fallback/i);
+    expect(body.data?.source).toBe("live");
+    expect(body.data?.teamKey).toBe("PHI");
+    expect(body.data?.nextGame?.week).toBe(2);
   });
 });
