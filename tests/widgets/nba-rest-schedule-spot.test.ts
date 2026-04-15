@@ -193,6 +193,10 @@ describe("NBA rest / schedule spot route", () => {
     expect(body.data?.sourceLabel).toContain("Live");
     expect(body.data?.sourceState).toBe("live");
     expect(body.data?.sourceDetail).toMatch(/BALLDONTLIE/i);
+    expect(body.data?.id).toBe("nba-rest-min-minnesota-timberwolves");
+    expect(body.data?.label).toBe("Minnesota Timberwolves schedule spot");
+    expect(body.data?.selectedScenarioId).toBe("nba-rest-min-minnesota-timberwolves");
+    expect(body.data?.summary).toMatch(/MIN|Minnesota Timberwolves/i);
     expect(body.data?.team?.key).toBe("MIN");
     expect(body.data?.opponent?.key).toBe("PHX");
   });
@@ -494,8 +498,137 @@ describe("NBA rest / schedule spot route", () => {
     expect(res.status).toBe(200);
     expect(body.meta?.sourceUsed).toBe("balldontlie");
     expect(body.data?.sourceState).toBe("live");
+    expect(body.data?.id).toBe("nba-rest-min-minnesota-timberwolves");
+    expect(body.data?.label).toBe("Minnesota Timberwolves schedule spot");
+    expect(body.data?.selectedScenarioId).toBe("nba-rest-min-minnesota-timberwolves");
+    expect(body.data?.summary).toMatch(/MIN|Minnesota Timberwolves/i);
     expect(body.data?.team?.key).toBe("MIN");
     expect(body.data?.opponent?.key).toBe("PHX");
     expect(body.meta?.warning).toMatch(/last-known real data/i);
+  });
+
+  it("prefers a fresh API-Sports schedule state over a preserved sparse cache-bust fallback", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.BALL_DONT_LIE_KEY = "test-key";
+    process.env.SPORTS_API_KEY = "live-nba-api-key-2025xx";
+    process.env.NBA_LEAGUE_ID = "12";
+    process.env.NBA_SEASON = "2025";
+
+    const cachedBallMeta = {
+      sourceUsed: "balldontlie" as const,
+      updatedAt: "2026-04-12T12:00:00.000Z",
+      requestId: "cached-rest-spot",
+      dataMode: "live" as const,
+      dataModeEffective: "live" as const,
+      cacheHit: true,
+    };
+    const wolves = {
+      id: 17,
+      conference: "West",
+      division: "Northwest",
+      city: "Minnesota",
+      name: "Timberwolves",
+      full_name: "Minnesota Timberwolves",
+      abbreviation: "MIN",
+    };
+
+    vi.doMock("@/lib/providers/balldontlie", () => ({
+      currentNbaSeason: () => 2025,
+      isBallDontLieConfigured: () => true,
+      findBestNbaPlayerMatch: async () => ({ data: null, meta: cachedBallMeta }),
+      findNbaTeamByKey: async (_teamKey: string, _mode: string, cacheBust?: string) => {
+        if (cacheBust) {
+          throw new Error("BALLDONTLIE 429: rate limit");
+        }
+        return { data: wolves, meta: cachedBallMeta };
+      },
+      getNbaPlayerSeasonStats: async () => ({ data: [], meta: cachedBallMeta }),
+      getNbaTeamSeasonGames: async () => ({
+        data: [
+          {
+            id: 1,
+            date: "2026-04-09",
+            season: 2025,
+            status: "Final",
+            period: 4,
+            time: "Final",
+            postseason: false,
+            postponed: false,
+            home_team_score: 118,
+            visitor_team_score: 104,
+            datetime: "2026-04-09T23:00:00.000Z",
+            home_team: wolves,
+            visitor_team: {
+              id: 30,
+              conference: "West",
+              division: "Northwest",
+              city: "Utah",
+              name: "Jazz",
+              full_name: "Utah Jazz",
+              abbreviation: "UTA",
+            },
+          },
+        ],
+        meta: cachedBallMeta,
+      }),
+      getNbaTeams: async () => ({ data: [wolves], meta: cachedBallMeta }),
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/teamAdvanced", () => ({
+      getTeamsAdvanced: async (_sport: string, teamRefsOrKeys: Array<{ teamKey: string } | string>) => {
+        const refs = teamRefsOrKeys.map((item) => typeof item === "string" ? item : item.teamKey);
+        return {
+          data: {
+            sport: "nba",
+            teams: refs.includes("MIN")
+              ? [
+                  {
+                    teamKey: "MIN",
+                    teamName: "Minnesota Timberwolves",
+                    status: { sport: "nba", teamKey: "MIN", hasGameToday: false },
+                    nextGame: { when: "2026-04-15T00:00:00.000Z", vs: "PHX", homeAway: "home" },
+                    record: { wins: 52, losses: 30, streak: "W2", last10: "7-3" },
+                    standings: { rank: "3", division: "Northwest", conference: "West" },
+                    lastGame: { when: "2026-04-12T00:00:00.000Z", vs: "UTA", result: "W", score: "118-104" },
+                    metaNotes: [],
+                  },
+                  {
+                    teamKey: "PHX",
+                    teamName: "Phoenix Suns",
+                    status: { sport: "nba", teamKey: "PHX", hasGameToday: false },
+                    nextGame: { when: "2026-04-15T00:00:00.000Z", vs: "MIN", homeAway: "away" },
+                    record: { wins: 46, losses: 36, streak: "L1", last10: "5-5" },
+                    standings: { rank: "7", division: "Pacific", conference: "West" },
+                    lastGame: { when: "2026-04-13T00:00:00.000Z", vs: "LAL", result: "L", score: "108-111" },
+                    metaNotes: [],
+                  },
+                ]
+              : [],
+          },
+          meta: {
+            sourceUsed: "apiSports" as const,
+            updatedAt: "2026-04-12T12:05:00.000Z",
+            requestId: "api-sports-rest-refresh",
+            dataMode: "live" as const,
+            dataModeEffective: "live" as const,
+          },
+        };
+      },
+    }));
+
+    const mod = await import("@/app/api/widgets/nba-rest-schedule-spot/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nba-rest-schedule-spot?mode=advanced&dataMode=live&teamKey=MIN&cacheBust=1"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("apiSports");
+    expect(body.data?.sourceState).toBe("partial");
+    expect(body.data?.id).toBe("nba-rest-min-minnesota-timberwolves");
+    expect(body.data?.label).toBe("Minnesota Timberwolves schedule context");
+    expect(body.data?.selectedScenarioId).toBe("nba-rest-min-minnesota-timberwolves");
+    expect(body.data?.summary).toMatch(/MIN|Minnesota Timberwolves/i);
+    expect(body.data?.team?.key).toBe("MIN");
+    expect(body.data?.opponent?.key).toBe("PHX");
+    expect(body.meta?.warning ?? "").not.toMatch(/last-known real data/i);
   });
 });

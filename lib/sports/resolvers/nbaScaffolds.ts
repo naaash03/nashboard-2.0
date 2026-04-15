@@ -302,6 +302,87 @@ function withRefreshPreservedRealState<T>(
   };
 }
 
+type RealWidgetState = { sourceState?: string };
+
+function toSelectionSlug(...parts: Array<string | undefined | null>): string {
+  return parts
+    .map((part) => normalizeText(part ?? "").replace(/\s+/g, "-"))
+    .filter(Boolean)
+    .join("-");
+}
+
+function honestPlayerSelectionFields(
+  player: { fullName?: string; teamKey?: string },
+  sourceState: "live" | "partial" | "hybrid",
+): Pick<PlayerRoleFormDemoData, "id" | "label" | "selectedScenarioId"> {
+  const playerName = player.fullName?.trim() || "NBA player";
+  const teamKey = player.teamKey?.trim().toUpperCase() || "NBA";
+  const id = `nba-player-${toSelectionSlug(teamKey, playerName)}`;
+  return {
+    id,
+    label: sourceState === "live" ? `${playerName} live role form` : `${playerName} player context`,
+    selectedScenarioId: id,
+  };
+}
+
+function honestScheduleSelectionFields(
+  team: { key?: string; name?: string },
+  sourceState: "live" | "partial" | "hybrid",
+): Pick<RestScheduleDemoData, "id" | "label" | "selectedScenarioId"> {
+  const teamName = team.name?.trim() || "NBA team";
+  const teamKey = team.key?.trim().toUpperCase() || "NBA";
+  const id = `nba-rest-${toSelectionSlug(teamKey, teamName)}`;
+  return {
+    id,
+    label: sourceState === "live" ? `${teamName} schedule spot` : `${teamName} schedule context`,
+    selectedScenarioId: id,
+  };
+}
+
+function honestMatchupSelectionFields(
+  away: { key?: string; name?: string },
+  home: { key?: string; name?: string },
+): Pick<TeamMatchupDemoData, "id" | "label" | "selectedScenarioId" | "matchup"> {
+  const awayName = away.name?.trim() || away.key?.trim().toUpperCase() || "Away team";
+  const homeName = home.name?.trim() || home.key?.trim().toUpperCase() || "Home team";
+  const awayKey = away.key?.trim().toUpperCase() || awayName;
+  const homeKey = home.key?.trim().toUpperCase() || homeName;
+  const id = `nba-matchup-${toSelectionSlug(awayKey)}-at-${toSelectionSlug(homeKey)}`;
+  return {
+    id,
+    label: `${awayName} at ${homeName}`,
+    selectedScenarioId: id,
+    matchup: `${awayName} at ${homeName}`,
+  };
+}
+
+function chooseBetterRefreshState<T extends RealWidgetState>(
+  current: { data: T; meta: Meta } | null,
+  candidate: { data: T; meta: Meta } | null | undefined,
+  stateRank: Record<string, number>,
+): { data: T; meta: Meta } | null {
+  if (!candidate || candidate.meta.sourceUsed === "demo" || candidate.data.sourceState === "demo") {
+    return current;
+  }
+  if (!current || current.meta.sourceUsed === "demo" || current.data.sourceState === "demo") {
+    return candidate;
+  }
+
+  const candidateRank = stateRank[candidate.data.sourceState ?? "demo"] ?? 0;
+  const currentRank = stateRank[current.data.sourceState ?? "demo"] ?? 0;
+  if (candidateRank !== currentRank) {
+    return candidateRank > currentRank ? candidate : current;
+  }
+
+  const candidateFresh = !candidate.meta.cacheHit && candidate.meta.sourceUsed !== "cache";
+  const currentFresh = !current.meta.cacheHit && current.meta.sourceUsed !== "cache";
+  if (candidateFresh !== currentFresh) {
+    return candidateFresh ? candidate : current;
+  }
+
+  return current;
+}
+
 function ballDontLieAvailability(dataMode: DataMode): { enabled: boolean; warning?: string } {
   if (dataMode === "fixture") {
     return { enabled: false };
@@ -595,6 +676,10 @@ async function resolveApiSportsTeamMatchupProfile(
   return {
     data: {
       ...base.data,
+      ...honestMatchupSelectionFields(
+        { key: away.teamKey, name: away.teamName ?? base.data.away.name },
+        { key: home.teamKey, name: home.teamName ?? base.data.home.name },
+      ),
       matchup: `${away.teamName ?? base.data.away.name} at ${home.teamName ?? base.data.home.name}`,
       context: `API-Sports NBA is supplying the live team context for this matchup. The pillar board remains scaffolded until team split data is connected cleanly.`,
       beginnerSummary:
@@ -670,6 +755,10 @@ async function resolveApiSportsRestScheduleSpot(
     return {
       data: {
         ...base.data,
+        ...honestScheduleSelectionFields(
+          { key: team.teamKey, name: team.teamName ?? base.data.team.name },
+          "partial",
+        ),
         team: {
           key: team.teamKey,
           name: team.teamName ?? base.data.team.name,
@@ -738,6 +827,10 @@ async function resolveApiSportsRestScheduleSpot(
   return {
     data: {
       ...base.data,
+      ...honestScheduleSelectionFields(
+        { key: team.teamKey, name: team.teamName ?? base.data.team.name },
+        "partial",
+      ),
       team: {
         key: team.teamKey,
         name: team.teamName ?? base.data.team.name,
@@ -853,6 +946,13 @@ async function resolveApiSportsPlayerRoleForm(
   return {
     data: {
       ...base.data,
+      ...honestPlayerSelectionFields(
+        {
+          fullName: insights?.fullName ?? livePlayer.fullName,
+          teamKey: insights?.teamAbbrev ?? livePlayer.teamAbbr ?? args.playerTeamKey ?? base.data.player.teamKey,
+        },
+        recentGames.length > 0 ? "hybrid" : "partial",
+      ),
       player: {
         fullName: insights?.fullName ?? livePlayer.fullName,
         teamKey: insights?.teamAbbrev ?? livePlayer.teamAbbr ?? args.playerTeamKey ?? base.data.player.teamKey,
@@ -955,6 +1055,10 @@ async function resolveLiveTeamMatchupProfile(
     return {
       data: {
         ...base.data,
+        ...honestMatchupSelectionFields(
+          { key: awayTeam.abbreviation, name: awayTeam.full_name },
+          { key: homeTeam.abbreviation, name: homeTeam.full_name },
+        ),
         away: { ...base.data.away, key: awayTeam.abbreviation, name: awayTeam.full_name, record: "Record unavailable" },
         home: { ...base.data.home, key: homeTeam.abbreviation, name: homeTeam.full_name, record: "Record unavailable" },
         context: `${awayTeam.full_name} and ${homeTeam.full_name} were confirmed via BALLDONTLIE, but game record data was temporarily unavailable.`,
@@ -995,6 +1099,10 @@ async function resolveLiveTeamMatchupProfile(
   return {
     data: {
       ...base.data,
+      ...honestMatchupSelectionFields(
+        { key: awayTeam.abbreviation, name: awayTeam.full_name },
+        { key: homeTeam.abbreviation, name: homeTeam.full_name },
+      ),
       context,
       beginnerSummary:
         `${awayTeam.full_name} enters ${awayRecord} overall and ${awayLast10} over the last 10 games. `
@@ -1079,6 +1187,10 @@ async function resolveLiveRestScheduleSpot(
     return {
       data: {
         ...base.data,
+        ...honestScheduleSelectionFields(
+          { key: teamInfo.abbreviation, name: teamInfo.full_name },
+          "partial",
+        ),
         team: {
           key: teamInfo.abbreviation,
           name: teamInfo.full_name,
@@ -1212,6 +1324,10 @@ async function resolveLiveRestScheduleSpot(
   return {
     data: {
       ...base.data,
+      ...honestScheduleSelectionFields(
+        { key: teamInfo.abbreviation, name: teamInfo.full_name },
+        "live",
+      ),
       team: {
         key: teamInfo.abbreviation,
         name: teamInfo.full_name,
@@ -1364,6 +1480,13 @@ async function resolveLivePlayerRoleForm(
     return {
       data: {
         ...base.data,
+        ...honestPlayerSelectionFields(
+          {
+            fullName: playerFullName(livePlayer),
+            teamKey: team?.abbreviation ?? args.playerTeamKey ?? base.data.player.teamKey,
+          },
+          "live",
+        ),
         player: {
           fullName: playerFullName(livePlayer),
           teamKey: team?.abbreviation ?? args.playerTeamKey ?? base.data.player.teamKey,
@@ -1458,6 +1581,13 @@ async function resolveLivePlayerRoleForm(
     return {
       data: {
         ...base.data,
+        ...honestPlayerSelectionFields(
+          {
+            fullName: playerFullName(livePlayer),
+            teamKey: team?.abbreviation ?? args.playerTeamKey ?? base.data.player.teamKey,
+          },
+          "partial",
+        ),
         player: {
           fullName: playerFullName(livePlayer),
           teamKey: team?.abbreviation ?? args.playerTeamKey ?? base.data.player.teamKey,
@@ -1550,6 +1680,8 @@ export async function resolveNbaTeamMatchupProfile(args: {
   const ball = ballDontLieAvailability(args.dataMode);
   const apiSports = apiSportsAvailability(args.dataMode);
   let ballError: string | undefined;
+  let refreshFallbackResult: { data: TeamMatchupDemoData; meta: Meta } | null = null;
+  const matchupStateRank = { demo: 0, partial: 1, hybrid: 2 };
 
   // Track whether BALLDONTLIE attempted enrichment but could not match the team abbreviations.
   // This lets the final fallback explain why demo is shown even when BALLDONTLIE is configured.
@@ -1576,19 +1708,20 @@ export async function resolveNbaTeamMatchupProfile(args: {
   if (refreshRequested && ball.enabled) {
     try {
       const cachedResolved = await resolveLiveTeamMatchupProfile(base, args.dataMode);
-      if (cachedResolved.meta.sourceUsed !== "demo") {
-        return withRefreshPreservedRealState(cachedResolved, {
-          widgetLabel: "NBA matchup",
-          reason: "The forced refresh path did not complete cleanly.",
-          notes: ["BALLDONTLIE fallback retry preserved the previous hybrid matchup context."],
-        });
-      }
+      refreshFallbackResult = chooseBetterRefreshState(refreshFallbackResult, cachedResolved, matchupStateRank);
     } catch {
       // Preserve the existing provider fallback chain below.
     }
   }
 
   if (!apiSports.enabled && ballError) {
+    if (refreshFallbackResult) {
+      return withRefreshPreservedRealState(refreshFallbackResult, {
+        widgetLabel: "NBA matchup",
+        reason: ballError,
+        notes: ["BALLDONTLIE fallback retry preserved the previous hybrid matchup context."],
+      });
+    }
     return withDemoFallback(base, {
       warning: `Live matchup enrichment failed, so the widget fell back to the demo board. ${ballError}`,
       notes: ["BALLDONTLIE live matchup enrichment failed during resolver execution."],
@@ -1597,20 +1730,32 @@ export async function resolveNbaTeamMatchupProfile(args: {
 
   if (apiSports.enabled) {
     try {
-      return await resolveApiSportsTeamMatchupProfile(base, args.dataMode, args.cacheBust);
+      const freshResolved = await resolveApiSportsTeamMatchupProfile(base, args.dataMode, args.cacheBust);
+      const preferredResolved = refreshRequested
+        ? chooseBetterRefreshState(refreshFallbackResult, freshResolved, matchupStateRank)
+        : freshResolved;
+      if (preferredResolved && preferredResolved !== freshResolved) {
+        return withRefreshPreservedRealState(preferredResolved, {
+          widgetLabel: "NBA matchup",
+          reason: "The forced refresh path only recovered a weaker fresh fallback state.",
+          notes: ["A preserved BALLDONTLIE matchup snapshot remained stronger than the fresh fallback provider result."],
+        });
+      }
+      return freshResolved;
     } catch (error) {
       if (refreshRequested) {
         try {
           const cachedResolved = await resolveApiSportsTeamMatchupProfile(base, args.dataMode);
-          if (cachedResolved.meta.sourceUsed !== "demo") {
-            return withRefreshPreservedRealState(cachedResolved, {
-              widgetLabel: "NBA matchup",
-              reason: String(error),
-              notes: ["API-Sports fallback retry preserved the previous live matchup context."],
-            });
-          }
+          refreshFallbackResult = chooseBetterRefreshState(refreshFallbackResult, cachedResolved, matchupStateRank);
         } catch {
           // Fall through to the existing demo fallback below.
+        }
+        if (refreshFallbackResult) {
+          return withRefreshPreservedRealState(refreshFallbackResult, {
+            widgetLabel: "NBA matchup",
+            reason: String(error),
+            notes: ["The refresh path preserved the strongest previously usable matchup context across the NBA provider chain."],
+          });
         }
       }
       return withDemoFallback(base, {
@@ -1628,6 +1773,14 @@ export async function resolveNbaTeamMatchupProfile(args: {
     ?? (ballTeamMismatch
       ? `BALLDONTLIE could not match the team abbreviations for this matchup. Try selecting teams via the Away/Home dropdowns using standard NBA keys (e.g. LAL, GSW, NYK). Showing the demo board.`
       : `No live NBA provider is configured. Showing the demo matchup board.`);
+
+  if (refreshFallbackResult) {
+    return withRefreshPreservedRealState(refreshFallbackResult, {
+      widgetLabel: "NBA matchup",
+      reason: "The forced refresh path did not produce a stronger live matchup state.",
+      notes: ["The resolver kept the best previously usable matchup context instead of collapsing to demo."],
+    });
+  }
 
   return withDemoFallback(base, {
     warning: demoWarning,
@@ -1647,6 +1800,8 @@ export async function resolveNbaRestScheduleSpot(args: {
   const requestedTeamKey = args.teamKey?.trim().toUpperCase();
   const refreshRequested = Boolean(args.cacheBust?.trim());
   let ballError: string | undefined;
+  let refreshFallbackResult: { data: RestScheduleDemoData; meta: Meta } | null = null;
+  const scheduleStateRank = { demo: 0, partial: 1, live: 2 };
 
   if (!requestedTeamKey) {
     return base;
@@ -1672,19 +1827,20 @@ export async function resolveNbaRestScheduleSpot(args: {
   if (refreshRequested && ball.enabled) {
     try {
       const cachedResolved = await resolveLiveRestScheduleSpot(base, requestedTeamKey, args.dataMode);
-      if (cachedResolved.meta.sourceUsed !== "demo") {
-        return withRefreshPreservedRealState(cachedResolved, {
-          widgetLabel: "NBA schedule",
-          reason: "The forced refresh path did not complete cleanly.",
-          notes: ["BALLDONTLIE fallback retry preserved the previous live or sparse-live schedule context."],
-        });
-      }
+      refreshFallbackResult = chooseBetterRefreshState(refreshFallbackResult, cachedResolved, scheduleStateRank);
     } catch {
       // Preserve the existing provider fallback chain below.
     }
   }
 
   if (!apiSports.enabled && ballError) {
+    if (refreshFallbackResult) {
+      return withRefreshPreservedRealState(refreshFallbackResult, {
+        widgetLabel: "NBA schedule",
+        reason: ballError,
+        notes: ["BALLDONTLIE fallback retry preserved the previous live or sparse-live schedule context."],
+      });
+    }
     return withDemoFallback(base, {
       warning: `Live schedule enrichment failed for ${requestedTeamKey}, so the widget fell back to the demo spot. ${ballError}`,
       notes: ["BALLDONTLIE live rest/schedule enrichment failed during resolver execution."],
@@ -1693,20 +1849,32 @@ export async function resolveNbaRestScheduleSpot(args: {
 
   if (apiSports.enabled) {
     try {
-      return await resolveApiSportsRestScheduleSpot(base, requestedTeamKey, args.dataMode, args.cacheBust);
+      const freshResolved = await resolveApiSportsRestScheduleSpot(base, requestedTeamKey, args.dataMode, args.cacheBust);
+      const preferredResolved = refreshRequested
+        ? chooseBetterRefreshState(refreshFallbackResult, freshResolved, scheduleStateRank)
+        : freshResolved;
+      if (preferredResolved && preferredResolved !== freshResolved) {
+        return withRefreshPreservedRealState(preferredResolved, {
+          widgetLabel: "NBA schedule",
+          reason: "The forced refresh path only recovered a weaker fresh fallback schedule state.",
+          notes: ["A preserved BALLDONTLIE schedule snapshot remained stronger than the fresh fallback provider result."],
+        });
+      }
+      return freshResolved;
     } catch (error) {
       if (refreshRequested) {
         try {
           const cachedResolved = await resolveApiSportsRestScheduleSpot(base, requestedTeamKey, args.dataMode);
-          if (cachedResolved.meta.sourceUsed !== "demo") {
-            return withRefreshPreservedRealState(cachedResolved, {
-              widgetLabel: "NBA schedule",
-              reason: String(error),
-              notes: ["API-Sports fallback retry preserved the previous schedule context."],
-            });
-          }
+          refreshFallbackResult = chooseBetterRefreshState(refreshFallbackResult, cachedResolved, scheduleStateRank);
         } catch {
           // Fall through to the existing demo fallback below.
+        }
+        if (refreshFallbackResult) {
+          return withRefreshPreservedRealState(refreshFallbackResult, {
+            widgetLabel: "NBA schedule",
+            reason: String(error),
+            notes: ["The refresh path preserved the strongest previously usable schedule context across the NBA provider chain."],
+          });
         }
       }
       return withDemoFallback(base, {
@@ -1717,6 +1885,14 @@ export async function resolveNbaRestScheduleSpot(args: {
         ],
       });
     }
+  }
+
+  if (refreshFallbackResult) {
+    return withRefreshPreservedRealState(refreshFallbackResult, {
+      widgetLabel: "NBA schedule",
+      reason: "The forced refresh path did not produce a stronger live schedule state.",
+      notes: ["The resolver kept the best previously usable schedule context instead of collapsing to demo."],
+    });
   }
 
   return withDemoFallback(base, {
@@ -1738,6 +1914,8 @@ export async function resolveNbaPlayerRoleForm(args: {
   const requestedPlayerName = args.playerName?.trim();
   const refreshRequested = Boolean(args.cacheBust?.trim());
   let ballError: string | undefined;
+  let refreshFallbackResult: { data: PlayerRoleFormDemoData; meta: Meta } | null = null;
+  const playerStateRank = { demo: 0, partial: 1, hybrid: 2, live: 3 };
 
   if (!requestedPlayerName) {
     return base;
@@ -1780,19 +1958,23 @@ export async function resolveNbaPlayerRoleForm(args: {
         playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
         dataMode: args.dataMode,
       });
-      if (cachedResolved.data.sourceState === "live" || cachedResolved.data.sourceState === "partial") {
-        return withRefreshPreservedRealState(cachedResolved, {
-          widgetLabel: "NBA player card",
-          reason: "The forced refresh path did not complete cleanly.",
-          notes: ["BALLDONTLIE fallback retry preserved the previous live or partial-live player context."],
-        });
-      }
+      refreshFallbackResult = chooseBetterRefreshState(refreshFallbackResult, cachedResolved, playerStateRank);
     } catch {
       // Preserve the existing provider fallback chain below.
     }
   }
 
   if (!apiSports.enabled && ballError) {
+    if (ballPartialResult) {
+      return ballPartialResult;
+    }
+    if (refreshFallbackResult) {
+      return withRefreshPreservedRealState(refreshFallbackResult, {
+        widgetLabel: "NBA player card",
+        reason: ballError,
+        notes: ["BALLDONTLIE fallback retry preserved the previous live or partial-live player context."],
+      });
+    }
     return withDemoFallback(base, {
       warning: `Live player enrichment failed for ${requestedPlayerName}, so the widget fell back to the demo profile. ${ballError}`,
       notes: ["BALLDONTLIE live player-role enrichment failed during resolver execution."],
@@ -1801,12 +1983,29 @@ export async function resolveNbaPlayerRoleForm(args: {
 
   if (apiSports.enabled) {
     try {
-      return await resolveApiSportsPlayerRoleForm(base, {
+      const freshResolved = await resolveApiSportsPlayerRoleForm(base, {
         playerName: requestedPlayerName,
         playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
         dataMode: args.dataMode,
         cacheBust: args.cacheBust,
       });
+      const preferredFreshResolved = refreshRequested
+        ? chooseBetterRefreshState(ballPartialResult, freshResolved, playerStateRank)
+        : freshResolved;
+      const preferredResolved = refreshRequested
+        ? chooseBetterRefreshState(refreshFallbackResult, preferredFreshResolved, playerStateRank)
+        : preferredFreshResolved;
+      if (preferredResolved && preferredResolved !== freshResolved) {
+        if (preferredResolved === ballPartialResult) {
+          return ballPartialResult;
+        }
+        return withRefreshPreservedRealState(preferredResolved, {
+          widgetLabel: "NBA player card",
+          reason: "The forced refresh path only recovered a weaker fresh fallback player state.",
+          notes: ["A preserved player context state remained stronger than the fresh fallback provider result."],
+        });
+      }
+      return freshResolved;
     } catch (error) {
       if (refreshRequested) {
         try {
@@ -1815,25 +2014,20 @@ export async function resolveNbaPlayerRoleForm(args: {
             playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
             dataMode: args.dataMode,
           });
-          if (cachedResolved.data.sourceState !== "demo") {
-            return withRefreshPreservedRealState(cachedResolved, {
-              widgetLabel: "NBA player card",
-              reason: String(error),
-              notes: ["API-Sports fallback retry preserved the previous player identity and form context."],
-            });
-          }
+          refreshFallbackResult = chooseBetterRefreshState(refreshFallbackResult, cachedResolved, playerStateRank);
         } catch {
           // Fall through to the existing partial/demo fallback below.
         }
       }
       if (ballPartialResult) {
-        return refreshRequested
-          ? withRefreshPreservedRealState(ballPartialResult, {
-              widgetLabel: "NBA player card",
-              reason: String(error),
-              notes: ["BALLDONTLIE partial-live identity context was preserved after the fresh provider chain degraded."],
-            })
-          : ballPartialResult;
+        return ballPartialResult;
+      }
+      if (refreshFallbackResult) {
+        return withRefreshPreservedRealState(refreshFallbackResult, {
+          widgetLabel: "NBA player card",
+          reason: String(error),
+          notes: ["The refresh path preserved the strongest previously usable player context across the NBA provider chain."],
+        });
       }
       return withDemoFallback(base, {
         warning: `Live player enrichment failed for ${requestedPlayerName} on both NBA providers, so the widget fell back to the demo profile. ${String(error)}`,
@@ -1848,6 +2042,14 @@ export async function resolveNbaPlayerRoleForm(args: {
   // Prefer the partial live result (real player identity + team context) over a pure demo fallback.
   if (ballPartialResult) {
     return ballPartialResult;
+  }
+
+  if (refreshFallbackResult) {
+    return withRefreshPreservedRealState(refreshFallbackResult, {
+      widgetLabel: "NBA player card",
+      reason: "The forced refresh path did not produce a stronger real player state.",
+      notes: ["The resolver kept the best previously usable player context instead of collapsing to demo."],
+    });
   }
 
   return withDemoFallback(base, {

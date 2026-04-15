@@ -168,6 +168,11 @@ describe("NBA team matchup profile route", () => {
     expect(body.data?.sourceLabel).toContain("Hybrid");
     expect(body.data?.sourceState).toBe("hybrid");
     expect(body.data?.sourceDetail).toMatch(/pillar board is still scaffolded/i);
+    expect(body.data?.id).toBe("nba-matchup-bos-at-nyk");
+    expect(body.data?.label).toBe("Boston Celtics at New York Knicks");
+    expect(body.data?.selectedScenarioId).toBe("nba-matchup-bos-at-nyk");
+    expect(body.data?.matchup).toBe("Boston Celtics at New York Knicks");
+    expect(body.data?.summary).toMatch(/BOS|NYK|Boston Celtics|New York Knicks/i);
     expect(body.data?.away?.key).toBe("BOS");
     expect(body.data?.home?.key).toBe("NYK");
   });
@@ -270,6 +275,12 @@ describe("NBA team matchup profile route", () => {
 
     expect(res.status).toBe(200);
     expect(body.meta?.sourceUsed).toBe("balldontlie");
+    expect(body.data?.id).toBe("nba-matchup-lal-at-gsw");
+    expect(body.data?.label).toBe("Los Angeles Lakers at Golden State Warriors");
+    expect(body.data?.selectedScenarioId).toBe("nba-matchup-lal-at-gsw");
+    expect(body.data?.matchup).toBe("Los Angeles Lakers at Golden State Warriors");
+    expect(body.data?.summary).toMatch(/LAL|GSW|Los Angeles Lakers|Golden State Warriors/i);
+    expect(body.data?.summary).not.toMatch(/Boston Celtics|New York Knicks/i);
     expect(body.data?.away?.key).toBe("LAL");
     expect(body.data?.home?.key).toBe("GSW");
     expect(body.data?.away?.name).toBe("Los Angeles Lakers");
@@ -486,5 +497,111 @@ describe("NBA team matchup profile route", () => {
     expect(body.data?.away?.key).toBe("BOS");
     expect(body.data?.home?.key).toBe("NYK");
     expect(body.meta?.warning).toMatch(/last-known real data/i);
+  });
+
+  it("prefers a fresher API-Sports matchup state over a preserved partial cache-bust fallback", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.BALL_DONT_LIE_KEY = "test-key";
+    process.env.SPORTS_API_KEY = "live-nba-api-key-2025xx";
+    process.env.NBA_LEAGUE_ID = "12";
+    process.env.NBA_SEASON = "2025";
+
+    const cachedBallMeta = {
+      sourceUsed: "balldontlie" as const,
+      updatedAt: "2026-04-12T12:00:00.000Z",
+      requestId: "cached-team-matchup",
+      dataMode: "live" as const,
+      dataModeEffective: "live" as const,
+      cacheHit: true,
+    };
+    const awayTeam = {
+      id: 2,
+      conference: "West",
+      division: "Pacific",
+      city: "Sacramento",
+      name: "Kings",
+      full_name: "Sacramento Kings",
+      abbreviation: "SAC",
+    };
+    const homeTeam = {
+      id: 24,
+      conference: "West",
+      division: "Northwest",
+      city: "Portland",
+      name: "Trail Blazers",
+      full_name: "Portland Trail Blazers",
+      abbreviation: "POR",
+    };
+
+    vi.doMock("@/lib/providers/balldontlie", () => ({
+      currentNbaSeason: () => 2025,
+      isBallDontLieConfigured: () => true,
+      findBestNbaPlayerMatch: async () => ({ data: null, meta: cachedBallMeta }),
+      findNbaTeamByKey: async () => ({ data: null, meta: cachedBallMeta }),
+      getNbaPlayerSeasonStats: async () => ({ data: [], meta: cachedBallMeta }),
+      getNbaTeamSeasonGames: async () => {
+        throw new Error("BALLDONTLIE games unavailable");
+      },
+      getNbaTeams: async (_mode: string, cacheBust?: string) => {
+        if (cacheBust) {
+          throw new Error("BALLDONTLIE 429: rate limit");
+        }
+        return { data: [awayTeam, homeTeam], meta: cachedBallMeta };
+      },
+    }));
+
+    vi.doMock("@/lib/providers/apiSports/teamAdvanced", () => ({
+      getTeamsAdvanced: async () => ({
+        data: {
+          sport: "nba",
+          teams: [
+            {
+              teamKey: "SAC",
+              teamName: "Sacramento Kings",
+              status: { sport: "nba", teamKey: "SAC", hasGameToday: false },
+              nextGame: { when: "2026-04-15T00:00:00.000Z", vs: "POR", homeAway: "away" },
+              record: { wins: 47, losses: 35, streak: "W2", last10: "6-4" },
+              standings: { rank: "8", division: "Pacific", conference: "West" },
+              lastGame: { when: "2026-04-12T00:00:00.000Z", vs: "GSW", result: "W", score: "118-112" },
+              metaNotes: [],
+            },
+            {
+              teamKey: "POR",
+              teamName: "Portland Trail Blazers",
+              status: { sport: "nba", teamKey: "POR", hasGameToday: false },
+              nextGame: { when: "2026-04-15T00:00:00.000Z", vs: "SAC", homeAway: "home" },
+              record: { wins: 31, losses: 51, streak: "L1", last10: "4-6" },
+              standings: { rank: "13", division: "Northwest", conference: "West" },
+              lastGame: { when: "2026-04-11T00:00:00.000Z", vs: "UTA", result: "L", score: "102-109" },
+              metaNotes: [],
+            },
+          ],
+        },
+        meta: {
+          sourceUsed: "apiSports" as const,
+          updatedAt: "2026-04-12T12:05:00.000Z",
+          requestId: "api-matchup-refresh",
+          dataMode: "live" as const,
+          dataModeEffective: "live" as const,
+        },
+      }),
+    }));
+
+    const mod = await import("@/app/api/widgets/nba-team-matchup-profile/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nba-team-matchup-profile?mode=advanced&dataMode=live&awayKey=SAC&homeKey=POR&cacheBust=1"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("apiSports");
+    expect(body.data?.sourceState).toBe("hybrid");
+    expect(body.data?.id).toBe("nba-matchup-sac-at-por");
+    expect(body.data?.label).toBe("Sacramento Kings at Portland Trail Blazers");
+    expect(body.data?.selectedScenarioId).toBe("nba-matchup-sac-at-por");
+    expect(body.data?.matchup).toBe("Sacramento Kings at Portland Trail Blazers");
+    expect(body.data?.summary).toMatch(/SAC|POR|Sacramento Kings|Portland Trail Blazers/i);
+    expect(body.data?.summary).not.toMatch(/Boston Celtics|New York Knicks/i);
+    expect(body.data?.away?.key).toBe("SAC");
+    expect(body.data?.home?.key).toBe("POR");
+    expect(body.meta?.warning ?? "").not.toMatch(/last-known real data/i);
   });
 });
