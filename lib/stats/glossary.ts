@@ -325,6 +325,42 @@ export const BUILTIN_GLOSSARY_TERMS: GlossaryTerm[] = [
     direction: "CONTEXT_DEPENDENT",
   }),
   term({
+    sport: "ALL",
+    key: "wins_record",
+    label: "W",
+    aliases: ["wins", "team wins"],
+    plainDefinition: "Wins count how many games a team won in the selected sample.",
+    whyItMatters: "They are the clearest standings signal because the goal is to win games, not just outgain opponents.",
+    direction: "HIGHER_IS_BETTER",
+  }),
+  term({
+    sport: "ALL",
+    key: "losses_record",
+    label: "L",
+    aliases: ["losses", "team losses"],
+    plainDefinition: "Losses count how many games a team lost in the selected sample.",
+    whyItMatters: "They show how often a team failed to finish drives, stops, and late-game situations strongly enough to win.",
+    direction: "LOWER_IS_BETTER",
+  }),
+  term({
+    sport: "ALL",
+    key: "ties",
+    label: "T",
+    aliases: ["ties", "draws"],
+    plainDefinition: "Ties count games that ended even after the league's overtime rules were exhausted.",
+    whyItMatters: "They affect record, winning percentage, and tiebreak math even when they are rare.",
+    direction: "CONTEXT_DEPENDENT",
+  }),
+  term({
+    sport: "ALL",
+    key: "streak",
+    label: "Streak",
+    aliases: ["current streak", "win streak", "loss streak"],
+    plainDefinition: "Streak shows whether a team has been stringing together wins or losses lately.",
+    whyItMatters: "It gives quick momentum context, though it should be paired with opponent quality and overall record.",
+    direction: "CONTEXT_DEPENDENT",
+  }),
+  term({
     sport: "MLB",
     key: "games_started",
     label: "GS",
@@ -429,6 +465,42 @@ export const BUILTIN_GLOSSARY_TERMS: GlossaryTerm[] = [
     whyItMatters: "It normalizes record so teams or players with different game totals are easier to compare.",
     direction: "HIGHER_IS_BETTER",
     interpretation: "Higher winning percentage means better results over the selected sample, especially when teams have played different numbers of games.",
+  }),
+  term({
+    sport: "NFL",
+    key: "points_for",
+    label: "PF",
+    aliases: ["points for", "team points scored"],
+    plainDefinition: "Points for is the total number of points a team scored.",
+    whyItMatters: "It gives a fast read on how much scoring pressure that team created across the season.",
+    direction: "HIGHER_IS_BETTER",
+  }),
+  term({
+    sport: "NFL",
+    key: "points_against",
+    label: "PA",
+    aliases: ["points against", "team points allowed"],
+    plainDefinition: "Points against is the total number of points a team allowed.",
+    whyItMatters: "It helps show how often that defense kept opponents from turning drives into points.",
+    direction: "LOWER_IS_BETTER",
+  }),
+  term({
+    sport: "NFL",
+    key: "playoff_seed",
+    label: "Playoff Seed",
+    aliases: ["seed", "conference seed"],
+    plainDefinition: "Playoff seed is the team's conference slot after the regular season standings are finalized.",
+    whyItMatters: "It determines playoff path, home-field context, and whether a team qualified at all.",
+    direction: "LOWER_IS_BETTER",
+  }),
+  term({
+    sport: "NFL",
+    key: "clinched",
+    label: "Clinched",
+    aliases: ["playoff berth clinched", "clinched playoff spot"],
+    plainDefinition: "Clinched means a team has already secured a playoff berth or locked in a postseason slot.",
+    whyItMatters: "It separates teams still chasing leverage games from teams that already secured a postseason path.",
+    direction: "CONTEXT_DEPENDENT",
   }),
   term({
     sport: "MLB",
@@ -894,7 +966,8 @@ function inferStatCategory(t: GlossaryTerm): StatCategory {
   if (["games_played", "days_rest"].includes(k)) return "workload";
   if (
     ["runs_scored", "runs_allowed", "run_differential", "run_diff_per_game",
-     "weighted_win_pct", "games_back", "win_pct", "w_l_record"].includes(k)
+     "weighted_win_pct", "games_back", "win_pct", "w_l_record", "wins_record", "losses_record",
+     "ties", "streak", "points_for", "points_against", "playoff_seed", "clinched"].includes(k)
   ) return "team";
   return "counting_hitter";
 }

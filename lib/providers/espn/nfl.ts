@@ -64,6 +64,112 @@ type EspnRoster = {
   athletes?: Array<{ id?: string; displayName?: string; position?: { abbreviation?: string } }>;
 };
 
+export type EspnNflTeamProfile = {
+  season?: {
+    year?: number;
+    type?: number;
+    name?: string;
+    displayName?: string;
+  };
+  team?: {
+    id?: string;
+    abbreviation?: string;
+    displayName?: string;
+    location?: string;
+    name?: string;
+    logo?: string;
+    logos?: Array<{ href?: string }>;
+    recordSummary?: string;
+    standingSummary?: string;
+    nextEvent?: Array<{ id?: string; date?: string }>;
+    byeWeek?: number;
+    record?: {
+      items?: Array<{
+        type?: string;
+        summary?: string;
+        stats?: Array<{
+          name?: string;
+          value?: number;
+          displayValue?: string;
+        }>;
+      }>;
+    };
+  };
+};
+
+export type EspnNflTeamSchedule = {
+  season?: {
+    year?: number;
+    type?: number;
+    name?: string;
+    displayName?: string;
+  };
+  requestedSeason?: {
+    year?: number;
+    type?: number;
+    name?: string;
+    displayName?: string;
+  };
+  team?: {
+    id?: string;
+    abbreviation?: string;
+    displayName?: string;
+    logo?: string;
+    logos?: Array<{ href?: string }>;
+    recordSummary?: string;
+    standingSummary?: string;
+    byeWeek?: number;
+  };
+  byeWeek?: number;
+  events?: Array<{
+    id?: string;
+    date?: string;
+    name?: string;
+    shortName?: string;
+    season?: {
+      year?: number;
+      displayName?: string;
+    };
+    seasonType?: {
+      type?: number;
+      name?: string;
+      abbreviation?: string;
+    };
+    week?: {
+      number?: number;
+      text?: string;
+    };
+    competitions?: Array<{
+      id?: string;
+      date?: string;
+      venue?: {
+        fullName?: string;
+      };
+      competitors?: Array<{
+        id?: string;
+        homeAway?: "home" | "away";
+        winner?: boolean;
+        score?: { value?: number; displayValue?: string };
+        team?: {
+          id?: string;
+          abbreviation?: string;
+          displayName?: string;
+          shortDisplayName?: string;
+          logos?: Array<{ href?: string }>;
+        };
+      }>;
+      status?: {
+        type?: {
+          state?: string;
+          description?: string;
+          detail?: string;
+          shortDetail?: string;
+        };
+      };
+    }>;
+  }>;
+};
+
 export type NflAthleteIndexEntry = {
   id: string;
   fullName: string;
@@ -900,6 +1006,57 @@ export async function getTeamRecentRbLeader(teamKey: string, dataMode?: ModeArg,
       },
     };
   }
+}
+
+export async function getNflTeamProfile(
+  teamKey: string,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+): Promise<{ data: EspnNflTeamProfile; meta: Meta }> {
+  const mode = getDataMode(dataMode);
+  const normalizedTeamKey = teamKey.trim().toLowerCase();
+
+  const response = await fetchEspnJson<EspnNflTeamProfile>({
+    endpoint: `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${encodeURIComponent(normalizedTeamKey)}`,
+    ttlSeconds: 300,
+    dataMode: mode,
+    cacheBust,
+  });
+
+  return response;
+}
+
+export async function getNflTeamSchedule(
+  teamKey: string,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+  season?: number,
+): Promise<{ data: EspnNflTeamSchedule; meta: Meta }> {
+  const mode = getDataMode(dataMode);
+  const normalizedTeamKey = teamKey.trim().toLowerCase();
+
+  const response = await fetchEspnJson<EspnNflTeamSchedule>({
+    endpoint: `https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/${encodeURIComponent(normalizedTeamKey)}/schedule`,
+    params: season ? { season } : undefined,
+    ttlSeconds: 300,
+    dataMode: mode,
+    cacheBust,
+  });
+
+  return {
+    ...response,
+    data: season
+      ? {
+          ...response.data,
+          requestedSeason: {
+            year: season,
+            type: response.data.requestedSeason?.type,
+            name: response.data.requestedSeason?.name,
+            displayName: response.data.requestedSeason?.displayName,
+          },
+        }
+      : response.data,
+  };
 }
 
 export function __resetAthleteIndexCacheForTests(): void {

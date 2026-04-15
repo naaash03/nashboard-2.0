@@ -23,6 +23,9 @@ import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
 import NbaTeamMatchupProfileWidget from "@/components/widgets/NbaTeamMatchupProfileWidget";
 import NbaRestScheduleSpotWidget from "@/components/widgets/NbaRestScheduleSpotWidget";
 import NbaPlayerRoleFormWidget from "@/components/widgets/NbaPlayerRoleFormWidget";
+import NflDivisionSnapshotWidget from "@/components/widgets/NflDivisionSnapshotWidget";
+import NflTeamContextCardWidget from "@/components/widgets/NflTeamContextCardWidget";
+import NflRecentFormWidget from "@/components/widgets/NflRecentFormWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -75,6 +78,9 @@ type Mode = "forced_guest" | "guest" | "signed_in";
 
 const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Element | null> = {
   tonights_slate: (props) => <TonightsSlateWidget {...props} />,
+  nfl_division_snapshot: (props) => <NflDivisionSnapshotWidget {...props} />,
+  nfl_team_context_card: (props) => <NflTeamContextCardWidget {...props} />,
+  nfl_recent_form: (props) => <NflRecentFormWidget {...props} />,
   player_card: (props) => <PlayerCardWidget {...props} />,
   watchlist: (props) => <WatchlistWidget {...props} />,
   rb_vs_dline: (props) => <RbVsDlineWidget {...props} />,

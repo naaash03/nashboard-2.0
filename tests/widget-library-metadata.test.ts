@@ -33,4 +33,12 @@ describe("widget metadata trust labels", () => {
     expect(keys.has("nba_rest_schedule_spot")).toBe(true);
     expect(keys.has("nba_player_role_form")).toBe(true);
   });
+
+  it("registers the new NFL baseline widgets cleanly", () => {
+    const nflWidgets = WIDGET_DEFINITIONS.filter((entry) => entry.sportCategory === "NFL");
+    const keys = new Set(nflWidgets.map((entry) => entry.key));
+    expect(keys.has("nfl_division_snapshot")).toBe(true);
+    expect(keys.has("nfl_team_context_card")).toBe(true);
+    expect(keys.has("nfl_recent_form")).toBe(true);
+  });
 });
