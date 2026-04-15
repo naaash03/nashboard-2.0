@@ -1597,19 +1597,21 @@ async function resolveLivePlayerRoleForm(
           archetype: fallbackRole.archetype,
         },
         form: "steady",
-        context: `Live BALLDONTLIE player lookup found ${playerFullName(livePlayer)}, but the current key did not expose game stats for a full recent-form read.`,
+        context:
+          `BALLDONTLIE confirmed ${playerFullName(livePlayer)} on ${team?.full_name ?? "an NBA roster"}. `
+          + "This view keeps the player identity, team, and position context live-backed while game-log stats remain unavailable at the current plan tier.",
         beginnerSummary:
-          `${playerFullName(livePlayer)} was found live on ${team?.full_name ?? "an NBA roster"}, but recent-form numbers are unavailable on the current BALLDONTLIE plan.`,
+          `${playerFullName(livePlayer)} is confirmed live on ${team?.full_name ?? "an NBA roster"}, so this card keeps the real player and role context even though recent box-score form is unavailable on the current plan tier.`,
         advancedSummary:
-          `The live path resolved ${playerFullName(livePlayer)} through BALLDONTLIE's player directory, but the stats endpoint was unavailable for this key. `
-          + "The widget stays honest by showing roster context without inventing recent production trends.",
+          `BALLDONTLIE confirmed ${playerFullName(livePlayer)} through the live player directory, but the current plan tier does not expose the game-log data needed for recent-form metrics. `
+          + "The card stays intentional by preserving identity, team, and position context without inventing production trends.",
         metrics: [
           {
-            label: "Live data status",
-            seasonValue: "Player profile found",
-            recentValue: "Game stats unavailable",
+            label: "Profile status",
+            seasonValue: "Player profile confirmed",
+            recentValue: "Game-log stats unavailable",
             trend: "steady",
-            takeaway: "The current key can verify roster identity, but not recent box-score form.",
+            takeaway: "The current plan tier verifies real player and team context, but not recent box-score form.",
           },
           {
             label: "Position",
@@ -1623,7 +1625,7 @@ async function resolveLivePlayerRoleForm(
             seasonValue: "Not available at this tier",
             recentValue: "Not available at this tier",
             trend: "steady",
-            takeaway: "Playing time and box-score trends are available with an upgraded BALLDONTLIE plan.",
+            takeaway: "Minutes-based role signals are unavailable on the current plan tier.",
           },
         ],
         roleSignals: [
@@ -1638,9 +1640,9 @@ async function resolveLivePlayerRoleForm(
             explanation: "The live player directory still confirms current team context.",
           },
           {
-            label: "Data gap",
-            value: "Stats tier unavailable",
-            explanation: "The current BALLDONTLIE key does not expose the player game-log data needed for form trends.",
+            label: "Coverage",
+            value: "Identity + position only",
+            explanation: "The current BALLDONTLIE plan confirms player identity, team, and position, but not the game-log layer needed for recent-form signals.",
           },
         ],
         recentGames: [],
@@ -1650,7 +1652,7 @@ async function resolveLivePlayerRoleForm(
         ],
         sourceState: "partial",
         sourceLabel: "Partial live player context",
-        sourceDetail: `BALLDONTLIE confirmed ${playerFullName(livePlayer)} on ${team?.full_name ?? "an NBA roster"}. Game log and stat access is gated at this plan tier — showing role identity and position context only.`,
+        sourceDetail: `BALLDONTLIE confirmed ${playerFullName(livePlayer)} on ${team?.full_name ?? "an NBA roster"}. Game log and stat access is gated at this plan tier - showing role identity and position context only.`,
       },
       meta: mergeMeta([playerMatch.meta], {
         warning: String(error),
