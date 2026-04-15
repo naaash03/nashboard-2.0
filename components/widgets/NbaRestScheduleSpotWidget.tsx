@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NbaRestScheduleSpotUi } from "@/lib/templates/nbaRestScheduleSpot";
 
@@ -258,7 +259,7 @@ export default function NbaRestScheduleSpotWidget(props: WidgetCommonProps) {
             {data.factors.map((factor) => (
               <div key={factor.label} className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-neutral-100">{factor.label}</p>
+                  <StatLabel label={factor.label} sport="nba" mode={props.mode} className="font-medium text-neutral-100" />
                   <FactorBadge edge={factor.edge} />
                 </div>
                 {advanced ? (

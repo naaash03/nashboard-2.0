@@ -357,4 +357,145 @@ describe("NBA rest / schedule spot route", () => {
     expect(body.data?.team?.key).toBe("MIN");
     expect(body.data?.opponent?.key).toBe("PHX");
   });
+
+  it("preserves live schedule context on cache-bust refresh when the fresh BALLDONTLIE path fails", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.BALL_DONT_LIE_KEY = "test-key";
+
+    const meta = {
+      sourceUsed: "balldontlie" as const,
+      updatedAt: "2026-04-12T12:00:00.000Z",
+      requestId: "cached-rest-spot",
+      dataMode: "live" as const,
+      dataModeEffective: "live" as const,
+      cacheHit: true,
+    };
+    const wolves = {
+      id: 17,
+      conference: "West",
+      division: "Northwest",
+      city: "Minnesota",
+      name: "Timberwolves",
+      full_name: "Minnesota Timberwolves",
+      abbreviation: "MIN",
+    };
+    const suns = {
+      id: 24,
+      conference: "West",
+      division: "Pacific",
+      city: "Phoenix",
+      name: "Suns",
+      full_name: "Phoenix Suns",
+      abbreviation: "PHX",
+    };
+
+    vi.doMock("@/lib/providers/balldontlie", () => ({
+      currentNbaSeason: () => 2025,
+      isBallDontLieConfigured: () => true,
+      findBestNbaPlayerMatch: async () => ({ data: null, meta }),
+      findNbaTeamByKey: async (_teamKey: string, _mode: string, cacheBust?: string) => {
+        if (cacheBust) {
+          throw new Error("BALLDONTLIE 429: rate limit");
+        }
+        return { data: wolves, meta };
+      },
+      getNbaPlayerSeasonStats: async () => ({ data: [], meta }),
+      getNbaTeamSeasonGames: async (teamId: number) => ({
+        data: teamId === wolves.id
+          ? [
+              {
+                id: 1,
+                date: "2026-04-09",
+                season: 2025,
+                status: "Final",
+                period: 4,
+                time: "Final",
+                postseason: false,
+                postponed: false,
+                home_team_score: 118,
+                visitor_team_score: 104,
+                datetime: "2026-04-09T23:00:00.000Z",
+                home_team: wolves,
+                visitor_team: {
+                  id: 30,
+                  conference: "West",
+                  division: "Northwest",
+                  city: "Utah",
+                  name: "Jazz",
+                  full_name: "Utah Jazz",
+                  abbreviation: "UTA",
+                },
+              },
+              {
+                id: 2,
+                date: "2099-04-13",
+                season: 2025,
+                status: "Scheduled",
+                period: 0,
+                time: "8:00 PM ET",
+                postseason: false,
+                postponed: false,
+                home_team_score: 0,
+                visitor_team_score: 0,
+                datetime: "2099-04-13T00:00:00.000Z",
+                home_team: wolves,
+                visitor_team: suns,
+              },
+            ]
+          : [
+              {
+                id: 2,
+                date: "2099-04-13",
+                season: 2025,
+                status: "Scheduled",
+                period: 0,
+                time: "8:00 PM ET",
+                postseason: false,
+                postponed: false,
+                home_team_score: 0,
+                visitor_team_score: 0,
+                datetime: "2099-04-13T00:00:00.000Z",
+                home_team: wolves,
+                visitor_team: suns,
+              },
+              {
+                id: 4,
+                date: "2026-04-12",
+                season: 2025,
+                status: "Final",
+                period: 4,
+                time: "Final",
+                postseason: false,
+                postponed: false,
+                home_team_score: 111,
+                visitor_team_score: 108,
+                datetime: "2026-04-12T23:00:00.000Z",
+                home_team: suns,
+                visitor_team: {
+                  id: 13,
+                  conference: "West",
+                  division: "Pacific",
+                  city: "Los Angeles",
+                  name: "Lakers",
+                  full_name: "Los Angeles Lakers",
+                  abbreviation: "LAL",
+                },
+              },
+            ],
+        meta,
+      }),
+      getNbaTeams: async () => ({ data: [wolves, suns], meta }),
+    }));
+
+    const mod = await import("@/app/api/widgets/nba-rest-schedule-spot/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nba-rest-schedule-spot?mode=advanced&dataMode=live&teamKey=MIN&cacheBust=1"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("balldontlie");
+    expect(body.data?.sourceState).toBe("live");
+    expect(body.data?.team?.key).toBe("MIN");
+    expect(body.data?.opponent?.key).toBe("PHX");
+    expect(body.meta?.warning).toMatch(/last-known real data/i);
+  });
 });

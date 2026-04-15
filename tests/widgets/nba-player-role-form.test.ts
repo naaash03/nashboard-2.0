@@ -380,4 +380,59 @@ describe("NBA player role + form route", () => {
     expect(body.data?.sourceDetail).toMatch(/API-Sports NBA/i);
     expect(body.data?.player?.fullName).toBe("Stephen Curry");
   });
+
+  it("preserves partial live player context on cache-bust refresh when the fresh BALLDONTLIE path fails", async () => {
+    process.env.NASHBOARD_DATA_MODE = "auto";
+    process.env.BALL_DONT_LIE_KEY = "test-key";
+
+    const meta = {
+      sourceUsed: "balldontlie" as const,
+      updatedAt: "2026-04-12T12:00:00.000Z",
+      requestId: "cached-player-role",
+      dataMode: "live" as const,
+      dataModeEffective: "live" as const,
+      cacheHit: true,
+    };
+    const player = {
+      id: 115,
+      first_name: "Stephen",
+      last_name: "Curry",
+      position: "G",
+      jersey_number: "30",
+      team: {
+        id: 10,
+        conference: "West",
+        division: "Pacific",
+        city: "Golden State",
+        name: "Warriors",
+        full_name: "Golden State Warriors",
+        abbreviation: "GSW",
+      },
+    };
+
+    vi.doMock("@/lib/providers/balldontlie", () => ({
+      currentNbaSeason: () => 2025,
+      isBallDontLieConfigured: () => true,
+      findBestNbaPlayerMatch: async (_name: string, options?: { cacheBust?: string }) => {
+        if (options?.cacheBust) {
+          throw new Error("BALLDONTLIE 429: rate limit");
+        }
+        return { data: player, meta };
+      },
+      findNbaTeamByKey: async () => ({ data: null, meta }),
+      getNbaPlayerSeasonStats: async () => ({ data: [], meta }),
+      getNbaTeamSeasonGames: async () => ({ data: [], meta }),
+      getNbaTeams: async () => ({ data: [player.team], meta }),
+    }));
+
+    const mod = await import("@/app/api/widgets/nba-player-role-form/route");
+    const res = await mod.GET(new Request("http://localhost/api/widgets/nba-player-role-form?mode=advanced&dataMode=live&playerName=Stephen%20Curry&playerTeamKey=GSW&cacheBust=1"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.meta?.sourceUsed).toBe("balldontlie");
+    expect(body.data?.sourceState).toBe("partial");
+    expect(body.data?.player?.fullName).toBe("Stephen Curry");
+    expect(body.meta?.warning).toMatch(/last-known real data/i);
+  });
 });

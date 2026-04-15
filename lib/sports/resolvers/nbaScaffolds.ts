@@ -284,6 +284,24 @@ function withDemoFallback<T>(
   };
 }
 
+function withRefreshPreservedRealState<T>(
+  resolved: { data: T; meta: Meta },
+  args: { widgetLabel: string; reason: string; notes?: string[] },
+): { data: T; meta: Meta } {
+  return {
+    data: resolved.data,
+    meta: mergeMeta([resolved.meta], {
+      warning: `Fresh ${args.widgetLabel} refresh failed, so NashBoard kept the last-known real data instead. ${args.reason}`,
+      notes: [
+        `A forced refresh could not hydrate newer ${args.widgetLabel} data, so the widget preserved the best available real state.`,
+        ...(args.notes ?? []),
+      ],
+      sourceUsed: resolved.meta.sourceUsed,
+      dataModeEffective: resolved.meta.dataModeEffective,
+    }),
+  };
+}
+
 function ballDontLieAvailability(dataMode: DataMode): { enabled: boolean; warning?: string } {
   if (dataMode === "fixture") {
     return { enabled: false };
@@ -1471,11 +1489,11 @@ async function resolveLivePlayerRoleForm(
             takeaway: "Position and team context help frame the role, but not the current form signal.",
           },
           {
-            label: "Next upgrade",
-            seasonValue: "Enable BALLDONTLIE stats",
-            recentValue: "Reload this player",
+            label: "Minutes",
+            seasonValue: "Not available at this tier",
+            recentValue: "Not available at this tier",
             trend: "steady",
-            takeaway: "A richer role + form read needs live minutes and box-score trends.",
+            takeaway: "Playing time and box-score trends are available with an upgraded BALLDONTLIE plan.",
           },
         ],
         roleSignals: [
@@ -1502,7 +1520,7 @@ async function resolveLivePlayerRoleForm(
         ],
         sourceState: "partial",
         sourceLabel: "Partial live player context",
-        sourceDetail: "BALLDONTLIE confirmed the player and current team context, but the current data tier did not return the game-log stats needed for a real recent-form model.",
+        sourceDetail: `BALLDONTLIE confirmed ${playerFullName(livePlayer)} on ${team?.full_name ?? "an NBA roster"}. Game log and stat access is gated at this plan tier — showing role identity and position context only.`,
       },
       meta: mergeMeta([playerMatch.meta], {
         warning: String(error),
@@ -1524,12 +1542,14 @@ export async function resolveNbaTeamMatchupProfile(args: {
   const base = getNbaTeamMatchupProfileDemo(args.scenarioId, args.dataMode);
   const overrideAwayKey = args.awayKey?.trim().toUpperCase();
   const overrideHomeKey = args.homeKey?.trim().toUpperCase();
+  const refreshRequested = Boolean(args.cacheBust?.trim());
   if (overrideAwayKey && overrideHomeKey) {
     base.data.away.key = overrideAwayKey;
     base.data.home.key = overrideHomeKey;
   }
   const ball = ballDontLieAvailability(args.dataMode);
   const apiSports = apiSportsAvailability(args.dataMode);
+  let ballError: string | undefined;
 
   // Track whether BALLDONTLIE attempted enrichment but could not match the team abbreviations.
   // This lets the final fallback explain why demo is shown even when BALLDONTLIE is configured.
@@ -1543,7 +1563,8 @@ export async function resolveNbaTeamMatchupProfile(args: {
       }
       ballTeamMismatch = true;
     } catch (error) {
-      if (!apiSports.enabled) {
+      ballError = String(error);
+      if (!apiSports.enabled && !refreshRequested) {
         return withDemoFallback(base, {
           warning: `Live matchup enrichment failed, so the widget fell back to the demo board. ${String(error)}`,
           notes: ["BALLDONTLIE live matchup enrichment failed during resolver execution."],
@@ -1552,10 +1573,46 @@ export async function resolveNbaTeamMatchupProfile(args: {
     }
   }
 
+  if (refreshRequested && ball.enabled) {
+    try {
+      const cachedResolved = await resolveLiveTeamMatchupProfile(base, args.dataMode);
+      if (cachedResolved.meta.sourceUsed !== "demo") {
+        return withRefreshPreservedRealState(cachedResolved, {
+          widgetLabel: "NBA matchup",
+          reason: "The forced refresh path did not complete cleanly.",
+          notes: ["BALLDONTLIE fallback retry preserved the previous hybrid matchup context."],
+        });
+      }
+    } catch {
+      // Preserve the existing provider fallback chain below.
+    }
+  }
+
+  if (!apiSports.enabled && ballError) {
+    return withDemoFallback(base, {
+      warning: `Live matchup enrichment failed, so the widget fell back to the demo board. ${ballError}`,
+      notes: ["BALLDONTLIE live matchup enrichment failed during resolver execution."],
+    });
+  }
+
   if (apiSports.enabled) {
     try {
       return await resolveApiSportsTeamMatchupProfile(base, args.dataMode, args.cacheBust);
     } catch (error) {
+      if (refreshRequested) {
+        try {
+          const cachedResolved = await resolveApiSportsTeamMatchupProfile(base, args.dataMode);
+          if (cachedResolved.meta.sourceUsed !== "demo") {
+            return withRefreshPreservedRealState(cachedResolved, {
+              widgetLabel: "NBA matchup",
+              reason: String(error),
+              notes: ["API-Sports fallback retry preserved the previous live matchup context."],
+            });
+          }
+        } catch {
+          // Fall through to the existing demo fallback below.
+        }
+      }
       return withDemoFallback(base, {
         warning: `Live matchup enrichment failed on both NBA providers, so the widget fell back to the demo board. ${String(error)}`,
         notes: [
@@ -1588,6 +1645,8 @@ export async function resolveNbaRestScheduleSpot(args: {
   const ball = ballDontLieAvailability(args.dataMode);
   const apiSports = apiSportsAvailability(args.dataMode);
   const requestedTeamKey = args.teamKey?.trim().toUpperCase();
+  const refreshRequested = Boolean(args.cacheBust?.trim());
+  let ballError: string | undefined;
 
   if (!requestedTeamKey) {
     return base;
@@ -1600,7 +1659,8 @@ export async function resolveNbaRestScheduleSpot(args: {
         return resolved;
       }
     } catch (error) {
-      if (!apiSports.enabled) {
+      ballError = String(error);
+      if (!apiSports.enabled && !refreshRequested) {
         return withDemoFallback(base, {
           warning: `Live schedule enrichment failed for ${requestedTeamKey}, so the widget fell back to the demo spot. ${String(error)}`,
           notes: ["BALLDONTLIE live rest/schedule enrichment failed during resolver execution."],
@@ -1609,10 +1669,46 @@ export async function resolveNbaRestScheduleSpot(args: {
     }
   }
 
+  if (refreshRequested && ball.enabled) {
+    try {
+      const cachedResolved = await resolveLiveRestScheduleSpot(base, requestedTeamKey, args.dataMode);
+      if (cachedResolved.meta.sourceUsed !== "demo") {
+        return withRefreshPreservedRealState(cachedResolved, {
+          widgetLabel: "NBA schedule",
+          reason: "The forced refresh path did not complete cleanly.",
+          notes: ["BALLDONTLIE fallback retry preserved the previous live or sparse-live schedule context."],
+        });
+      }
+    } catch {
+      // Preserve the existing provider fallback chain below.
+    }
+  }
+
+  if (!apiSports.enabled && ballError) {
+    return withDemoFallback(base, {
+      warning: `Live schedule enrichment failed for ${requestedTeamKey}, so the widget fell back to the demo spot. ${ballError}`,
+      notes: ["BALLDONTLIE live rest/schedule enrichment failed during resolver execution."],
+    });
+  }
+
   if (apiSports.enabled) {
     try {
       return await resolveApiSportsRestScheduleSpot(base, requestedTeamKey, args.dataMode, args.cacheBust);
     } catch (error) {
+      if (refreshRequested) {
+        try {
+          const cachedResolved = await resolveApiSportsRestScheduleSpot(base, requestedTeamKey, args.dataMode);
+          if (cachedResolved.meta.sourceUsed !== "demo") {
+            return withRefreshPreservedRealState(cachedResolved, {
+              widgetLabel: "NBA schedule",
+              reason: String(error),
+              notes: ["API-Sports fallback retry preserved the previous schedule context."],
+            });
+          }
+        } catch {
+          // Fall through to the existing demo fallback below.
+        }
+      }
       return withDemoFallback(base, {
         warning: `Live schedule enrichment failed for ${requestedTeamKey} on both NBA providers, so the widget fell back to the demo spot. ${String(error)}`,
         notes: [
@@ -1640,6 +1736,8 @@ export async function resolveNbaPlayerRoleForm(args: {
   const ball = ballDontLieAvailability(args.dataMode);
   const apiSports = apiSportsAvailability(args.dataMode);
   const requestedPlayerName = args.playerName?.trim();
+  const refreshRequested = Boolean(args.cacheBust?.trim());
+  let ballError: string | undefined;
 
   if (!requestedPlayerName) {
     return base;
@@ -1665,13 +1763,40 @@ export async function resolveNbaPlayerRoleForm(args: {
         ballPartialResult = resolved;
       }
     } catch (error) {
-      if (!apiSports.enabled) {
+      ballError = String(error);
+      if (!apiSports.enabled && !refreshRequested) {
         return withDemoFallback(base, {
           warning: `Live player enrichment failed for ${requestedPlayerName}, so the widget fell back to the demo profile. ${String(error)}`,
           notes: ["BALLDONTLIE live player-role enrichment failed during resolver execution."],
         });
       }
     }
+  }
+
+  if (refreshRequested && ball.enabled) {
+    try {
+      const cachedResolved = await resolveLivePlayerRoleForm(base, {
+        playerName: requestedPlayerName,
+        playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
+        dataMode: args.dataMode,
+      });
+      if (cachedResolved.data.sourceState === "live" || cachedResolved.data.sourceState === "partial") {
+        return withRefreshPreservedRealState(cachedResolved, {
+          widgetLabel: "NBA player card",
+          reason: "The forced refresh path did not complete cleanly.",
+          notes: ["BALLDONTLIE fallback retry preserved the previous live or partial-live player context."],
+        });
+      }
+    } catch {
+      // Preserve the existing provider fallback chain below.
+    }
+  }
+
+  if (!apiSports.enabled && ballError) {
+    return withDemoFallback(base, {
+      warning: `Live player enrichment failed for ${requestedPlayerName}, so the widget fell back to the demo profile. ${ballError}`,
+      notes: ["BALLDONTLIE live player-role enrichment failed during resolver execution."],
+    });
   }
 
   if (apiSports.enabled) {
@@ -1683,8 +1808,32 @@ export async function resolveNbaPlayerRoleForm(args: {
         cacheBust: args.cacheBust,
       });
     } catch (error) {
+      if (refreshRequested) {
+        try {
+          const cachedResolved = await resolveApiSportsPlayerRoleForm(base, {
+            playerName: requestedPlayerName,
+            playerTeamKey: args.playerTeamKey?.trim().toUpperCase() || undefined,
+            dataMode: args.dataMode,
+          });
+          if (cachedResolved.data.sourceState !== "demo") {
+            return withRefreshPreservedRealState(cachedResolved, {
+              widgetLabel: "NBA player card",
+              reason: String(error),
+              notes: ["API-Sports fallback retry preserved the previous player identity and form context."],
+            });
+          }
+        } catch {
+          // Fall through to the existing partial/demo fallback below.
+        }
+      }
       if (ballPartialResult) {
-        return ballPartialResult;
+        return refreshRequested
+          ? withRefreshPreservedRealState(ballPartialResult, {
+              widgetLabel: "NBA player card",
+              reason: String(error),
+              notes: ["BALLDONTLIE partial-live identity context was preserved after the fresh provider chain degraded."],
+            })
+          : ballPartialResult;
       }
       return withDemoFallback(base, {
         warning: `Live player enrichment failed for ${requestedPlayerName} on both NBA providers, so the widget fell back to the demo profile. ${String(error)}`,

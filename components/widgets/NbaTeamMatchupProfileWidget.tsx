@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NbaTeamMatchupProfileUi } from "@/lib/templates/nbaTeamMatchupProfile";
 
@@ -263,7 +264,7 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
             {data.pillars.map((pillar) => (
               <div key={pillar.id} className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-neutral-100">{pillar.label}</p>
+                  <StatLabel label={pillar.label} sport="nba" mode={props.mode} className="font-medium text-neutral-100" />
                   <EdgeBadge edge={pillar.edge} />
                 </div>
                 <p className="mt-1 text-neutral-300">{pillar.takeaway}</p>
@@ -279,7 +280,7 @@ export default function NbaTeamMatchupProfileWidget(props: WidgetCommonProps) {
                     </div>
                   </div>
                 ) : null}
-                <p className="mt-2 text-[11px] text-neutral-500">{pillar.whyItMatters}</p>
+                {advanced ? <p className="mt-2 text-[11px] text-neutral-500">{pillar.whyItMatters}</p> : null}
               </div>
             ))}
           </div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NbaPlayerRoleFormUi } from "@/lib/templates/nbaPlayerRoleForm";
 import type { PlayerSearchResult } from "@/lib/types/players";
@@ -366,7 +367,7 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
             {data.metrics.map((metric) => (
               <div key={metric.label} className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-neutral-100">{metric.label}</p>
+                  <StatLabel label={metric.label} sport="nba" mode={props.mode} className="font-medium text-neutral-100" />
                   <TrendChip trend={metric.trend} />
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
@@ -400,26 +401,28 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
               </div>
             </div>
 
-            <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
-              <p className="text-[10px] uppercase tracking-wide text-neutral-500">Recent games</p>
-              {data.recentGames.length > 0 ? (
-                <div className="mt-2 space-y-2">
-                  {data.recentGames.map((game) => (
-                    <div key={`${game.dateLabel}-${game.opponent}`} className="rounded border border-neutral-800 bg-neutral-900/60 p-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium text-neutral-200">
-                          {game.dateLabel} vs {game.opponent}
-                        </p>
-                        <span className="text-[10px] text-neutral-500">{game.line}</span>
+            {(advanced || data.recentGames.length > 0) ? (
+              <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
+                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Recent games</p>
+                {data.recentGames.length > 0 ? (
+                  <div className="mt-2 space-y-2">
+                    {data.recentGames.map((game) => (
+                      <div key={`${game.dateLabel}-${game.opponent}`} className="rounded border border-neutral-800 bg-neutral-900/60 p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium text-neutral-200">
+                            {game.dateLabel} vs {game.opponent}
+                          </p>
+                          <span className="text-[10px] text-neutral-500">{game.line}</span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-neutral-500">{game.roleNote}</p>
                       </div>
-                      <p className="mt-1 text-[11px] text-neutral-500">{game.roleNote}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-[11px] text-neutral-500">Recent game logs are not available on the current live data path.</p>
-              )}
-            </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-neutral-500">Recent game logs are not available on the current live data path.</p>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
