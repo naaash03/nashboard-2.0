@@ -682,12 +682,13 @@ export default function WatchlistWidget(props: WidgetCommonProps) {
     }
 
     const legacyConfig = legacyTeamsFromConfig(props.config);
-    const legacyServer = legacyItems.map((item) => item.teamKey.trim().toUpperCase());
+    const nflLegacyItems = legacyItems.filter((item) => item.sport === "NFL" && item.entityType === "team");
+    const legacyServer = nflLegacyItems.map((item) => item.entityId.trim().toUpperCase());
     const nflKeys = Array.from(new Set([...legacyConfig, ...legacyServer])).filter(Boolean);
 
     const nflNames: Record<string, string> = {};
-    for (const item of legacyItems) {
-      nflNames[item.teamKey.trim().toUpperCase()] = item.teamName;
+    for (const item of nflLegacyItems) {
+      nflNames[item.entityId.trim().toUpperCase()] = item.entityName;
     }
 
     const nextTeams: TeamWatchlistBySport = {

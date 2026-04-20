@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { Meta } from "@/lib/providers/types";
+import type { DataSource, Meta } from "@/lib/providers/types";
 
 type MlbSource = "mlb" | "fixture" | "cache" | "demo";
 
@@ -25,8 +25,47 @@ type InMemoryCacheEntry = {
   updatedAt: string;
 };
 
+type EndpointHealth = {
+  endpoint: string;
+  lastSuccessAt?: string;
+  lastErrorAt?: string;
+  lastErrorMessage?: string;
+  lastStatus?: number;
+  cacheHit?: boolean;
+  cacheAgeSeconds?: number;
+  lastSourceUsed?: DataSource;
+  lastUrl?: string;
+};
+
 const MLB_BASE = "https://statsapi.mlb.com/api/v1";
 const inMemory = new Map<string, InMemoryCacheEntry>();
+const endpointHealth = new Map<string, EndpointHealth>();
+
+function trackSuccess(endpoint: string, sourceUsed: DataSource, url?: string, status?: number, cacheHit?: boolean, cacheAgeSeconds?: number): void {
+  const current = endpointHealth.get(endpoint) ?? { endpoint };
+  endpointHealth.set(endpoint, {
+    ...current,
+    endpoint,
+    lastSuccessAt: new Date().toISOString(),
+    lastStatus: status,
+    cacheHit,
+    cacheAgeSeconds: typeof cacheAgeSeconds === "number" ? Math.max(0, cacheAgeSeconds) : undefined,
+    lastSourceUsed: sourceUsed,
+    lastUrl: url ?? current.lastUrl,
+  });
+}
+
+function trackError(endpoint: string, message: string, status?: number, url?: string): void {
+  const current = endpointHealth.get(endpoint) ?? { endpoint };
+  endpointHealth.set(endpoint, {
+    ...current,
+    endpoint,
+    lastErrorAt: new Date().toISOString(),
+    lastErrorMessage: message,
+    lastStatus: status,
+    lastUrl: url ?? current.lastUrl,
+  });
+}
 
 function stableParams(params: FetchOptions["params"]): string {
   const entries = Object.entries(params ?? {})
@@ -205,6 +244,7 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
     const mem = inMemory.get(cacheKey);
     if (mem && mem.expiresAtMs > Date.now()) {
       const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
+      trackSuccess(options.endpoint, "cache", endpointUrl, 200, true, ageSeconds);
       return {
         data: mem.payload as T,
         meta: {
@@ -248,6 +288,7 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
       });
 
       await storePersistentCache(options.endpoint, options.params, payload, "mlb", requestId, ttlSeconds);
+      trackSuccess(options.endpoint, "mlb", endpointUrl, response.status, false);
 
       return {
         data: payload,
@@ -265,12 +306,16 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
     } catch (error) {
       clearTimeout(timeout);
       lastError = error;
+      const statusMatch = String(error).match(/MLB Stats API\s+(\d{3})/i);
+      const errorStatus = statusMatch ? Number(statusMatch[1]) : lastStatus;
+      trackError(options.endpoint, String(error), errorStatus, endpointUrl);
     }
   }
 
   if (!bypassCache) {
     const cached = await readPersistentCache<T>(options.endpoint, options.params);
     if (cached) {
+      trackSuccess(options.endpoint, "cache", endpointUrl, lastStatus, true, cached.ageSeconds);
       return {
         data: cached.payload,
         meta: {
@@ -294,4 +339,8 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
 
 export function getMlbDataMode(override?: "auto" | "live" | "fixture"): "live" | "fixture" {
   return resolvedDataMode(override);
+}
+
+export function getMlbHealthSnapshot(): Record<string, EndpointHealth> {
+  return Object.fromEntries(endpointHealth.entries());
 }

@@ -37,7 +37,7 @@ function toSourceUsed(value: string, dataMode: "auto" | "live" | "fixture"): Met
   if (value === "apiSports" || value === "espn" || value === "fixture" || value === "cache" || value === "demo" || value === "mlb") {
     return value;
   }
-  return dataMode === "fixture" ? "fixture" : "apiSports";
+  return dataMode === "fixture" ? "fixture" : "mlb";
 }
 
 function toContractMeta(meta: MlbStartingPitcherMatchupMeta, dataMode: "auto" | "live" | "fixture"): Meta {
@@ -50,7 +50,7 @@ function toContractMeta(meta: MlbStartingPitcherMatchupMeta, dataMode: "auto" | 
     notes: meta.notes,
     dataMode: meta.dataMode ?? dataMode,
     hydrationUsed: meta.fallbackUsed || undefined,
-    attemptedSources: meta.fallbackUsed ? ["apiSports", "espn"] : undefined,
+    attemptedSources: meta.fallbackUsed ? ["mlb", "espn"] : undefined,
   };
 }
 
@@ -121,7 +121,7 @@ export async function GET(req: Request) {
         data: null,
         error,
         meta,
-        primaryProvider: "apiSports",
+        primaryProvider: "mlb",
       }),
       error,
     }, { status: 400 });

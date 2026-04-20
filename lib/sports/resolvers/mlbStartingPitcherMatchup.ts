@@ -1257,7 +1257,7 @@ export async function resolveMlbStartingPitcherMatchup(
     return createFailedResult({
       message: "teamKey is required",
       code: "MISSING_TEAM_KEY",
-      sourceUsed: providerMode === "fixture" ? "fixture" : "apiSports",
+      sourceUsed: providerMode === "fixture" ? "fixture" : "mlb",
       fallbackUsed: false,
       dataMode: args.dataMode,
       warnings: ["teamKey is required"],
@@ -1265,7 +1265,7 @@ export async function resolveMlbStartingPitcherMatchup(
   }
 
   let fallbackUsed = false;
-  let sourceUsed = providerMode === "fixture" ? "fixture" : "apiSports";
+  let sourceUsed = providerMode === "fixture" ? "fixture" : "mlb";
   const metaStack: Meta[] = [];
 
   const teamResult = await deps.fetchTeamIdentity(normalizedTeamKey, providerMode, args.cacheBust);

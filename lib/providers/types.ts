@@ -8,7 +8,7 @@ export type Meta = {
   warning?: string;
   notes?: string[];
   warnings?: string[];
-  attemptedSources?: Array<"apiSports" | "espn" | "fixture">;
+  attemptedSources?: Array<DataSource>;
   hydrationUsed?: boolean;
   dataModeEffective?: "live" | "fixture";
   requestId: string;

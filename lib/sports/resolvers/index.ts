@@ -155,7 +155,7 @@ export async function resolveTeamStatus(args: {
     data,
     error: envelope.error?.message ?? null,
     meta: envelope.meta,
-    primaryProvider: "apiSports",
+    primaryProvider: "espn",
   });
 }
 
@@ -172,7 +172,7 @@ export async function resolveTeamStatusBatch(args: {
     data,
     error: envelope.error?.message ?? null,
     meta: envelope.meta,
-    primaryProvider: "apiSports",
+    primaryProvider: "espn",
   });
 }
 

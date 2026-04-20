@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { resolvePlayersSearch } from "@/lib/providers";
 import { fetchApiSportsJson, getApiSportsHealthSnapshot } from "@/lib/providers/apiSports/client";
+import { fetchBallDontLieJson, getBallDontLieHealthSnapshot, isBallDontLieConfigured } from "@/lib/providers/balldontlie/client";
+import { fetchMlbJson, getMlbHealthSnapshot } from "@/lib/providers/mlb/client";
 import { buildDateRange } from "@/lib/providers/scheduleWindow";
 import { CACHE_TTL_SECONDS } from "@/lib/sports/cachePolicy";
 import { canAutoUseFixtureFallback } from "@/lib/sports/utils/fixturePolicy";
@@ -97,6 +99,31 @@ export async function GET(req: Request) {
     }
 
     try {
+      await fetchMlbJson<unknown>({
+        endpoint: "sports",
+        ttlSeconds: 30,
+        dataMode: probeMode,
+        cacheBust,
+      });
+    } catch {
+      // diagnostics recorded in provider snapshot
+    }
+
+    if (isBallDontLieConfigured()) {
+      try {
+        await fetchBallDontLieJson<unknown>({
+          endpoint: "teams",
+          params: { per_page: 1 },
+          ttlSeconds: 30,
+          dataMode: probeMode === "fixture" ? "fixture" : "live",
+          cacheBust,
+        });
+      } catch {
+        // diagnostics recorded in provider snapshot
+      }
+    }
+
+    try {
       const probeEnvelope = await resolvePlayersSearch("mlb", "Soto", 1, {
         dataMode: requestedMode,
         cacheBust,
@@ -121,7 +148,14 @@ export async function GET(req: Request) {
 
   const espnSnapshot = getEspnHealthSnapshot();
   const apiSportsSnapshot = getApiSportsHealthSnapshot();
-  const allSnapshotRows = [...Object.values(espnSnapshot), ...Object.values(apiSportsSnapshot)];
+  const mlbSnapshot = getMlbHealthSnapshot();
+  const ballDontLieSnapshot = getBallDontLieHealthSnapshot();
+  const allSnapshotRows = [
+    ...Object.values(espnSnapshot),
+    ...Object.values(apiSportsSnapshot),
+    ...Object.values(mlbSnapshot),
+    ...Object.values(ballDontLieSnapshot),
+  ];
   const scheduleWindow = buildDateRange();
 
   let persistedCacheAge: number | null = null;
@@ -146,7 +180,7 @@ export async function GET(req: Request) {
     const latest = await prisma.cachedResponse.findMany({
       where: {
         provider: {
-          in: ["espn", "apiSports"],
+          in: ["espn", "apiSports", "mlb", "balldontlie"],
         },
       },
       orderBy: { fetchedAt: "desc" },
@@ -189,6 +223,8 @@ export async function GET(req: Request) {
       fixture: effectiveDataMode === "fixture" ? "enabled" : "disabled",
       apiSports: providerStatus(apiSportsSnapshot),
       espn: providerStatus(espnSnapshot),
+      mlb: providerStatus(mlbSnapshot),
+      balldontlie: isBallDontLieConfigured() ? providerStatus(ballDontLieSnapshot) : "unconfigured",
     },
     cache: {
       hit: allSnapshotRows.some((item) => item.cacheHit === true),
@@ -208,6 +244,8 @@ export async function GET(req: Request) {
     endpoints: {
       apiSports: apiSportsSnapshot,
       espn: espnSnapshot,
+      mlb: mlbSnapshot,
+      balldontlie: ballDontLieSnapshot,
     },
     lastFetchTimestamps: persistedEndpoints,
     architecture: {
@@ -217,7 +255,7 @@ export async function GET(req: Request) {
         autoFallbackAllowedInRuntime: canAutoUseFixtureFallback(),
       },
       cacheTtlSeconds: CACHE_TTL_SECONDS,
-      providerPriority: ["apiSports", "espn", "fixture"],
+      providerPriority: ["mlb", "espn", "apiSports", "balldontlie", "fixture"],
     },
   });
 }

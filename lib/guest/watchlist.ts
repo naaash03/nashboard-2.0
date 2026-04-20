@@ -1,8 +1,11 @@
+"use client";
+
 export type GuestWatchlistItem = {
   id: string;
-  teamKey: string;
-  teamName: string;
-  sport: "NFL";
+  sport: "NFL" | "NBA" | "MLB";
+  entityType: "team" | "player";
+  entityId: string;
+  entityName: string;
   createdAt: string;
 };
 
@@ -11,8 +14,9 @@ type GuestWatchlistState = {
   updatedAt: string;
 };
 
-const WATCHLIST_KEY = "nashboard:guest-watchlist:v1";
-const LIMIT = 5;
+const WATCHLIST_KEY = "nashboard:guest-watchlist:v2";
+const LEGACY_KEY = "nashboard:guest-watchlist:v1";
+const LIMIT = 10;
 
 const EMPTY_STATE: GuestWatchlistState = {
   items: [],
@@ -21,6 +25,15 @@ const EMPTY_STATE: GuestWatchlistState = {
 
 function isBrowser(): boolean {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
+}
+
+function normalizeSport(raw: unknown): "NFL" | "NBA" | "MLB" {
+  if (raw === "NFL" || raw === "NBA" || raw === "MLB") return raw;
+  return "NFL";
+}
+
+function normalizeEntityType(raw: unknown): "team" | "player" {
+  return raw === "player" ? "player" : "team";
 }
 
 function normalize(input: unknown): GuestWatchlistState {
@@ -34,17 +47,19 @@ function normalize(input: unknown): GuestWatchlistState {
         .filter((item) => item && typeof item === "object")
         .map((item) => {
           const value = item as Record<string, unknown>;
-          const teamKey = String(value.teamKey ?? "").trim().toUpperCase();
-          const teamName = String(value.teamName ?? "").trim();
+          // Accept both new contract (entityId/entityName) and legacy (teamKey/teamName)
+          const entityId = String(value.entityId ?? value.teamKey ?? "").trim().toUpperCase();
+          const entityName = String(value.entityName ?? value.teamName ?? "").trim();
           return {
-            id: String(value.id ?? `guest-team-${Date.now()}`),
-            teamKey,
-            teamName,
-            sport: "NFL" as const,
+            id: String(value.id ?? `guest-${Date.now()}`),
+            sport: normalizeSport(value.sport),
+            entityType: normalizeEntityType(value.entityType),
+            entityId,
+            entityName,
             createdAt: String(value.createdAt ?? new Date().toISOString()),
           };
         })
-        .filter((item) => item.teamKey.length > 0 && item.teamName.length > 0)
+        .filter((item) => item.entityId.length > 0 && item.entityName.length > 0)
         .slice(0, LIMIT)
     : [];
 
@@ -55,20 +70,45 @@ function normalize(input: unknown): GuestWatchlistState {
 }
 
 function persist(state: GuestWatchlistState): void {
-  if (!isBrowser()) {
-    return;
-  }
+  if (!isBrowser()) return;
   window.sessionStorage.setItem(WATCHLIST_KEY, JSON.stringify(state));
 }
 
-export function getGuestWatchlist(): GuestWatchlistState {
-  if (!isBrowser()) {
-    return EMPTY_STATE;
+function migrateLegacy(): GuestWatchlistState | null {
+  if (!isBrowser()) return null;
+  const raw = window.sessionStorage.getItem(LEGACY_KEY);
+  if (!raw) return null;
+  try {
+    const v1 = JSON.parse(raw) as { items?: Array<Record<string, unknown>>; updatedAt?: string };
+    if (!Array.isArray(v1.items)) return null;
+    const migrated: GuestWatchlistState = {
+      items: v1.items
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          id: String(item.id ?? `guest-${Date.now()}`),
+          sport: "NFL" as const,
+          entityType: "team" as const,
+          entityId: String(item.teamKey ?? "").trim().toUpperCase(),
+          entityName: String(item.teamName ?? "").trim(),
+          createdAt: String(item.createdAt ?? new Date().toISOString()),
+        }))
+        .filter((item) => item.entityId.length > 0 && item.entityName.length > 0)
+        .slice(0, LIMIT),
+      updatedAt: typeof v1.updatedAt === "string" ? v1.updatedAt : new Date().toISOString(),
+    };
+    persist(migrated);
+    return migrated;
+  } catch {
+    return null;
   }
+}
+
+export function getGuestWatchlist(): GuestWatchlistState {
+  if (!isBrowser()) return EMPTY_STATE;
 
   const raw = window.sessionStorage.getItem(WATCHLIST_KEY);
   if (!raw) {
-    return EMPTY_STATE;
+    return migrateLegacy() ?? EMPTY_STATE;
   }
 
   try {
@@ -78,34 +118,38 @@ export function getGuestWatchlist(): GuestWatchlistState {
   }
 }
 
-export function addGuestWatchlistTeam(teamKey: string, teamName: string): { state: GuestWatchlistState; error?: string } {
-  const key = teamKey.trim().toUpperCase();
-  const name = teamName.trim();
+export function addGuestWatchlistItem(
+  sport: "NFL" | "NBA" | "MLB",
+  entityType: "team" | "player",
+  entityId: string,
+  entityName: string,
+): { state: GuestWatchlistState; error?: string } {
+  const id = entityId.trim().toUpperCase();
+  const name = entityName.trim();
   const current = getGuestWatchlist();
 
-  if (!key || !name) {
-    return { state: current, error: "teamKey and teamName are required" };
+  if (!id || !name) {
+    return { state: current, error: "entityId and entityName are required" };
   }
 
-  if (current.items.some((item) => item.teamKey === key)) {
-    return { state: current, error: "Team is already on your watchlist." };
+  const sportItems = current.items.filter((item) => item.sport === sport && item.entityType === entityType);
+  if (sportItems.some((item) => item.entityId === id)) {
+    return { state: current, error: "Item is already on your watchlist." };
   }
 
-  if (current.items.length >= LIMIT) {
-    return {
-      state: current,
-      error: "Watchlist limit reached. Remove a team before adding another.",
-    };
+  if (sportItems.length >= LIMIT) {
+    return { state: current, error: "Watchlist limit reached. Remove an item before adding another." };
   }
 
   const state: GuestWatchlistState = {
     items: [
       ...current.items,
       {
-        id: `guest-team-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        teamKey: key,
-        teamName: name,
-        sport: "NFL",
+        id: `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sport,
+        entityType,
+        entityId: id,
+        entityName: name,
         createdAt: new Date().toISOString(),
       },
     ],
@@ -115,7 +159,7 @@ export function addGuestWatchlistTeam(teamKey: string, teamName: string): { stat
   return { state };
 }
 
-export function removeGuestWatchlistTeam(id: string): GuestWatchlistState {
+export function removeGuestWatchlistItem(id: string): GuestWatchlistState {
   const current = getGuestWatchlist();
   const state: GuestWatchlistState = {
     items: current.items.filter((item) => item.id !== id),

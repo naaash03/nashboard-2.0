@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getBallDontLieKey } from "@/lib/config/env";
-import type { Meta } from "@/lib/providers/types";
+import type { DataSource, Meta } from "@/lib/providers/types";
 
 type QueryPrimitive = string | number | boolean;
 type QueryValue = QueryPrimitive | QueryPrimitive[] | undefined | null;
@@ -24,9 +24,48 @@ type InMemoryCacheEntry = {
   updatedAt: string;
 };
 
+type EndpointHealth = {
+  endpoint: string;
+  lastSuccessAt?: string;
+  lastErrorAt?: string;
+  lastErrorMessage?: string;
+  lastStatus?: number;
+  cacheHit?: boolean;
+  cacheAgeSeconds?: number;
+  lastSourceUsed?: DataSource;
+  lastUrl?: string;
+};
+
 const BALLDONTLIE_BASE = "https://api.balldontlie.io/v1";
 const inMemory = new Map<string, InMemoryCacheEntry>();
 const inFlight = new Map<string, Promise<FetchResult<unknown>>>();
+const endpointHealth = new Map<string, EndpointHealth>();
+
+function trackSuccess(endpoint: string, sourceUsed: DataSource, url?: string, status?: number, cacheHit?: boolean, cacheAgeSeconds?: number): void {
+  const current = endpointHealth.get(endpoint) ?? { endpoint };
+  endpointHealth.set(endpoint, {
+    ...current,
+    endpoint,
+    lastSuccessAt: new Date().toISOString(),
+    lastStatus: status,
+    cacheHit,
+    cacheAgeSeconds: typeof cacheAgeSeconds === "number" ? Math.max(0, cacheAgeSeconds) : undefined,
+    lastSourceUsed: sourceUsed,
+    lastUrl: url ?? current.lastUrl,
+  });
+}
+
+function trackError(endpoint: string, message: string, status?: number, url?: string): void {
+  const current = endpointHealth.get(endpoint) ?? { endpoint };
+  endpointHealth.set(endpoint, {
+    ...current,
+    endpoint,
+    lastErrorAt: new Date().toISOString(),
+    lastErrorMessage: message,
+    lastStatus: status,
+    lastUrl: url ?? current.lastUrl,
+  });
+}
 
 function resolvedDataMode(override?: "auto" | "live" | "fixture"): "live" | "fixture" {
   if (override === "live" || override === "fixture") {
@@ -206,6 +245,10 @@ export function isBallDontLieConfigured(): boolean {
   return getBallDontLieKey().length > 0;
 }
 
+export function getBallDontLieHealthSnapshot(): Record<string, EndpointHealth> {
+  return Object.fromEntries(endpointHealth.entries());
+}
+
 export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<FetchResult<T>> {
   const requestId = randomUUID();
   const ttlSeconds = options.ttlSeconds ?? 180;
@@ -228,6 +271,7 @@ export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<Fe
     const mem = inMemory.get(cacheKey);
     if (mem && mem.expiresAtMs > Date.now()) {
       const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
+      trackSuccess(options.endpoint, "cache", endpointUrl, 200, true, ageSeconds);
       return {
         data: mem.payload as T,
         meta: {
@@ -246,6 +290,7 @@ export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<Fe
 
     const persisted = await readPersistentCache<T>(options.endpoint, options.params);
     if (persisted && persisted.ageSeconds <= ttlSeconds) {
+      trackSuccess(options.endpoint, "cache", endpointUrl, 200, true, persisted.ageSeconds);
       return {
         data: persisted.payload,
         meta: {
@@ -303,6 +348,7 @@ export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<Fe
           updatedAt,
         });
         await storePersistentCache(options.endpoint, options.params, payload, requestId, ttlSeconds);
+        trackSuccess(options.endpoint, "balldontlie", endpointUrl, response.status, false);
 
         return {
           data: payload,
@@ -323,6 +369,7 @@ export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<Fe
         lastError = error;
         const statusMatch = String(error).match(/BALLDONTLIE\s+(\d{3})/i);
         lastStatus = statusMatch ? Number(statusMatch[1]) : lastStatus;
+        trackError(options.endpoint, String(error), lastStatus, endpointUrl);
         if (!shouldRetry(lastStatus, attempt)) {
           break;
         }
@@ -334,6 +381,7 @@ export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<Fe
       const mem = inMemory.get(cacheKey);
       if (mem) {
         const ageSeconds = Math.max(0, Math.floor((Date.now() - new Date(mem.updatedAt).getTime()) / 1000));
+        trackSuccess(options.endpoint, "cache", endpointUrl, lastStatus, true, ageSeconds);
         return {
           data: mem.payload as T,
           meta: {
@@ -354,6 +402,7 @@ export async function fetchBallDontLieJson<T>(options: FetchOptions): Promise<Fe
 
       const persisted = await readPersistentCache<T>(options.endpoint, options.params);
       if (persisted) {
+        trackSuccess(options.endpoint, "cache", endpointUrl, lastStatus, true, persisted.ageSeconds);
         return {
           data: persisted.payload,
           meta: {

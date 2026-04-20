@@ -39,6 +39,7 @@ import {
 } from "@/lib/guest/guestDashboard";
 import { resolveDataMode, type DataMode } from "@/lib/dataMode";
 import { canonicalizeWidgetType, formatWidgetTypeLabel } from "@/lib/widgets/widgetType";
+import { WIDGET_DEFINITIONS } from "@/lib/widgets/registry";
 
 type Sport = "NFL" | "NBA" | "MLB";
 
@@ -225,6 +226,8 @@ export default function DashboardPage({
 
   const addWidget = async (widgetType: string) => {
     const canonicalWidgetType = canonicalizeWidgetType(widgetType);
+    const widgetSport =
+      WIDGET_DEFINITIONS.find((d) => d.key === canonicalWidgetType)?.sportCategory ?? "NFL";
 
     if (isGuestMode) {
       const next: DashboardWidget = {
@@ -250,7 +253,7 @@ export default function DashboardPage({
     const response = await fetch("/api/dashboard/widgets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetType: canonicalWidgetType, sport, mode: "BEGINNER", config: {} }),
+      body: JSON.stringify({ widgetType: canonicalWidgetType, sport: widgetSport, mode: "BEGINNER", config: {} }),
     });
 
     const payload = (await response.json()) as { error?: string; widget?: Partial<DashboardWidget> };

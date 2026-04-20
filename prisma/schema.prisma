@@ -131,17 +131,18 @@ model WidgetInstance {
 }
 
 model WatchlistTeam {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sport     Sport    @default(NFL)
-  teamKey   String
-  teamName  String
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport       Sport    @default(NFL)
+  entityType  String   @default("team")
+  teamKey     String
+  teamName    String
   apiSportsTeamId String?
   espnTeamId      String?
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
-  @@unique([userId, sport, teamKey])
+  @@unique([userId, sport, entityType, teamKey])
 }
 
 model FavoritePlayer {
