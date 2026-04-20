@@ -6,9 +6,14 @@ export type WidgetDefinition = {
   description: string;
   sportCategory: WidgetSport;
   defaultSize: { w: number; h: number };
+  allowedSizes?: Array<{ w: number; h: number }>;
   stability?: "stable" | "experimental" | "admin";
   audience?: "beginner" | "advanced" | "mixed";
 };
+
+const SM = { w: 1, h: 1 };
+const MD = { w: 2, h: 1 };
+const LG = { w: 2, h: 2 };
 
 export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
@@ -17,6 +22,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Today-first slate with offseason-safe next-slate fallback.",
     sportCategory: "NFL",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -26,6 +32,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Division-by-division standings context with an honest offseason final-standings view.",
     sportCategory: "NFL",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -35,6 +42,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Next-game or most-recent-game context for a selected NFL team, with honest bye and offseason handling.",
     sportCategory: "NFL",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -44,6 +52,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Recent-results board for a selected NFL team with schedule-difficulty flavor and explicit offseason honesty.",
     sportCategory: "NFL",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -53,6 +62,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Player identity card with reliable profile fields and optional advanced insights.",
     sportCategory: "UTILITIES",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -62,6 +72,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Track teams and players with prioritized live, recent, and next-game context.",
     sportCategory: "UTILITIES",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -71,6 +82,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Expected RB and run-defense matchup context.",
     sportCategory: "NFL",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     stability: "experimental",
     audience: "advanced",
   },
@@ -80,6 +92,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Upcoming 7-game schedule for any MLB team via MLB Stats API.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -89,6 +102,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Pitch-type breakdown with velocity and spin rate for a selected pitcher.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     stability: "experimental",
     audience: "advanced",
   },
@@ -98,6 +112,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Current or upcoming series context with game-by-game results.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     audience: "mixed",
   },
   {
@@ -106,6 +121,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Probable starters with season stats for a team's next scheduled game.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     stability: "stable",
     audience: "mixed",
   },
@@ -115,6 +131,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Year-by-year hitting or pitching stats for a player, or team stats for a season.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
   },
   {
     key: "mlb_platoon_advantage",
@@ -122,6 +139,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Analyzes pitcher platoon splits to identify home/away matchup advantages.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
   },
   {
     key: "mlb_recent_form",
@@ -129,6 +147,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Hot/Warm/Cool/Cold rating based on last 7, 14, and 30-day win percentages.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
   },
   {
     key: "mlb_bullpen_fatigue",
@@ -136,6 +155,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Tracks active bullpen pitcher availability and fatigue based on recent appearances.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
   },
   {
     key: "mlb_run_expectancy",
@@ -143,6 +163,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Interactive RE24 matrix — click any base/out state to see expected runs and scoring probability.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
   },
   {
     key: "nba_tonights_slate",
@@ -150,6 +171,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Today-first NBA slate using ESPN scoreboard data.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -159,6 +181,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "East/West standings snapshot with beginner/advanced depth.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "stable",
     audience: "mixed",
   },
@@ -168,6 +191,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Teachable matchup board with live team form when available, while deeper matchup pillars stay scaffolded until richer NBA split data is wired in.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     stability: "experimental",
     audience: "mixed",
   },
@@ -177,6 +201,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Rest edge and game-density context with live BALLDONTLIE schedule reads when a team key is selected, plus an honest demo fallback.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "experimental",
     audience: "mixed",
   },
@@ -186,6 +211,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Role-based player context with live BALLDONTLIE player lookup and stat-backed form when available, plus an honest scaffold fallback.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     stability: "experimental",
     audience: "mixed",
   },
@@ -195,6 +221,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Operational summary with optional provider diagnostics in advanced mode.",
     sportCategory: "UTILITIES",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD],
     stability: "admin",
     audience: "advanced",
   },
@@ -204,8 +231,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Projected strikeout total for a starting pitcher using season stats, recent form, market odds, and weather.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
+    allowedSizes: [SM, MD, LG],
     stability: "experimental",
     audience: "mixed",
   },
 ];
-

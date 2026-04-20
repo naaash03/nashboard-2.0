@@ -56,6 +56,8 @@ export async function POST(req: Request) {
     mode?: "BEGINNER" | "ADVANCED";
     config?: Record<string, unknown>;
     playerId?: string;
+    w?: number;
+    h?: number;
   };
 
   if (!body.widgetType || !body.sport) {
@@ -88,8 +90,8 @@ export async function POST(req: Request) {
         playerId: body.playerId,
         x: count % 4,
         y: Math.floor(count / 4),
-        w: 1,
-        h: 1,
+        w: body.w ?? 1,
+        h: body.h ?? 1,
       },
     });
 

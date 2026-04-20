@@ -14,6 +14,7 @@ import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidge
 import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
 import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
 import MlbPitcherProjectionWidget from "@/components/widgets/MlbPitcherProjectionWidget";
+import WidgetSizePicker from "@/components/widgets/WidgetSizePicker";
 import MlbSeasonStatsWidget from "@/components/widgets/MlbSeasonStatsWidget";
 import MlbPlatoonAdvantageWidget from "@/components/widgets/MlbPlatoonAdvantageWidget";
 import MlbRecentFormWidget from "@/components/widgets/MlbRecentFormWidget";
@@ -128,6 +129,7 @@ export default function DashboardPage({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [bugBundle, setBugBundle] = useState<Record<string, unknown> | null>(null);
   const [refreshAt, setRefreshAt] = useState(0);
+  const [sizePickerWidgetId, setSizePickerWidgetId] = useState<string | null>(null);
   const loadRequestRef = useRef(0);
 
   const isGuestMode = mode !== "signed_in";
@@ -226,10 +228,42 @@ export default function DashboardPage({
     };
   }, [authConfigured, loadGuest, loadServerDashboard]);
 
+  const resizeWidget = async (widgetId: string, w: number, h: number) => {
+    if (dashboard?.layoutLocked) return;
+
+    const widget = widgets.find((candidate) => candidate.id === widgetId);
+    if (!widget) return;
+
+    const nextWidget = { ...widget, w, h };
+
+    if (isGuestMode) {
+      const state = updateLayout(widgets.map((item) => (item.id === widgetId ? nextWidget : item)));
+      setWidgets(state.widgets);
+      setSizePickerWidgetId(null);
+      return;
+    }
+
+    const response = await fetch(`/api/dashboard/widgets/${widgetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ w, h }),
+    });
+
+    if (!response.ok) {
+      setError("Failed to resize widget");
+      return;
+    }
+
+    setWidgets((current) => current.map((item) => (item.id === widgetId ? nextWidget : item)));
+    setSizePickerWidgetId(null);
+  };
+
   const addWidget = async (widgetType: string) => {
     const canonicalWidgetType = canonicalizeWidgetType(widgetType);
-    const widgetSport =
-      WIDGET_DEFINITIONS.find((d) => d.key === canonicalWidgetType)?.sportCategory ?? "NFL";
+    const def = WIDGET_DEFINITIONS.find((d) => d.key === canonicalWidgetType);
+    const widgetSport = def?.sportCategory ?? "NFL";
+    const defaultW = def?.defaultSize.w ?? 1;
+    const defaultH = def?.defaultSize.h ?? 1;
 
     if (isGuestMode) {
       const next: DashboardWidget = {
@@ -238,8 +272,8 @@ export default function DashboardPage({
         mode: "BEGINNER",
         x: widgets.length % 4,
         y: Math.floor(widgets.length / 4),
-        w: 1,
-        h: 1,
+        w: defaultW,
+        h: defaultH,
         config: {},
       };
 
@@ -255,7 +289,7 @@ export default function DashboardPage({
     const response = await fetch("/api/dashboard/widgets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetType: canonicalWidgetType, sport: widgetSport, mode: "BEGINNER", config: {} }),
+      body: JSON.stringify({ widgetType: canonicalWidgetType, sport: widgetSport, mode: "BEGINNER", config: {}, w: defaultW, h: defaultH }),
     });
 
     const payload = (await response.json()) as { error?: string; widget?: Partial<DashboardWidget> };
@@ -580,8 +614,13 @@ export default function DashboardPage({
           {sortedWidgets.map((widget) => {
             const resolvedWidgetType = canonicalizeWidgetType(widget.widgetType);
             const Component = WIDGET_COMPONENTS[resolvedWidgetType];
+            const widgetDef = WIDGET_DEFINITIONS.find((d) => d.key === resolvedWidgetType);
+            const allowedSizes = widgetDef?.allowedSizes ?? [{ w: 1, h: 1 }, { w: 2, h: 1 }];
+            const colSpan = widget.w === 2 ? "col-span-2" : "col-span-1";
+            const rowSpan = widget.h === 2 ? "row-span-2" : "row-span-1";
+            const sizePickerOpen = sizePickerWidgetId === widget.id && !dashboard?.layoutLocked;
             return (
-              <section key={widget.id} className="rounded-xl border border-neutral-800 bg-[#111827] p-3">
+              <section key={widget.id} className={`rounded-xl border border-neutral-800 bg-[#111827] p-3 ${colSpan} ${rowSpan}`}>
                 <div className="mb-2.5 flex items-center justify-between border-b border-neutral-800/60 pb-2">
                   <p className="text-[10px] font-medium uppercase tracking-widest text-neutral-500">
                     {formatWidgetTypeLabel(widget.widgetType)}
@@ -605,6 +644,20 @@ export default function DashboardPage({
                     >
                       ↓
                     </button>
+                    {!dashboard?.layoutLocked && (
+                      <button
+                        type="button"
+                        className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+                          sizePickerOpen
+                            ? "bg-neutral-700 text-neutral-200"
+                            : "text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300"
+                        }`}
+                        onClick={() => setSizePickerWidgetId(sizePickerOpen ? null : widget.id)}
+                        title="Resize widget"
+                      >
+                        {widget.w}×{widget.h}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="rounded px-1.5 py-0.5 text-[11px] text-neutral-500 hover:bg-red-950 hover:text-red-300 disabled:cursor-default disabled:opacity-30"
@@ -616,6 +669,16 @@ export default function DashboardPage({
                     </button>
                   </div>
                 </div>
+                {sizePickerOpen && (
+                  <div className="mb-2.5 border-b border-neutral-800/60 pb-2.5">
+                    <WidgetSizePicker
+                      allowedSizes={allowedSizes}
+                      currentW={widget.w}
+                      currentH={widget.h}
+                      onSizeChange={(w, h) => void resizeWidget(widget.id, w, h)}
+                    />
+                  </div>
+                )}
                 {Component ? (
                   <Component
                     widgetId={widget.id}
