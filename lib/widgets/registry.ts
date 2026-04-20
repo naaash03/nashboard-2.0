@@ -198,5 +198,14 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     stability: "admin",
     audience: "advanced",
   },
+  {
+    key: "mlb_pitcher_projection",
+    name: "MLB Pitcher Projection",
+    description: "Projected strikeout total for a starting pitcher using season stats, recent form, market odds, and weather.",
+    sportCategory: "MLB",
+    defaultSize: { w: 1, h: 1 },
+    stability: "experimental",
+    audience: "mixed",
+  },
 ];
 

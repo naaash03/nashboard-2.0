@@ -13,6 +13,7 @@ import MlbNext7GamesWidget from "@/components/widgets/MlbNext7GamesWidget";
 import MlbPitcherArsenalWidget from "@/components/widgets/MlbPitcherArsenalWidget";
 import MlbSeriesTrackerWidget from "@/components/widgets/MlbSeriesTrackerWidget";
 import MlbStartingPitcherMatchupWidget from "@/components/widgets/MlbStartingPitcherMatchupWidget";
+import MlbPitcherProjectionWidget from "@/components/widgets/MlbPitcherProjectionWidget";
 import MlbSeasonStatsWidget from "@/components/widgets/MlbSeasonStatsWidget";
 import MlbPlatoonAdvantageWidget from "@/components/widgets/MlbPlatoonAdvantageWidget";
 import MlbRecentFormWidget from "@/components/widgets/MlbRecentFormWidget";
@@ -95,6 +96,7 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_recent_form: (props) => <MlbRecentFormWidget {...props} />,
   mlb_bullpen_fatigue: (props) => <MlbBullpenFatigueWidget {...props} />,
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
+  mlb_pitcher_projection: (props) => <MlbPitcherProjectionWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
   nba_team_matchup_profile: (props) => <NbaTeamMatchupProfileWidget {...props} />,
