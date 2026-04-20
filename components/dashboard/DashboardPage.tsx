@@ -583,26 +583,27 @@ export default function DashboardPage({
 
       <main className="mx-auto max-w-screen-2xl px-6 py-5">
         {error ? (
-          <div className="mb-4 rounded border border-red-500/50 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+          <div className="mb-4 rounded-r border-l-4 border-red-500 bg-red-500/10 py-2 pl-3 text-xs text-red-400">
             {error}
           </div>
         ) : null}
 
-        <div className={`mb-4 border-l-2 pl-3 text-xs ${
+        <div className={`mb-4 rounded-r border-l-4 py-2 pl-3 text-xs ${
           statusBanner.tone === "emerald"
-            ? "border-emerald-500 text-emerald-300"
-            : "border-amber-500/70 text-amber-300"
+            ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+            : "border-yellow-500 bg-yellow-500/10 text-yellow-400"
         }`}>
           {statusBanner.text}
         </div>
 
         {sortedWidgets.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-neutral-700/60 px-6 py-16 text-center">
-            <p className="text-sm font-medium text-neutral-300">Your dashboard is empty</p>
-            <p className="text-xs text-neutral-500">Add widgets to start tracking what matters.</p>
+            <div className="h-8 w-8 rounded-full border-2 border-slate-600" aria-hidden="true" />
+            <p className="text-sm font-semibold text-slate-400">Your dashboard is empty</p>
+            <p className="text-xs text-slate-400">Add widgets to start tracking what matters.</p>
             <button
               onClick={() => setLibraryOpen(true)}
-              className="mt-1 rounded border border-neutral-600 bg-neutral-800/80 px-4 py-1.5 text-xs font-medium hover:bg-neutral-700"
+              className="mt-1 rounded border border-neutral-600 bg-neutral-800/80 px-4 py-1.5 text-xs font-medium text-slate-300 hover:bg-neutral-700"
               type="button"
             >
               Add your first widget
@@ -610,19 +611,19 @@ export default function DashboardPage({
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sortedWidgets.map((widget) => {
             const resolvedWidgetType = canonicalizeWidgetType(widget.widgetType);
             const Component = WIDGET_COMPONENTS[resolvedWidgetType];
             const widgetDef = WIDGET_DEFINITIONS.find((d) => d.key === resolvedWidgetType);
             const allowedSizes = widgetDef?.allowedSizes ?? [{ w: 1, h: 1 }, { w: 2, h: 1 }];
-            const colSpan = widget.w === 2 ? "col-span-2" : "col-span-1";
+            const colSpan = widget.w === 3 ? "col-span-3" : widget.w === 2 ? "col-span-2" : "col-span-1";
             const rowSpan = widget.h === 2 ? "row-span-2" : "row-span-1";
             const sizePickerOpen = sizePickerWidgetId === widget.id && !dashboard?.layoutLocked;
             return (
-              <section key={widget.id} className={`rounded-xl border border-neutral-800 bg-[#111827] p-3 ${colSpan} ${rowSpan}`}>
-                <div className="mb-2.5 flex items-center justify-between border-b border-neutral-800/60 pb-2">
-                  <p className="text-[10px] font-medium uppercase tracking-widest text-neutral-500">
+              <section key={widget.id} className={`flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111827] ${colSpan} ${rowSpan}`}>
+                <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-neutral-800/40 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
                     {formatWidgetTypeLabel(widget.widgetType)}
                   </p>
                   <div className="flex items-center gap-0.5">
@@ -670,7 +671,7 @@ export default function DashboardPage({
                   </div>
                 </div>
                 {sizePickerOpen && (
-                  <div className="mb-2.5 border-b border-neutral-800/60 pb-2.5">
+                  <div className="shrink-0 border-b border-white/10 px-3 pb-2.5 pt-2.5">
                     <WidgetSizePicker
                       allowedSizes={allowedSizes}
                       currentW={widget.w}
@@ -679,36 +680,41 @@ export default function DashboardPage({
                     />
                   </div>
                 )}
-                {Component ? (
-                  <Component
-                    widgetId={widget.id}
-                    locked={Boolean(dashboard?.layoutLocked)}
-                    mode={widget.mode}
-                    config={widget.config}
-                    viewerMode={isGuestMode ? "guest" : "signed_in"}
-                    authConfigured={authConfigured}
-                    dbConfigured={dbConfigured}
-                    refreshTick={refreshTick}
-                    dataMode={dataMode}
-                    preferenceDataMode={preferenceDataMode}
-                    dataModeSource={modeResolution.source}
-                    onPersist={(next) => persistWidget(widget.id, next)}
-                    onReportBug={(bundle) => {
-                      const parsed = bundle as ReportBugPayload;
-                      setBugBundle({
-                        widgetType: widget.widgetType,
-                        sourceUsed: parsed.meta?.sourceUsed,
-                        updatedTimestamp: parsed.meta?.updatedAt,
-                        warnings: parsed.warning,
-                        requestId: parsed.meta?.requestId,
-                        widget,
-                        bundle,
-                      });
-                    }}
-                  />
-                ) : (
-                  <p className="text-xs text-neutral-500">Widget is not wired.</p>
-                )}
+                <div className="min-h-0 flex-1 p-3">
+                  {Component ? (
+                    <Component
+                      widgetId={widget.id}
+                      locked={Boolean(dashboard?.layoutLocked)}
+                      mode={widget.mode}
+                      config={widget.config}
+                      viewerMode={isGuestMode ? "guest" : "signed_in"}
+                      authConfigured={authConfigured}
+                      dbConfigured={dbConfigured}
+                      refreshTick={refreshTick}
+                      dataMode={dataMode}
+                      preferenceDataMode={preferenceDataMode}
+                      dataModeSource={modeResolution.source}
+                      onPersist={(next) => persistWidget(widget.id, next)}
+                      onReportBug={(bundle) => {
+                        const parsed = bundle as ReportBugPayload;
+                        setBugBundle({
+                          widgetType: widget.widgetType,
+                          sourceUsed: parsed.meta?.sourceUsed,
+                          updatedTimestamp: parsed.meta?.updatedAt,
+                          warnings: parsed.warning,
+                          requestId: parsed.meta?.requestId,
+                          widget,
+                          bundle,
+                        });
+                      }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-6 text-center">
+                      <div className="h-5 w-5 rounded-full border border-slate-600" aria-hidden="true" />
+                      <p className="text-xs text-slate-400">Widget is not wired.</p>
+                    </div>
+                  )}
+                </div>
               </section>
             );
           })}

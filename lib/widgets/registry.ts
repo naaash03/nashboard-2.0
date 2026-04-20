@@ -13,6 +13,7 @@ export type WidgetDefinition = {
 
 const SM = { w: 1, h: 1 };
 const MD = { w: 2, h: 1 };
+const WD = { w: 3, h: 1 };
 const LG = { w: 2, h: 2 };
 
 export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
@@ -82,7 +83,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Expected RB and run-defense matchup context.",
     sportCategory: "NFL",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     stability: "experimental",
     audience: "advanced",
   },
@@ -102,7 +103,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Pitch-type breakdown with velocity and spin rate for a selected pitcher.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     stability: "experimental",
     audience: "advanced",
   },
@@ -112,7 +113,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Current or upcoming series context with game-by-game results.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     audience: "mixed",
   },
   {
@@ -121,7 +122,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Probable starters with season stats for a team's next scheduled game.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     stability: "stable",
     audience: "mixed",
   },
@@ -131,7 +132,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Year-by-year hitting or pitching stats for a player, or team stats for a season.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
   },
   {
     key: "mlb_platoon_advantage",
@@ -139,7 +140,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Analyzes pitcher platoon splits to identify home/away matchup advantages.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
   },
   {
     key: "mlb_recent_form",
@@ -155,7 +156,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Tracks active bullpen pitcher availability and fatigue based on recent appearances.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
   },
   {
     key: "mlb_run_expectancy",
@@ -163,7 +164,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Interactive RE24 matrix — click any base/out state to see expected runs and scoring probability.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
   },
   {
     key: "nba_tonights_slate",
@@ -191,7 +192,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Teachable matchup board with live team form when available, while deeper matchup pillars stay scaffolded until richer NBA split data is wired in.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     stability: "experimental",
     audience: "mixed",
   },
@@ -211,7 +212,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Role-based player context with live BALLDONTLIE player lookup and stat-backed form when available, plus an honest scaffold fallback.",
     sportCategory: "NBA",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     stability: "experimental",
     audience: "mixed",
   },
@@ -231,7 +232,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Projected strikeout total for a starting pitcher using season stats, recent form, market odds, and weather.",
     sportCategory: "MLB",
     defaultSize: { w: 1, h: 1 },
-    allowedSizes: [SM, MD, LG],
+    allowedSizes: [SM, MD, WD, LG],
     stability: "experimental",
     audience: "mixed",
   },

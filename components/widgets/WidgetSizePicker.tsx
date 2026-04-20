@@ -12,11 +12,12 @@ type Props = {
 const SIZE_LABELS: Record<string, string> = {
   "1x1": "Sm",
   "2x1": "Md",
+  "3x1": "Wd",
   "2x2": "Lg",
 };
 
 function SizePreview({ w, h, active }: { w: number; h: number; active: boolean }) {
-  const cols = w === 2 ? "grid-cols-2" : "grid-cols-1";
+  const cols = w === 3 ? "grid-cols-3" : w === 2 ? "grid-cols-2" : "grid-cols-1";
   return (
     <div
       className={`grid gap-[3px] ${cols} p-1.5 rounded transition-colors ${
