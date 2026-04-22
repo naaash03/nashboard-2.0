@@ -18,11 +18,13 @@ export async function GET(req: Request) {
     dataMode: resolvedDataMode,
     cacheBust,
   });
+  const src = resolved.meta.sourceUsed;
+  const primaryProvider = (src === "apiSports" || src === "espn" || src === "mlb" || src === "balldontlie" ? src : "balldontlie") as const;
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,
     meta: resolved.meta,
-    primaryProvider: "balldontlie",
+    primaryProvider,
     notes: [
       resolved.data.sourceDetail,
       "Rest / schedule context uses BALLDONTLIE as the primary live source, API-Sports NBA as the fallback live source, and only then the demo scaffold.",

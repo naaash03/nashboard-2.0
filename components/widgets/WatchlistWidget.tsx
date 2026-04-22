@@ -52,7 +52,7 @@ const PLAYER_INSIGHTS_REFRESH_MS = 60_000;
 const MLB_CANONICAL_KEYS = new Set<string>([
   "NYM","NYY","LAD","BOS","CHC","HOU","ATL","PHI","SDP","SFG",
   "STL","MIL","CIN","PIT","COL","ARI","SEA","TEX","OAK","MIN",
-  "CLE","DET","KCR","CHW","TBR","BAL","WSN","MIA","TOR","LAA",
+  "CLE","DET","KCR","CWS","TBR","BAL","WSN","MIA","TOR","LAA",
 ]);
 const NBA_CANONICAL_KEYS = new Set<string>([
   "ATL","BOS","NOP","CHI","CLE","DAL","DEN","DET","GSW","HOU",

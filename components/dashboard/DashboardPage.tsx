@@ -28,6 +28,9 @@ import NbaPlayerRoleFormWidget from "@/components/widgets/NbaPlayerRoleFormWidge
 import NflDivisionSnapshotWidget from "@/components/widgets/NflDivisionSnapshotWidget";
 import NflTeamContextCardWidget from "@/components/widgets/NflTeamContextCardWidget";
 import NflRecentFormWidget from "@/components/widgets/NflRecentFormWidget";
+import TodaysScheduleWidget from "@/components/widgets/TodaysScheduleWidget";
+import MlbTrendChartWidget from "@/components/widgets/MlbTrendChartWidget";
+import MlbMarketInsightsWidget from "@/components/widgets/MlbMarketInsightsWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -103,6 +106,11 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   nba_team_matchup_profile: (props) => <NbaTeamMatchupProfileWidget {...props} />,
   nba_rest_schedule_spot: (props) => <NbaRestScheduleSpotWidget {...props} />,
   nba_player_role_form: (props) => <NbaPlayerRoleFormWidget {...props} />,
+  mlb_schedule_today: (props) => <TodaysScheduleWidget sport="MLB" {...props} />,
+  nba_schedule_today: (props) => <TodaysScheduleWidget sport="NBA" {...props} />,
+  nfl_schedule_today: (props) => <TodaysScheduleWidget sport="NFL" {...props} />,
+  mlb_trend_chart: (props) => <MlbTrendChartWidget {...props} />,
+  mlb_market_insights: (props) => <MlbMarketInsightsWidget {...props} />,
 };
 
 function to12h(value: string): string {

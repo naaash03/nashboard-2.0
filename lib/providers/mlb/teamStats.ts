@@ -1281,3 +1281,115 @@ export async function mlbGetPlatoonAdvantage(
     },
   };
 }
+
+// ── mlbGetRecentGameLog ───────────────────────────────────────────────────────
+
+export type TeamGameLogEntry = {
+  gamePk: number;
+  gameNumber: number;
+  date: string;
+  dateISO: string;
+  opponent: string;
+  opponentKey: string;
+  homeAway: "home" | "away";
+  runsScored: number;
+  runsAllowed: number;
+  result: "W" | "L";
+};
+
+export type TeamGameLog = {
+  teamKey: string;
+  teamName: string;
+  games: TeamGameLogEntry[];
+  isPartial: boolean;
+};
+
+export async function mlbGetRecentGameLog(
+  teamKey: string,
+  limit = 15,
+  dataMode?: ModeArg,
+): Promise<{ data: TeamGameLog | null; meta: Meta }> {
+  const resolved = getMlbDataMode(dataMode);
+  const normalizedTeamKey = normalizeTeamKeyInput(teamKey);
+  const team = resolveMlbTeam(normalizedTeamKey);
+  if (!team) {
+    return { data: null, meta: fallbackMeta(resolved, `Unknown MLB team key: ${normalizedTeamKey}`) };
+  }
+
+  const now = new Date();
+  const response = await fetchMlbJson<RawScheduleDates>({
+    endpoint: "/schedule",
+    params: {
+      teamId: team.id,
+      sportId: 1,
+      startDate: isoDate(addDays(now, -42)),
+      endDate: isoDate(now),
+      gameTypes: "R",
+    },
+    fixtureFile: "team-game-log.json",
+    ttlSeconds: 300,
+    dataMode: resolved,
+  });
+
+  const games = extractGameLog(team.id, response.data, limit);
+
+  return {
+    data: {
+      teamKey: team.key,
+      teamName: team.name,
+      games,
+      isPartial: games.length < limit,
+    },
+    meta: response.meta,
+  };
+}
+
+function extractGameLog(teamId: number, payload: RawScheduleDates, limit: number): TeamGameLogEntry[] {
+  const entries: TeamGameLogEntry[] = [];
+
+  for (const bucket of payload.dates ?? []) {
+    for (const game of bucket.games ?? []) {
+      if ((game.status?.abstractGameState ?? "").toLowerCase() !== "final") continue;
+      if (!game.officialDate || !game.gamePk) continue;
+      if ((game.gameType ?? "") !== "R") continue;
+
+      const homeTeam = game.teams?.home?.team;
+      const awayTeam = game.teams?.away?.team;
+      if (!homeTeam || !awayTeam) continue;
+
+      const isHome = homeTeam.id === teamId;
+      const isAway = awayTeam.id === teamId;
+      if (!isHome && !isAway) continue;
+
+      const runsScored = isHome ? game.teams?.home?.score : game.teams?.away?.score;
+      const runsAllowed = isHome ? game.teams?.away?.score : game.teams?.home?.score;
+
+      if (typeof runsScored !== "number" || typeof runsAllowed !== "number") continue;
+
+      const opponentTeam = isHome ? awayTeam : homeTeam;
+
+      entries.push({
+        gamePk: game.gamePk,
+        gameNumber: 0,
+        date: formatGameDate(game.officialDate),
+        dateISO: game.officialDate,
+        opponent: opponentTeam.name ?? teamKeyFromIdOrName(opponentTeam.id),
+        opponentKey: teamKeyFromIdOrName(opponentTeam.id, opponentTeam.name),
+        homeAway: isHome ? "home" : "away",
+        runsScored,
+        runsAllowed,
+        result: runsScored > runsAllowed ? "W" : "L",
+      });
+    }
+  }
+
+  entries.sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+  const trimmed = entries.slice(-limit);
+  trimmed.forEach((e, i) => { e.gameNumber = i + 1; });
+  return trimmed;
+}
+
+function formatGameDate(dateISO: string): string {
+  const d = new Date(dateISO + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}

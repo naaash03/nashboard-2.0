@@ -216,7 +216,7 @@ const ESPN_ABBREV_EXPAND: Record<string, string> = {
   SF: "SFG",   // San Francisco Giants
   KC: "KCR",   // Kansas City Royals
   TB: "TBR",   // Tampa Bay Rays
-  CWS: "CHW",  // Chicago White Sox
+  CHW: "CWS",  // Chicago White Sox
   WSH: "WSN",  // Washington Nationals
 };
 

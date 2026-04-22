@@ -1,4 +1,5 @@
 import type { Team } from "@/lib/sports/models";
+import { MLB_TEAMS } from "@/lib/providers/mlb/MLB_TEAMS";
 
 type LeagueKey = "NFL" | "NBA" | "MLB";
 type TeamMapByLeague = Record<LeagueKey, Record<string, Team>>;
@@ -29,6 +30,52 @@ function team(
   };
 }
 
+const MLB_VERIFIED_PROVIDER_IDS: Record<string, { apiSports?: string; espn?: string }> = {
+  NYM: { apiSports: "22", espn: "25" },
+  LAD: { apiSports: "15", espn: "19" },
+  SEA: { apiSports: "12", espn: "12" },
+};
+
+const MLB_ALIASES: Record<string, string[]> = {
+  NYY: ["yankees", "new york yankees"],
+  BOS: ["red sox", "boston red sox"],
+  TBR: ["rays", "tampa bay rays"],
+  TOR: ["blue jays", "toronto blue jays"],
+  BAL: ["orioles", "baltimore orioles"],
+  CLE: ["guardians", "cleveland guardians"],
+  CWS: ["white sox", "chicago white sox"],
+  DET: ["tigers", "detroit tigers"],
+  KCR: ["royals", "kansas city royals"],
+  MIN: ["twins", "minnesota twins"],
+  HOU: ["astros", "houston astros"],
+  LAA: ["angels", "los angeles angels"],
+  OAK: ["athletics", "oakland athletics"],
+  SEA: ["mariners", "seattle mariners"],
+  TEX: ["rangers", "texas rangers"],
+  ATL: ["braves", "atlanta braves"],
+  MIA: ["marlins", "miami marlins"],
+  NYM: ["mets", "new york mets"],
+  PHI: ["phillies", "philadelphia phillies"],
+  WSN: ["nationals", "washington nationals"],
+  CHC: ["cubs", "chicago cubs"],
+  CIN: ["reds", "cincinnati reds"],
+  MIL: ["brewers", "milwaukee brewers"],
+  PIT: ["pirates", "pittsburgh pirates"],
+  STL: ["cardinals", "st. louis cardinals"],
+  ARI: ["diamondbacks", "arizona diamondbacks"],
+  COL: ["rockies", "colorado rockies"],
+  LAD: ["dodgers", "los angeles dodgers"],
+  SDP: ["padres", "san diego padres"],
+  SFG: ["giants", "san francisco giants"],
+};
+
+const MLB_TEAM_ENTRIES: Record<string, Team> = Object.fromEntries(
+  MLB_TEAMS.map((t) => [
+    t.key,
+    team("MLB", t.key, t.name, t.city, MLB_VERIFIED_PROVIDER_IDS[t.key] ?? {}, MLB_ALIASES[t.key] ?? []),
+  ]),
+);
+
 const TEAM_MAP: TeamMapByLeague = {
   NFL: {
     NYJ: team("NFL", "NYJ", "New York Jets", "New York", { apiSports: "20", espn: "20" }, ["jets", "new york jets", "ny jets"]),
@@ -40,11 +87,7 @@ const TEAM_MAP: TeamMapByLeague = {
     NYK: team("NBA", "NYK", "New York Knicks", "New York", { apiSports: "24", espn: "18" }, ["knicks", "new york knicks", "new york"]),
     BOS: team("NBA", "BOS", "Boston Celtics", "Boston", { apiSports: "2", espn: "2" }, ["celtics", "boston celtics"]),
   },
-  MLB: {
-    NYM: team("MLB", "NYM", "New York Mets", "New York", { apiSports: "22", espn: "25" }, ["mets", "new york mets", "new york"]),
-    LAD: team("MLB", "LAD", "Los Angeles Dodgers", "Los Angeles", { apiSports: "15", espn: "19" }, ["dodgers", "los angeles dodgers"]),
-    SEA: team("MLB", "SEA", "Seattle Mariners", "Seattle", { apiSports: "12", espn: "12" }, ["mariners", "seattle mariners"]),
-  },
+  MLB: MLB_TEAM_ENTRIES,
 };
 
 function normalize(value: string): string {

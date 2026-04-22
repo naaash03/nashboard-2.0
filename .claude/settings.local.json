@@ -15,7 +15,9 @@
       "Bash(echo \"exit:$?\")",
       "Bash(grep -v \"^$\")",
       "Bash(npm run:*)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(xargs grep *)",
+      "Bash(git stash *)"
     ]
   }
 }

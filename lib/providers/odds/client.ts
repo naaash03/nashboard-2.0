@@ -107,7 +107,10 @@ function extractOverUnder(game: OddsGame): number | null {
   return null;
 }
 
-export async function fetchMlbGameOdds(
+export type OddsSportSlug = "baseball_mlb" | "basketball_nba" | "americanfootball_nfl";
+
+export async function fetchGameOdds(
+  sportSlug: OddsSportSlug,
   homeTeam: string,
   awayTeam: string,
 ): Promise<MlbGameOdds> {
@@ -116,7 +119,7 @@ export async function fetchMlbGameOdds(
     return { ...FALLBACK_UNAVAILABLE, fallbackReason: "THE_ODDS_KEY is not configured." };
   }
 
-  const endpoint = "/sports/baseball_mlb/odds";
+  const endpoint = `/sports/${sportSlug}/odds`;
   const params = new URLSearchParams({
     apiKey,
     regions: "us",
@@ -168,6 +171,121 @@ export async function fetchMlbGameOdds(
     const message = String(error);
     trackError(endpoint, message, undefined, safeUrl);
     return { ...FALLBACK_UNAVAILABLE, fallbackReason: `Fetch failed: ${message}` };
+  }
+}
+
+export async function fetchMlbGameOdds(
+  homeTeam: string,
+  awayTeam: string,
+): Promise<MlbGameOdds> {
+  return fetchGameOdds("baseball_mlb", homeTeam, awayTeam);
+}
+
+export type LineMovement = {
+  awayOpen: number | null;
+  homeOpen: number | null;
+  awayVigShift: string | null;
+  homeVigShift: string | null;
+  isFallback: boolean;
+  fallbackReason?: string;
+};
+
+const FALLBACK_LINE_MOVEMENT_UNAVAILABLE = (reason: string): LineMovement => ({
+  awayOpen: null,
+  homeOpen: null,
+  awayVigShift: null,
+  homeVigShift: null,
+  isFallback: true,
+  fallbackReason: reason,
+});
+
+function formatShift(shift: number): string {
+  return shift >= 0 ? `+${shift}` : `${shift}`;
+}
+
+// Fetches the overnight (midnight UTC today) snapshot as a proxy for opening line,
+// then compares to current lines to compute line movement.
+// Returns isFallback when: key absent, API error, game not in snapshot, or only one data point.
+export async function fetchLineMovement(
+  sportSlug: OddsSportSlug,
+  homeTeam: string,
+  awayTeam: string,
+  currentHomeML: number | null,
+  currentAwayML: number | null,
+): Promise<LineMovement> {
+  const apiKey = process.env.THE_ODDS_KEY;
+  if (!apiKey) {
+    return FALLBACK_LINE_MOVEMENT_UNAVAILABLE("THE_ODDS_KEY is not configured.");
+  }
+
+  if (currentHomeML === null || currentAwayML === null) {
+    return FALLBACK_LINE_MOVEMENT_UNAVAILABLE("Current odds unavailable — cannot compute line movement.");
+  }
+
+  // Use midnight UTC today as "opening" snapshot proxy
+  const todayMidnight = new Date();
+  todayMidnight.setUTCHours(0, 0, 0, 0);
+  const dateParam = todayMidnight.toISOString().replace(".000Z", "Z");
+
+  const endpoint = `/historical/sports/${sportSlug}/odds`;
+  const params = new URLSearchParams({
+    apiKey,
+    date: dateParam,
+    regions: "us",
+    markets: "h2h",
+    oddsFormat: "american",
+  });
+  const url = `${ODDS_BASE}${endpoint}?${params}`;
+  const safeUrl = sanitizeUrl(url);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+
+  try {
+    const response = await fetch(url, { method: "GET", cache: "no-store", signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const text = (await response.text()).slice(0, 200);
+      trackError(endpoint, `Odds history ${response.status}: ${text}`, response.status, safeUrl);
+      return FALLBACK_LINE_MOVEMENT_UNAVAILABLE(`Odds history API returned ${response.status}.`);
+    }
+
+    // Historical endpoint wraps games in { data: OddsGame[], timestamp: string }
+    const body = (await response.json()) as { data?: OddsGame[] } | OddsGame[];
+    trackSuccess(endpoint, safeUrl, response.status);
+
+    const games: OddsGame[] = Array.isArray(body) ? body : (body.data ?? []);
+
+    const match = games.find(
+      (g) => teamsMatch(g.home_team, homeTeam) && teamsMatch(g.away_team, awayTeam),
+    );
+
+    if (!match) {
+      return FALLBACK_LINE_MOVEMENT_UNAVAILABLE("Insufficient history for line movement.");
+    }
+
+    const { home: homeOpen, away: awayOpen } = extractMoneylines(match);
+
+    if (homeOpen === null || awayOpen === null) {
+      return FALLBACK_LINE_MOVEMENT_UNAVAILABLE("Insufficient history for line movement.");
+    }
+
+    const homeShift = currentHomeML - homeOpen;
+    const awayShift = currentAwayML - awayOpen;
+
+    return {
+      awayOpen,
+      homeOpen,
+      awayVigShift: formatShift(awayShift),
+      homeVigShift: formatShift(homeShift),
+      isFallback: false,
+    };
+  } catch (error) {
+    clearTimeout(timeout);
+    const message = String(error);
+    trackError(endpoint, message, undefined, safeUrl);
+    return FALLBACK_LINE_MOVEMENT_UNAVAILABLE(`Fetch failed: ${message}`);
   }
 }
 

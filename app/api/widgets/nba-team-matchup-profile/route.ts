@@ -40,11 +40,13 @@ export async function GET(req: Request) {
     dataMode: resolvedDataMode,
     cacheBust,
   });
+  const src = resolved.meta.sourceUsed;
+  const primaryProvider = (src === "apiSports" || src === "espn" || src === "mlb" || src === "balldontlie" ? src : "balldontlie") as const;
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,
     meta: resolved.meta,
-    primaryProvider: "balldontlie",
+    primaryProvider,
     notes: [
       resolved.data.sourceDetail,
       "Live team context comes from BALLDONTLIE first, then API-Sports NBA if needed; matchup pillar cards remain scaffolded until richer team split data is connected.",

@@ -1,0 +1,60 @@
+{
+  "events": [
+    {
+      "id": "401700010",
+      "date": "2026-04-21T23:05:00Z",
+      "season": { "type": 2 },
+      "competitions": [
+        {
+          "broadcasts": [{ "names": ["NBC Sports Philadelphia"] }],
+          "venue": { "fullName": "Citizens Bank Park", "address": { "city": "Philadelphia" } },
+          "status": { "type": { "state": "pre", "description": "Scheduled", "detail": "7:05 PM ET" } },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "team": { "abbreviation": "NYM", "displayName": "New York Mets" },
+              "records": [{ "summary": "12-8" }]
+            },
+            {
+              "homeAway": "home",
+              "team": { "abbreviation": "PHI", "displayName": "Philadelphia Phillies" },
+              "records": [{ "summary": "14-7" }]
+            }
+          ],
+          "probables": [
+            { "athlete": { "id": "669373", "fullName": "Zack Wheeler" }, "homeAway": "home" },
+            { "athlete": { "id": "656905", "fullName": "Sean Manaea" }, "homeAway": "away" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401700011",
+      "date": "2026-04-21T19:10:00Z",
+      "season": { "type": 2 },
+      "competitions": [
+        {
+          "broadcasts": [{ "names": ["Apple TV+"] }],
+          "venue": { "fullName": "Minute Maid Park", "address": { "city": "Houston" } },
+          "status": { "type": { "state": "pre", "description": "Scheduled", "detail": "2:10 PM ET" } },
+          "competitors": [
+            {
+              "homeAway": "away",
+              "team": { "abbreviation": "TBR", "displayName": "Tampa Bay Rays" },
+              "records": [{ "summary": "9-10" }]
+            },
+            {
+              "homeAway": "home",
+              "team": { "abbreviation": "HOU", "displayName": "Houston Astros" },
+              "records": [{ "summary": "11-8" }]
+            }
+          ],
+          "probables": [
+            { "athlete": { "id": "641154", "fullName": "Framber Valdez" }, "homeAway": "home" },
+            { "athlete": { "id": "641933", "fullName": "Shane McClanahan" }, "homeAway": "away" }
+          ]
+        }
+      ]
+    }
+  ]
+}

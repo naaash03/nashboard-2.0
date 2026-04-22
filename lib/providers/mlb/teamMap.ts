@@ -1,26 +1,23 @@
-﻿export type MlbTeamOption = {
+import { MLB_TEAMS } from "./MLB_TEAMS";
+
+export type MlbTeamOption = {
   key: string;
   name: string;
   id: number;
 };
 
-export const MLB_TEAM_MAP: Record<string, MlbTeamOption> = {
-  ATL: { key: "ATL", name: "Atlanta Braves", id: 144 },
-  BOS: { key: "BOS", name: "Boston Red Sox", id: 111 },
-  CHC: { key: "CHC", name: "Chicago Cubs", id: 112 },
-  HOU: { key: "HOU", name: "Houston Astros", id: 117 },
-  LAD: { key: "LAD", name: "Los Angeles Dodgers", id: 119 },
-  NYM: { key: "NYM", name: "New York Mets", id: 121 },
-  NYY: { key: "NYY", name: "New York Yankees", id: 147 },
-  PHI: { key: "PHI", name: "Philadelphia Phillies", id: 143 },
-  SD: { key: "SD", name: "San Diego Padres", id: 135 },
-  SF: { key: "SF", name: "San Francisco Giants", id: 137 },
-  SEA: { key: "SEA", name: "Seattle Mariners", id: 136 },
-  STL: { key: "STL", name: "St. Louis Cardinals", id: 138 },
-  TB: { key: "TB", name: "Tampa Bay Rays", id: 139 },
-  TEX: { key: "TEX", name: "Texas Rangers", id: 140 },
-  TOR: { key: "TOR", name: "Toronto Blue Jays", id: 141 },
+const MLB_STATS_API_IDS: Record<string, number> = {
+  NYY: 147, BOS: 111, TBR: 139, TOR: 141, BAL: 110,
+  CLE: 114, CWS: 145, DET: 116, KCR: 118, MIN: 142,
+  HOU: 117, LAA: 108, OAK: 133, SEA: 136, TEX: 140,
+  ATL: 144, MIA: 146, NYM: 121, PHI: 143, WSN: 120,
+  CHC: 112, CIN: 113, MIL: 158, PIT: 134, STL: 138,
+  ARI: 109, COL: 115, LAD: 119, SDP: 135, SFG: 137,
 };
+
+export const MLB_TEAM_MAP: Record<string, MlbTeamOption> = Object.fromEntries(
+  MLB_TEAMS.map((t) => [t.key, { key: t.key, name: t.name, id: MLB_STATS_API_IDS[t.key] ?? 0 }]),
+);
 
 export const MLB_TEAM_OPTIONS: MlbTeamOption[] = Object.values(MLB_TEAM_MAP).sort((a, b) =>
   a.name.localeCompare(b.name),

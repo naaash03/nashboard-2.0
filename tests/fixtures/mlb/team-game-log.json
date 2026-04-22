@@ -1,0 +1,187 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "totalItems": 15,
+  "totalGames": 15,
+  "dates": [
+    {
+      "date": "2026-03-31",
+      "games": [{
+        "gamePk": 900101, "gameDate": "2026-03-31T17:05:00Z", "officialDate": "2026-03-31",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 4 },
+          "home": { "team": { "id": 111, "name": "Boston Red Sox" }, "score": 2 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-01",
+      "games": [{
+        "gamePk": 900102, "gameDate": "2026-04-01T17:05:00Z", "officialDate": "2026-04-01",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 1 },
+          "home": { "team": { "id": 111, "name": "Boston Red Sox" }, "score": 5 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-02",
+      "games": [{
+        "gamePk": 900103, "gameDate": "2026-04-02T17:05:00Z", "officialDate": "2026-04-02",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 7 },
+          "home": { "team": { "id": 111, "name": "Boston Red Sox" }, "score": 3 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-04",
+      "games": [{
+        "gamePk": 900104, "gameDate": "2026-04-04T18:05:00Z", "officialDate": "2026-04-04",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 6 },
+          "away": { "team": { "id": 139, "name": "Tampa Bay Rays" }, "score": 2 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-05",
+      "games": [{
+        "gamePk": 900105, "gameDate": "2026-04-05T18:05:00Z", "officialDate": "2026-04-05",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 2 },
+          "away": { "team": { "id": 139, "name": "Tampa Bay Rays" }, "score": 4 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-06",
+      "games": [{
+        "gamePk": 900106, "gameDate": "2026-04-06T18:05:00Z", "officialDate": "2026-04-06",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 5 },
+          "away": { "team": { "id": 139, "name": "Tampa Bay Rays" }, "score": 1 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-08",
+      "games": [{
+        "gamePk": 900107, "gameDate": "2026-04-08T23:05:00Z", "officialDate": "2026-04-08",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 3 },
+          "home": { "team": { "id": 117, "name": "Houston Astros" }, "score": 8 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-09",
+      "games": [{
+        "gamePk": 900108, "gameDate": "2026-04-09T23:05:00Z", "officialDate": "2026-04-09",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 2 },
+          "home": { "team": { "id": 117, "name": "Houston Astros" }, "score": 3 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-11",
+      "games": [{
+        "gamePk": 900109, "gameDate": "2026-04-11T18:05:00Z", "officialDate": "2026-04-11",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 8 },
+          "away": { "team": { "id": 114, "name": "Cleveland Guardians" }, "score": 4 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-12",
+      "games": [{
+        "gamePk": 900110, "gameDate": "2026-04-12T18:05:00Z", "officialDate": "2026-04-12",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 3 },
+          "away": { "team": { "id": 114, "name": "Cleveland Guardians" }, "score": 6 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-14",
+      "games": [{
+        "gamePk": 900111, "gameDate": "2026-04-14T23:10:00Z", "officialDate": "2026-04-14",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 5 },
+          "home": { "team": { "id": 119, "name": "Los Angeles Dodgers" }, "score": 4 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-15",
+      "games": [{
+        "gamePk": 900112, "gameDate": "2026-04-15T23:10:00Z", "officialDate": "2026-04-15",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "away": { "team": { "id": 147, "name": "New York Yankees" }, "score": 1 },
+          "home": { "team": { "id": 119, "name": "Los Angeles Dodgers" }, "score": 7 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-18",
+      "games": [{
+        "gamePk": 900113, "gameDate": "2026-04-18T18:05:00Z", "officialDate": "2026-04-18",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 9 },
+          "away": { "team": { "id": 141, "name": "Toronto Blue Jays" }, "score": 3 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-19",
+      "games": [{
+        "gamePk": 900114, "gameDate": "2026-04-19T18:05:00Z", "officialDate": "2026-04-19",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 6 },
+          "away": { "team": { "id": 141, "name": "Toronto Blue Jays" }, "score": 2 }
+        }
+      }]
+    },
+    {
+      "date": "2026-04-20",
+      "games": [{
+        "gamePk": 900115, "gameDate": "2026-04-20T18:05:00Z", "officialDate": "2026-04-20",
+        "gameType": "R",
+        "status": { "abstractGameState": "Final", "codedGameState": "F" },
+        "teams": {
+          "home": { "team": { "id": 147, "name": "New York Yankees" }, "score": 4 },
+          "away": { "team": { "id": 141, "name": "Toronto Blue Jays" }, "score": 1 }
+        }
+      }]
+    }
+  ]
+}
