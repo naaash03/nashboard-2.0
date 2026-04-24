@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type StandingRow = {
@@ -72,9 +73,9 @@ function ConferenceTable({
                   ) : null}
                 </span>
                 <span className="text-neutral-400">
-                  {row.wins}-{row.losses}
+                  <StatLabel label={`${row.wins}-${row.losses}`} statKey="w_l_record" sport="NBA" mode={mode} />
                   {advanced ? (
-                    <span className="ml-1.5 text-[10px] text-neutral-600">{row.pct}</span>
+                    <StatLabel label={row.pct} statKey="win_pct" sport="NBA" mode={mode} className="ml-1.5 text-[10px] text-neutral-600" />
                   ) : null}
                 </span>
               </div>

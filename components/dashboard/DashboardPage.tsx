@@ -31,6 +31,9 @@ import NflRecentFormWidget from "@/components/widgets/NflRecentFormWidget";
 import TodaysScheduleWidget from "@/components/widgets/TodaysScheduleWidget";
 import MlbTrendChartWidget from "@/components/widgets/MlbTrendChartWidget";
 import MlbMarketInsightsWidget from "@/components/widgets/MlbMarketInsightsWidget";
+import NbaMarketInsightsWidget from "@/components/widgets/NbaMarketInsightsWidget";
+import NflMarketInsightsWidget from "@/components/widgets/NflMarketInsightsWidget";
+import MlbMatchupCommentaryWidget from "@/components/widgets/MlbMatchupCommentaryWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -111,6 +114,9 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   nfl_schedule_today: (props) => <TodaysScheduleWidget sport="NFL" {...props} />,
   mlb_trend_chart: (props) => <MlbTrendChartWidget {...props} />,
   mlb_market_insights: (props) => <MlbMarketInsightsWidget {...props} />,
+  nba_market_insights: (props) => <NbaMarketInsightsWidget {...props} />,
+  nfl_market_insights: (props) => <NflMarketInsightsWidget {...props} />,
+  mlb_matchup_commentary: (props) => <MlbMatchupCommentaryWidget {...props} />,
 };
 
 function to12h(value: string): string {
