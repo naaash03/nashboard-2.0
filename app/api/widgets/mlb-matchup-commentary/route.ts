@@ -386,12 +386,28 @@ export async function GET(req: Request) {
   } catch (err) {
     const message = "Failed to load matchup commentary";
     const fallbackMeta: Meta = {
-      sourceUsed: "error",
+      sourceUsed: dataMode === "fixture" ? "fixture" : "espn",
       updatedAt: new Date().toISOString(),
       requestId: randomUUID(),
+      warning: message,
+      notes: [`Commentary route failed before usable data could be returned: ${String(err)}`],
+      dataMode: resolvedDataMode,
+      dataModeEffective: dataMode === "fixture" ? "fixture" : "live",
     };
+    const contract = toWidgetPayload({
+      data: null,
+      error: message,
+      meta: fallbackMeta,
+      primaryProvider: "espn",
+    });
     return NextResponse.json(
-      { data: null, meta: fallbackMeta, error: message },
+      {
+        data: null,
+        meta: fallbackMeta,
+        contract,
+        error: message,
+        userFacingMessage: "Matchup commentary is temporarily unavailable.",
+      },
       { status: 502 },
     );
   }

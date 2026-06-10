@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { fetchEspnJson } from "@/lib/providers/espn/client";
 import { getTeamNextGame, getTeamRecentRbLeader } from "@/lib/providers/espn/nfl";
+import type { Meta, RbVsDlineStats } from "@/lib/providers/types";
+import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { shapeRbVsDline } from "@/lib/templates/rbVsDline";
-import type { RbVsDlineStats } from "@/lib/providers/types";
 
 type RosterFixture = {
   teamKey: string;
@@ -31,6 +33,17 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function buildRouteMeta(warning: string, resolvedDataMode: "auto" | "live" | "fixture"): Meta {
+  return {
+    sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "espn",
+    updatedAt: new Date().toISOString(),
+    requestId: randomUUID(),
+    warning,
+    dataMode: resolvedDataMode,
+    dataModeEffective: resolvedDataMode === "fixture" ? "fixture" : "live",
+  };
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const teamKey = (searchParams.get("teamKey") ?? "").trim().toUpperCase();
@@ -40,7 +53,10 @@ export async function GET(req: Request) {
   const providerMode = resolvedDataMode === "auto" ? "live" : resolvedDataMode;
 
   if (!teamKey) {
-    return NextResponse.json({ error: "teamKey is required" }, { status: 400 });
+    const error = "teamKey is required";
+    const meta = buildRouteMeta(error, resolvedDataMode);
+    const contract = toWidgetPayload({ data: null, error, meta, primaryProvider: "espn" });
+    return NextResponse.json({ data: null, meta, error, contract }, { status: 400 });
   }
 
   try {
@@ -49,20 +65,25 @@ export async function GET(req: Request) {
 
     if (!nextGame) {
       const leader = await getTeamRecentRbLeader(teamKey, providerMode, cacheBust);
+      const data = {
+        emptyState: true,
+        title: "No upcoming games; offseason",
+        explanation: "There are no upcoming games for this team right now. This is expected during offseason windows.",
+        recentLeader: leader.playerName,
+        whyItMatters: "Use historical context now, then switch to matchup mode when schedules are posted.",
+      };
+      const meta = {
+        ...nextGameResult.meta,
+        warning: leader.playerName
+          ? `No upcoming game. Most recent RB leader: ${leader.playerName}`
+          : "No upcoming game and no recent RB leader was available from ESPN.",
+      };
+      const contract = toWidgetPayload({ data, error: null, meta, primaryProvider: "espn" });
       return NextResponse.json({
-        data: {
-          emptyState: true,
-          title: "No upcoming games; offseason",
-          explanation: "There are no upcoming games for this team right now. This is expected during offseason windows.",
-          recentLeader: leader.playerName,
-          whyItMatters: "Use historical context now, then switch to matchup mode when schedules are posted.",
-        },
-        meta: {
-          ...nextGameResult.meta,
-          warning: leader.playerName
-            ? `No upcoming game. Most recent RB leader: ${leader.playerName}`
-            : "No upcoming game and no recent RB leader was available from ESPN.",
-        },
+        data,
+        meta,
+        error: null,
+        contract,
       });
     }
 
@@ -112,11 +133,18 @@ export async function GET(req: Request) {
       disclaimer: missingDepthChartDisclaimer,
     };
 
+    const data = shapeRbVsDline(stats, mode);
+    const contract = toWidgetPayload({ data, error: null, meta: rosterResponse.meta, primaryProvider: "espn" });
     return NextResponse.json({
-      data: shapeRbVsDline(stats, mode),
+      data,
       meta: rosterResponse.meta,
+      error: null,
+      contract,
     });
   } catch (error) {
-    return NextResponse.json({ error: `Failed to load RB vs D-Line: ${String(error)}` }, { status: 502 });
+    const message = `Failed to load RB vs D-Line: ${String(error)}`;
+    const meta = buildRouteMeta(message, resolvedDataMode);
+    const contract = toWidgetPayload({ data: null, error: message, meta, primaryProvider: "espn" });
+    return NextResponse.json({ data: null, meta, error: message, contract }, { status: 502 });
   }
 }
