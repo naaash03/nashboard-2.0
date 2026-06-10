@@ -13,6 +13,9 @@ import {
   mlbGetRecentGameLog,
   mlbGetBullpenFatigue,
   mlbGetTeamSeasonStats,
+  mlbGetPlayerSeasonStats,
+  type MlbPlayerSeasonStats,
+  type MlbPlayerYearStats,
 } from "@/lib/providers/mlb/teamStats";
 import { inferAnalysis, getLastProviderUsed } from "@/lib/providers/ai/client";
 import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
@@ -47,6 +50,21 @@ function getCachedEntry(gameId: string, fingerprint: string): CacheEntry | null 
   return entry;
 }
 
+// ─── Pitcher Stats Helpers ────────────────────────────────────────────────────
+export function latestPitchingStats(
+  stats: { data: MlbPlayerSeasonStats | null } | null,
+): MlbPlayerYearStats | null {
+  const rows = stats?.data?.pitching;
+  if (!rows || rows.length === 0) return null;
+  const recent = rows[0]; // sorted descending by season
+  if (!recent.era && !recent.inningsPitched && !recent.strikeOuts) return null;
+  return recent;
+}
+
+export function formatPitcherStats(s: MlbPlayerYearStats): string {
+  return `${s.season} — ${s.wins ?? 0}-${s.losses ?? 0}, ERA ${s.era ?? "N/A"}, WHIP ${s.whip ?? "N/A"}, ${s.inningsPitched ?? "0.0"} IP, ${s.strikeOuts ?? 0} K`;
+}
+
 // ─── Input Gathering ──────────────────────────────────────────────────────────
 type GameInputs = {
   awayForm: Awaited<ReturnType<typeof mlbGetRecentGameLog>>;
@@ -58,6 +76,8 @@ type GameInputs = {
   homeBullpen: Awaited<ReturnType<typeof mlbGetBullpenFatigue>>;
   awayStats: Awaited<ReturnType<typeof mlbGetTeamSeasonStats>>;
   homeStats: Awaited<ReturnType<typeof mlbGetTeamSeasonStats>>;
+  awayPitcherStats: { data: MlbPlayerSeasonStats | null; meta: Meta } | null;
+  homePitcherStats: { data: MlbPlayerSeasonStats | null; meta: Meta } | null;
 };
 
 async function gatherGameInputs(
@@ -65,7 +85,19 @@ async function gatherGameInputs(
   dataMode: LocalModeArg | undefined,
 ): Promise<GameInputs> {
   const currentYear = new Date().getFullYear();
-  const [awayForm, homeForm, odds, awayBullpen, homeBullpen, awayStats, homeStats] =
+  const awayP = game.probables.find((p) => p.homeAway === "away");
+  const homeP = game.probables.find((p) => p.homeAway === "home");
+
+  type PitcherStatsResult = GameInputs["awayPitcherStats"];
+  const fetchAwayPitcher: Promise<PitcherStatsResult> = awayP?.athleteId
+    ? mlbGetPlayerSeasonStats(awayP.athleteId, dataMode).catch((): null => null)
+    : Promise.resolve(null);
+  const fetchHomePitcher: Promise<PitcherStatsResult> = homeP?.athleteId
+    ? mlbGetPlayerSeasonStats(homeP.athleteId, dataMode).catch((): null => null)
+    : Promise.resolve(null);
+
+  const [awayForm, homeForm, odds, awayBullpen, homeBullpen, awayStats, homeStats,
+         awayPitcherStats, homePitcherStats] =
     await Promise.all([
       mlbGetRecentGameLog(game.awayTeam.key, 5, dataMode),
       mlbGetRecentGameLog(game.homeTeam.key, 5, dataMode),
@@ -74,6 +106,8 @@ async function gatherGameInputs(
       mlbGetBullpenFatigue(game.homeTeam.key, dataMode),
       mlbGetTeamSeasonStats(game.awayTeam.key, currentYear, dataMode),
       mlbGetTeamSeasonStats(game.homeTeam.key, currentYear, dataMode),
+      fetchAwayPitcher,
+      fetchHomePitcher,
     ]);
 
   const lineMovement = await fetchLineMovement(
@@ -88,7 +122,7 @@ async function gatherGameInputs(
     ? await fetchGameDayWeather(game.venueName, game.venueCity ?? game.venueName)
     : null;
 
-  return { awayForm, homeForm, odds, lineMovement, weather, awayBullpen, homeBullpen, awayStats, homeStats };
+  return { awayForm, homeForm, odds, lineMovement, weather, awayBullpen, homeBullpen, awayStats, homeStats, awayPitcherStats, homePitcherStats };
 }
 
 // ─── Fingerprint (change detection for cache invalidation) ───────────────────
@@ -124,12 +158,24 @@ function buildMatchupPrompt(
   sections.push(`Game: ${game.awayTeam.name} @ ${game.homeTeam.name}`);
 
   if (awayP) {
-    sections.push(`Away starter: ${awayP.name} (season stats unavailable)`);
-    inputsUsed.push("away_starter_name");
+    const awayPStats = latestPitchingStats(inputs.awayPitcherStats);
+    if (awayPStats) {
+      sections.push(`Away starter: ${awayP.name} — ${formatPitcherStats(awayPStats)}`);
+      inputsUsed.push("away_starter_name", "away_starter_stats");
+    } else {
+      sections.push(`Away starter: ${awayP.name} (season stats unavailable)`);
+      inputsUsed.push("away_starter_name");
+    }
   }
   if (homeP) {
-    sections.push(`Home starter: ${homeP.name} (season stats unavailable)`);
-    inputsUsed.push("home_starter_name");
+    const homePStats = latestPitchingStats(inputs.homePitcherStats);
+    if (homePStats) {
+      sections.push(`Home starter: ${homeP.name} — ${formatPitcherStats(homePStats)}`);
+      inputsUsed.push("home_starter_name", "home_starter_stats");
+    } else {
+      sections.push(`Home starter: ${homeP.name} (season stats unavailable)`);
+      inputsUsed.push("home_starter_name");
+    }
   }
 
   if (game.awayTeam.record) {
