@@ -25,5 +25,5 @@ export async function GET(req: Request) {
       console.warn(`[contract] mlb-bullpen-fatigue missing fields: ${missing.join(", ")}`);
     }
   }
-  return NextResponse.json({ data, meta, contract });
+  return NextResponse.json({ data, meta, error: null, contract });
 }
