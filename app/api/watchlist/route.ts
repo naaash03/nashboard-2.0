@@ -90,7 +90,7 @@ export async function POST(req: Request) {
   });
   if (count >= 10) {
     return NextResponse.json(
-      { error: "Watchlist limit reached for this sport. Remove an item before adding another." },
+      { error: "Watchlist limit reached for this sport. Remove a team before adding another." },
       { status: 409 },
     );
   }

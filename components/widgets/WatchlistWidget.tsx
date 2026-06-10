@@ -460,7 +460,7 @@ export function teamCardStatusLabel(status: TeamStatus | undefined, team: TeamAd
   if (team?.nextGame) {
     return `Next: ${nextGameLabel(team)}`;
   }
-  return "No game today";
+  return "No scheduled games available right now";
 }
 
 export function teamCardSecondaryLabel(status: TeamStatus | undefined, team: TeamAdvanced | undefined): string | null {

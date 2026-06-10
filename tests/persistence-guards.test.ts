@@ -40,8 +40,8 @@ describe("persistence guards", () => {
     expect(String(body.error)).toContain("already on your dashboard");
   });
 
-  it("watchlist blocks 6th team", async () => {
-    prismaMock.watchlistTeam.count.mockResolvedValue(5);
+  it("watchlist blocks 11th team", async () => {
+    prismaMock.watchlistTeam.count.mockResolvedValue(10);
     const mod = await import("@/app/api/watchlist/route");
 
     const res = await mod.POST(new Request("http://localhost/api/watchlist", {
