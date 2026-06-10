@@ -1,8 +1,19 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { getViewer } from "@/lib/auth";
+import { WIDGET_DEFINITIONS } from "@/lib/widgets/registry";
+import { canonicalizeWidgetType } from "@/lib/widgets/widgetType";
 
 function missingDbResponse() {
   return NextResponse.json({ error: "DATABASE_URL is not configured." }, { status: 500 });
+}
+
+function isAllowedSize(widgetType: string, w?: number, h?: number): boolean {
+  if (w === undefined && h === undefined) return true;
+  if (w === undefined || h === undefined) return false;
+  const canonical = canonicalizeWidgetType(widgetType);
+  const definition = WIDGET_DEFINITIONS.find((item) => item.key === canonical);
+  const allowed = definition?.allowedSizes ?? [{ w: 1, h: 1 }, { w: 2, h: 1 }];
+  return allowed.some((size) => size.w === w && size.h === h);
 }
 
 export async function DELETE(
@@ -74,6 +85,19 @@ export async function PATCH(
     config?: Record<string, unknown>;
     playerId?: string;
   };
+
+  const existingWidget = await prisma.widgetInstance.findFirst({
+    where: { id, dashboardId: dashboard.id },
+    select: { widgetType: true },
+  });
+
+  if (!existingWidget) {
+    return NextResponse.json({ error: "Widget not found" }, { status: 404 });
+  }
+
+  if (!isAllowedSize(existingWidget.widgetType, body.w, body.h)) {
+    return NextResponse.json({ error: "Widget size is not allowed for this widget type" }, { status: 400 });
+  }
 
   const updated = await prisma.widgetInstance.update({
     where: { id },

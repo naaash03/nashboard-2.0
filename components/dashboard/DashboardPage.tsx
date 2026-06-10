@@ -84,6 +84,7 @@ type ReportBugPayload = {
 };
 
 type Mode = "forced_guest" | "guest" | "signed_in";
+type WidgetSize = { w: number; h: number };
 
 const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Element | null> = {
   tonights_slate: (props) => <TonightsSlateWidget {...props} />,
@@ -118,6 +119,28 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   nfl_market_insights: (props) => <NflMarketInsightsWidget {...props} />,
   mlb_matchup_commentary: (props) => <MlbMatchupCommentaryWidget {...props} />,
 };
+
+function sameSize(left: WidgetSize, right: WidgetSize): boolean {
+  return left.w === right.w && left.h === right.h;
+}
+
+function allowedSizesFor(widgetType: string): WidgetSize[] {
+  const def = WIDGET_DEFINITIONS.find((item) => item.key === canonicalizeWidgetType(widgetType));
+  return def?.allowedSizes ?? [{ w: 1, h: 1 }, { w: 2, h: 1 }];
+}
+
+function resolvedWidgetSize(widgetType: string, requested: WidgetSize): WidgetSize {
+  const def = WIDGET_DEFINITIONS.find((item) => item.key === canonicalizeWidgetType(widgetType));
+  const allowed = allowedSizesFor(widgetType);
+  const defaultSize = def?.defaultSize ?? allowed[0] ?? { w: 1, h: 1 };
+  if (allowed.some((size) => sameSize(size, requested))) {
+    return requested;
+  }
+  if (allowed.some((size) => sameSize(size, defaultSize))) {
+    return defaultSize;
+  }
+  return allowed[0] ?? { w: 1, h: 1 };
+}
 
 function to12h(value: string): string {
   const date = new Date(value);
@@ -248,7 +271,9 @@ export default function DashboardPage({
     const widget = widgets.find((candidate) => candidate.id === widgetId);
     if (!widget) return;
 
-    const nextWidget = { ...widget, w, h };
+    const nextSize = resolvedWidgetSize(widget.widgetType, { w, h });
+    if (!allowedSizesFor(widget.widgetType).some((size) => sameSize(size, nextSize))) return;
+    const nextWidget = { ...widget, ...nextSize };
 
     if (isGuestMode) {
       const state = updateLayout(widgets.map((item) => (item.id === widgetId ? nextWidget : item)));
@@ -260,7 +285,7 @@ export default function DashboardPage({
     const response = await fetch(`/api/dashboard/widgets/${widgetId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ w, h }),
+      body: JSON.stringify(nextSize),
     });
 
     if (!response.ok) {
@@ -625,21 +650,27 @@ export default function DashboardPage({
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid auto-rows-[22rem] grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sortedWidgets.map((widget) => {
             const resolvedWidgetType = canonicalizeWidgetType(widget.widgetType);
             const Component = WIDGET_COMPONENTS[resolvedWidgetType];
             const widgetDef = WIDGET_DEFINITIONS.find((d) => d.key === resolvedWidgetType);
-            const allowedSizes = widgetDef?.allowedSizes ?? [{ w: 1, h: 1 }, { w: 2, h: 1 }];
-            const colSpan = widget.w === 3 ? "col-span-3" : widget.w === 2 ? "col-span-2" : "col-span-1";
-            const rowSpan = widget.h === 2 ? "row-span-2" : "row-span-1";
+            const allowedSizes = allowedSizesFor(resolvedWidgetType);
+            const renderedSize = resolvedWidgetSize(resolvedWidgetType, { w: widget.w, h: widget.h });
+            const colSpan = renderedSize.w === 3 ? "sm:col-span-2 lg:col-span-3" : renderedSize.w === 2 ? "sm:col-span-2" : "col-span-1";
+            const rowSpan = renderedSize.h === 2 ? "row-span-2" : "row-span-1";
             const sizePickerOpen = sizePickerWidgetId === widget.id && !dashboard?.layoutLocked;
             return (
-              <section key={widget.id} className={`flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111827] ${colSpan} ${rowSpan}`}>
-                <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-neutral-800/40 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                    {formatWidgetTypeLabel(widget.widgetType)}
-                  </p>
+              <section key={widget.id} className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/15 bg-[#111827] shadow-sm shadow-black/20 ${colSpan} ${rowSpan}`}>
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-neutral-800/50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-100">
+                      {widgetDef?.name ?? formatWidgetTypeLabel(widget.widgetType)}
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      {widgetDef?.sportCategory ?? "Widget"}
+                    </p>
+                  </div>
                   <div className="flex items-center gap-0.5">
                     <button
                       type="button"
@@ -670,7 +701,7 @@ export default function DashboardPage({
                         onClick={() => setSizePickerWidgetId(sizePickerOpen ? null : widget.id)}
                         title="Resize widget"
                       >
-                        {widget.w}×{widget.h}
+                        {renderedSize.w}×{renderedSize.h}
                       </button>
                     )}
                     <button
@@ -688,13 +719,13 @@ export default function DashboardPage({
                   <div className="shrink-0 border-b border-white/10 px-3 pb-2.5 pt-2.5">
                     <WidgetSizePicker
                       allowedSizes={allowedSizes}
-                      currentW={widget.w}
-                      currentH={widget.h}
+                      currentW={renderedSize.w}
+                      currentH={renderedSize.h}
                       onSizeChange={(w, h) => void resizeWidget(widget.id, w, h)}
                     />
                   </div>
                 )}
-                <div className="min-h-0 flex-1 p-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
                   {Component ? (
                     <Component
                       widgetId={widget.id}
