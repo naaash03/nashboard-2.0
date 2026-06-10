@@ -4,6 +4,8 @@ import { shapeNbaTeamMatchupProfile } from "@/lib/templates/nbaTeamMatchupProfil
 import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { resolveNbaTeamMatchupProfile } from "@/lib/sports/resolvers/nbaScaffolds";
 
+type WidgetPrimaryProvider = Parameters<typeof toWidgetPayload>[0]["primaryProvider"];
+
 function parseTeamKey(value: string | null): string | null {
   if (value === null) {
     return null;
@@ -41,7 +43,10 @@ export async function GET(req: Request) {
     cacheBust,
   });
   const src = resolved.meta.sourceUsed;
-  const primaryProvider = (src === "apiSports" || src === "espn" || src === "mlb" || src === "balldontlie" ? src : "balldontlie") as const;
+  const primaryProvider: WidgetPrimaryProvider =
+    src === "apiSports" || src === "espn" || src === "mlb" || src === "balldontlie"
+      ? src
+      : "balldontlie";
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,

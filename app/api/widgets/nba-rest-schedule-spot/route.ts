@@ -4,6 +4,8 @@ import { resolveNbaRestScheduleSpot } from "@/lib/sports/resolvers/nbaScaffolds"
 import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import { shapeNbaRestScheduleSpot } from "@/lib/templates/nbaRestScheduleSpot";
 
+type WidgetPrimaryProvider = Parameters<typeof toWidgetPayload>[0]["primaryProvider"];
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
@@ -19,7 +21,10 @@ export async function GET(req: Request) {
     cacheBust,
   });
   const src = resolved.meta.sourceUsed;
-  const primaryProvider = (src === "apiSports" || src === "espn" || src === "mlb" || src === "balldontlie" ? src : "balldontlie") as const;
+  const primaryProvider: WidgetPrimaryProvider =
+    src === "apiSports" || src === "espn" || src === "mlb" || src === "balldontlie"
+      ? src
+      : "balldontlie";
   const contract = toWidgetPayload({
     data: resolved.data,
     error: null,
