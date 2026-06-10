@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
+import { getEspnScoreboardLocalDate } from "@/lib/providers/espn/date";
 import { getTodaysSlate } from "@/lib/providers/espn/nba";
 import { fetchGameOdds, type MlbGameOdds } from "@/lib/providers/odds/client";
 import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
@@ -135,7 +136,7 @@ export async function GET(req: Request) {
       {
         data: {
           sport: "NBA",
-          dateUsed: new Date().toISOString().slice(0, 10),
+          dateUsed: getEspnScoreboardLocalDate(),
           games: [],
           userFacingMessage: "Could not load today's NBA schedule.",
         },

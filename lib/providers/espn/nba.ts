@@ -1,5 +1,6 @@
 ﻿import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
 import type { Meta, Mode, SlateGame } from "@/lib/providers/types";
+import { getEspnScoreboardLocalDate, toEspnScoreboardDateParam } from "@/lib/providers/espn/date";
 
 type ModeArg = "auto" | "live" | "fixture";
 type CacheBustArg = string | number | null | undefined;
@@ -64,10 +65,6 @@ export type NbaStandingsSnapshot = {
 
 const SCOREBOARD_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 const STANDINGS_ENDPOINT = "https://site.api.espn.com/apis/v2/sports/basketball/nba/standings";
-
-function toCompactDate(dateISO: string): string {
-  return dateISO.replaceAll("-", "");
-}
 
 function gameTypeFromSeasonType(type?: number): string | undefined {
   if (type === 1) return "preseason";
@@ -191,11 +188,11 @@ function normalizeStandings(payload: EspnStandingsResponse, mode: Mode): NbaStan
 
 export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ games: SlateGame[]; meta: Meta; dateUsed: string }> {
   const resolved = getDataMode(dataMode);
-  const dateUsed = new Date().toISOString().slice(0, 10);
+  const dateUsed = getEspnScoreboardLocalDate();
 
   const response = await fetchEspnJson<EspnScoreboard>({
     endpoint: SCOREBOARD_ENDPOINT,
-    params: { dates: toCompactDate(dateUsed) },
+    params: { dates: toEspnScoreboardDateParam(dateUsed) },
     fixtureFile: "scoreboard.json",
     fixtureSubdir: "nba",
     ttlSeconds: 90,

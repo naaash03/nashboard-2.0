@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
+import { getEspnScoreboardLocalDate } from "@/lib/providers/espn/date";
 import { getTodaysSchedule, type MlbScheduleGame } from "@/lib/providers/espn/mlb";
 import { fetchGameDayWeather, type GameDayWeather } from "@/lib/providers/weather/client";
 import { fetchGameOdds, type MlbGameOdds } from "@/lib/providers/odds/client";
@@ -182,7 +183,7 @@ export async function GET(req: Request) {
       {
         data: {
           sport: "MLB",
-          dateUsed: new Date().toISOString().slice(0, 10),
+          dateUsed: getEspnScoreboardLocalDate(),
           games: [],
           userFacingMessage: "Could not load today's MLB schedule.",
         },

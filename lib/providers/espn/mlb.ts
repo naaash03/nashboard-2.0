@@ -1,4 +1,5 @@
 import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
+import { getEspnScoreboardLocalDate, toEspnScoreboardDateParam } from "@/lib/providers/espn/date";
 import type { Meta } from "@/lib/providers/types";
 
 type ModeArg = "auto" | "live" | "fixture";
@@ -40,10 +41,6 @@ export type MlbScheduleGame = {
 };
 
 const MLB_SCOREBOARD_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard";
-
-function toCompactDate(dateISO: string): string {
-  return dateISO.replaceAll("-", "");
-}
 
 function gameTypeFromSeasonType(type?: number): string | undefined {
   if (type === 1) return "preseason";
@@ -98,11 +95,11 @@ export async function getTodaysSchedule(
   cacheBust?: CacheBustArg,
 ): Promise<{ games: MlbScheduleGame[]; meta: Meta; dateUsed: string }> {
   const resolved = getDataMode(dataMode);
-  const dateUsed = new Date().toISOString().slice(0, 10);
+  const dateUsed = getEspnScoreboardLocalDate();
 
   const response = await fetchEspnJson<EspnMlbScoreboard>({
     endpoint: MLB_SCOREBOARD_ENDPOINT,
-    params: { dates: toCompactDate(dateUsed) },
+    params: { dates: toEspnScoreboardDateParam(dateUsed) },
     fixtureFile: "scoreboard.json",
     fixtureSubdir: "mlb",
     ttlSeconds: 90,
