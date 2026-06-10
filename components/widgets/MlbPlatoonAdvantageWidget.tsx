@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import StatLabel from "@/components/stats/StatLabel";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherSplits = {
@@ -54,6 +55,12 @@ function AdvantageBadge({ advantage }: { advantage: "home" | "away" | "neutral" 
       {labels[advantage]}
     </span>
   );
+}
+
+function edgeLabel(data: PlatoonAdvantage): string {
+  if (data.advantage === "home") return `${data.game.homeTeam.key} has the edge`;
+  if (data.advantage === "away") return `${data.game.awayTeam.key} has the edge`;
+  return "No clear side has the edge";
 }
 
 function SplitsTable({ pitcher }: { pitcher: { fullName: string; throwsHand: string; splits: PitcherSplits } }) {
@@ -202,6 +209,16 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
 
       {data && (
         <div className="space-y-2">
+          {!advanced && (
+            <div className="rounded border border-blue-800 bg-blue-950/40 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300">
+                Which side has the edge and why?
+              </p>
+              <p className="mt-1 font-medium text-neutral-100">{edgeLabel(data)}</p>
+              <p className="mt-1 text-neutral-300">{data.explanation}</p>
+            </div>
+          )}
+
           <div>
             <p className="font-medium">
               {data.game.awayTeam.key} @ {data.game.homeTeam.key}
@@ -222,7 +239,7 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
                 </span>
               </div>
             )}
-            <p className="text-neutral-200">{data.explanation}</p>
+            <p className="text-neutral-200">{advanced ? data.explanation : "Use this as a quick matchup lean. Split samples can be noisy, so treat big edges as a watch item rather than a certainty."}</p>
             {data.analysisMode === "handedness" && (
               <p className="mt-1.5 border-t border-neutral-800 pt-1.5 text-[10px] text-neutral-500">
                 Use this as a rough lean until both probable starters have posted split data.
@@ -273,8 +290,9 @@ export default function MlbPlatoonAdvantageWidget(props: WidgetCommonProps) {
         </div>
       )}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} />
       </div>
       <button
         type="button"

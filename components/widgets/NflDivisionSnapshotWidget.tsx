@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import StatLabel from "@/components/stats/StatLabel";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NflDivisionSnapshotUi } from "@/lib/templates/nflDivisionSnapshot";
 
@@ -140,6 +141,15 @@ export default function NflDivisionSnapshotWidget(props: WidgetCommonProps) {
 
       {data ? (
         <div className="space-y-2">
+          {!advanced ? (
+            <div className="rounded border border-blue-800 bg-blue-950/35 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300">What to watch</p>
+              <p className="mt-1 text-neutral-300">
+                Start with the division leader, then look for teams with a hot streak or a close record gap.
+              </p>
+            </div>
+          ) : null}
+
           <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -248,8 +258,9 @@ export default function NflDivisionSnapshotWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} />
       </div>
 
       <button

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import StatLabel from "@/components/stats/StatLabel";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PitcherAvailability = {
@@ -62,6 +63,22 @@ function FatigueDot({ fatigue }: { fatigue: PitcherAvailability["fatigue"] }) {
 
 function fatigueLabel(fatigue: PitcherAvailability["fatigue"]): string {
   return fatigue.charAt(0).toUpperCase() + fatigue.slice(1);
+}
+
+function availabilitySummary(relievers: PitcherAvailability[]) {
+  return relievers.reduce(
+    (summary, reliever) => {
+      if (reliever.fatigue === "fatigued") {
+        summary.avoid += 1;
+      } else if (reliever.fatigue === "tired") {
+        summary.caution += 1;
+      } else {
+        summary.available += 1;
+      }
+      return summary;
+    },
+    { available: 0, caution: 0, avoid: 0 },
+  );
 }
 
 export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
@@ -136,6 +153,7 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
 
   const advanced = props.mode === "ADVANCED";
   const displayRelievers = advanced ? data?.relievers : data?.relievers.slice(0, 5);
+  const summary = data ? availabilitySummary(data.relievers) : null;
 
   return (
     <div className="space-y-2 text-xs">
@@ -213,6 +231,23 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
       {data && !loading && (
         <div className="space-y-2">
           <p className="font-medium">{data.teamName}</p>
+
+          {summary && (
+            <div className="grid grid-cols-3 gap-1.5">
+              <div className="rounded border border-emerald-800 bg-emerald-950/40 p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">Available</p>
+                <p className="mt-1 text-lg font-semibold text-emerald-100">{summary.available}</p>
+              </div>
+              <div className="rounded border border-yellow-800 bg-yellow-950/40 p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-yellow-300">Caution</p>
+                <p className="mt-1 text-lg font-semibold text-yellow-100">{summary.caution}</p>
+              </div>
+              <div className="rounded border border-red-800 bg-red-950/40 p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-red-300">Avoid</p>
+                <p className="mt-1 text-lg font-semibold text-red-100">{summary.avoid}</p>
+              </div>
+            </div>
+          )}
 
           {viewMode === "starters" && (
             <div className="space-y-1">
@@ -342,8 +377,9 @@ export default function MlbBullpenFatigueWidget(props: WidgetCommonProps) {
         </div>
       )}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} />
       </div>
       <button
         type="button"

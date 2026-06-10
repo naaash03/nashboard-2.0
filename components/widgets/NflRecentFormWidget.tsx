@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NflRecentFormUi } from "@/lib/templates/nflRecentForm";
 
@@ -86,7 +87,7 @@ export default function NflRecentFormWidget(props: WidgetCommonProps) {
       </div>
 
       <div className="space-y-1">
-        <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-recent-form-key`}>Live team key</label>
+        <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-recent-form-key`}>{advanced ? "Live team key" : "Team"}</label>
         <div className="flex gap-2">
           <input
             id={`${props.widgetId}-recent-form-key`}
@@ -123,7 +124,7 @@ export default function NflRecentFormWidget(props: WidgetCommonProps) {
             Clear
           </button>
         </div>
-        {!activeTeamKey ? <p className="text-[10px] text-neutral-500">Without a team key, this widget stays on a demo recent-form read.</p> : null}
+        {!activeTeamKey ? <p className="text-[10px] text-neutral-500">Choose a team to replace the sample recent-form read.</p> : null}
       </div>
 
       {loading ? <p className="text-neutral-400">Loading recent form...</p> : null}
@@ -132,6 +133,15 @@ export default function NflRecentFormWidget(props: WidgetCommonProps) {
 
       {data ? (
         <div className="space-y-2">
+          {!advanced ? (
+            <div className="rounded border border-blue-800 bg-blue-950/35 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300">What to watch</p>
+              <p className="mt-1 text-neutral-300">
+                Read the last five results first, then use the next opponent to decide whether the trend is likely to continue.
+              </p>
+            </div>
+          ) : null}
+
           <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -192,8 +202,9 @@ export default function NflRecentFormWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} />
       </div>
 
       <button

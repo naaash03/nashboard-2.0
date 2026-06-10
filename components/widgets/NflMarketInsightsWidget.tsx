@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type PublicBettingFallback = {
@@ -233,7 +234,14 @@ export default function NflMarketInsightsWidget(props: WidgetCommonProps) {
           NFL Market Insights
           {data?.dateUsed && <span className="text-zinc-500 font-normal"> · {data.dateUsed}</span>}
         </div>
-        <span className="text-[9px] text-zinc-600 uppercase tracking-wide font-medium">NFL</span>
+        <SourceChips
+          meta={meta}
+          chips={[
+            { label: meta?.sourceUsed === "fixture" ? "Fixture games" : "ESPN", tone: meta?.sourceUsed === "fixture" ? "fixture" : "live" },
+            { label: "Odds", tone: data?.oddsUnavailable ? "partial" : "live" },
+            { label: "Line movement", tone: "partial" },
+          ]}
+        />
       </div>
 
       {/* Odds unavailable notice */}
@@ -277,9 +285,7 @@ export default function NflMarketInsightsWidget(props: WidgetCommonProps) {
         </p>
         {meta && (
           <div className="flex items-center justify-between">
-            <span className="text-[9px] text-zinc-700">
-              Updated {new Date(meta.updatedAt).toLocaleTimeString()} · Source {(meta.sourceUsed ?? "espn").toUpperCase()}
-            </span>
+            <span className="text-[9px] text-zinc-700">Updated {new Date(meta.updatedAt).toLocaleTimeString()}</span>
             <button
               type="button"
               className="text-[9px] text-zinc-700 hover:text-zinc-500 transition-colors"

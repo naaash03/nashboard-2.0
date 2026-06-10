@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDebouncedValue } from "@/components/hooks/useDebouncedValue";
 import StatLabel from "@/components/stats/StatLabel";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NbaPlayerRoleFormUi } from "@/lib/templates/nbaPlayerRoleForm";
 import type { PlayerSearchResult } from "@/lib/types/players";
@@ -77,6 +78,16 @@ function searchErrorText(raw: PlayerSearchResponse["error"]): string | null {
     return raw;
   }
   return raw.message ?? "Player search unavailable.";
+}
+
+function metricStatKey(label: string): string | undefined {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("min")) return "nba_minutes";
+  if (normalized.includes("usage")) return "usage_rate";
+  if (normalized.includes("true") || normalized.includes("ts")) return "true_shooting_pct";
+  if (normalized.includes("assist")) return "assists";
+  if (normalized.includes("points")) return "points";
+  return undefined;
 }
 
 export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
@@ -360,6 +371,11 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
                 {advanced ? "Advanced read" : "Beginner read"}
               </p>
               <p className="mt-1 text-neutral-200">{data.summary}</p>
+              {!advanced ? (
+                <p className="mt-2 text-[11px] text-neutral-400">
+                  Beginner takeaway: role matters because stable minutes and on-ball responsibility make recent stats easier to trust.
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -367,16 +383,20 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
             {data.metrics.map((metric) => (
               <div key={metric.label} className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <StatLabel label={metric.label} sport="nba" mode={props.mode} className="font-medium text-neutral-100" />
+                  <StatLabel label={metric.label} statKey={metricStatKey(metric.label)} sport="NBA" mode={props.mode} className="font-medium text-neutral-100" />
                   <TrendChip trend={metric.trend} />
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
                   <div className="rounded border border-neutral-800 bg-neutral-900/60 p-2">
-                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">Season baseline</p>
+                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">
+                      <StatLabel label="Season baseline" statKey={metricStatKey(metric.label)} sport="NBA" mode={props.mode} />
+                    </p>
                     <p className="mt-1 text-neutral-300">{metric.seasonValue}</p>
                   </div>
                   <div className="rounded border border-neutral-800 bg-neutral-900/60 p-2">
-                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">Recent window</p>
+                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">
+                      <StatLabel label="Recent window" statKey={metricStatKey(metric.label)} sport="NBA" mode={props.mode} />
+                    </p>
                     <p className="mt-1 text-neutral-300">{metric.recentValue}</p>
                   </div>
                 </div>
@@ -436,8 +456,15 @@ export default function NbaPlayerRoleFormWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips
+          meta={meta}
+          chips={[{
+            label: trustBadge.label,
+            tone: data?.sourceState === "demo" ? "demo" : data?.sourceState === "partial" ? "partial" : data?.sourceState === "hybrid" ? "partial" : "live",
+          }]}
+        />
       </div>
 
       <button

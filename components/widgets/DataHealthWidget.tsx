@@ -124,15 +124,15 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
         <>
           <div className="space-y-1.5 rounded border border-neutral-800 bg-neutral-950 p-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-neutral-400">Mode</span>
+              <span className="text-neutral-400">Effective mode:</span>
               <span className="font-medium text-neutral-100">{effectiveMode}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-neutral-400">Source</span>
+              <span className="text-neutral-400">Effective source:</span>
               <span className="font-medium text-neutral-100">{effectiveSource}</span>
             </div>
             <div className="flex items-center justify-between border-t border-neutral-800 pt-1.5">
-              <span className="text-neutral-400">Cache</span>
+              <span className="text-neutral-400">Cache state:</span>
               <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                 cacheState === "hit"
                   ? "bg-emerald-950 text-emerald-400"
@@ -147,7 +147,7 @@ export default function DataHealthWidget(props: WidgetCommonProps) {
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-neutral-400">Fallback</span>
+              <span className="text-neutral-400">Fallback state:</span>
               <span className={`text-[10px] ${data.hydrationOccurred ? "text-amber-300" : "text-neutral-400"}`}>
                 {fallbackState}
               </span>

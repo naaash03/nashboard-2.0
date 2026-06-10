@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type Sport = "MLB" | "NBA" | "NFL";
@@ -159,6 +160,16 @@ export default function TodaysScheduleWidget(props: TodaysScheduleWidgetProps) {
   const [endpoint, setEndpoint] = useState("");
 
   const mode = props.mode.toLowerCase();
+  const sourceChips = sport === "MLB"
+    ? [
+        { label: meta?.sourceUsed === "fixture" ? "Fixture schedule" : "ESPN", tone: meta?.sourceUsed === "fixture" ? "fixture" as const : "live" as const },
+        { label: "Odds", tone: "partial" as const },
+        { label: "Weather", tone: "partial" as const },
+      ]
+    : [
+        { label: meta?.sourceUsed === "fixture" ? "Fixture schedule" : "ESPN", tone: meta?.sourceUsed === "fixture" ? "fixture" as const : "live" as const },
+        { label: "Odds", tone: "partial" as const },
+      ];
 
   const load = useCallback(async () => {
     const url = `/api/widgets/${sport.toLowerCase()}-schedule-today?mode=${mode}&dataMode=${props.dataMode}&cacheBust=${props.refreshTick}`;
@@ -174,7 +185,7 @@ export default function TodaysScheduleWidget(props: TodaysScheduleWidgetProps) {
       setData(json.data ?? null);
       setMeta(json.meta ?? null);
       setError(json.error ?? null);
-    } catch (loadError) {
+    } catch {
       setError(`Failed to load today's ${sport} schedule`);
       setData(null);
     } finally {
@@ -213,6 +224,15 @@ export default function TodaysScheduleWidget(props: TodaysScheduleWidgetProps) {
         <p className="text-neutral-400">{data.userFacingMessage}</p>
       ) : null}
 
+      {!loading && !error && sport === "NFL" && mode === "beginner" ? (
+        <div className="rounded border border-blue-800 bg-blue-950/35 p-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300">What to watch</p>
+          <p className="mt-1 text-neutral-300">
+            If no games are listed, it is usually an offseason or non-game day. On game days, start with kickoff time and TV before looking at odds.
+          </p>
+        </div>
+      ) : null}
+
       {!loading && !error && (data?.games ?? []).length > 0 ? (
         <div className="space-y-2">
           {data?.games.map((game) => (
@@ -221,8 +241,9 @@ export default function TodaysScheduleWidget(props: TodaysScheduleWidgetProps) {
         </div>
       ) : null}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} · Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} chips={sourceChips} />
       </div>
 
       <button

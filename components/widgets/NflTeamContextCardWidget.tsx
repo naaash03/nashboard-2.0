@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 import type { NflTeamContextCardUi } from "@/lib/templates/nflTeamContextCard";
 
@@ -123,7 +124,7 @@ export default function NflTeamContextCardWidget(props: WidgetCommonProps) {
       </div>
 
       <div className="space-y-1">
-        <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-team-context-key`}>Live team key</label>
+        <label className="text-[10px] uppercase tracking-wide text-neutral-500" htmlFor={`${props.widgetId}-team-context-key`}>{advanced ? "Live team key" : "Team"}</label>
         <div className="flex gap-2">
           <input
             id={`${props.widgetId}-team-context-key`}
@@ -161,7 +162,7 @@ export default function NflTeamContextCardWidget(props: WidgetCommonProps) {
           </button>
         </div>
         {teamInput && teamInput !== activeTeamKey ? <p className="text-[10px] text-neutral-500">Press Set to load {teamInput}.</p> : null}
-        {!activeTeamKey ? <p className="text-[10px] text-neutral-500">Without a team key, this widget stays on a demo offseason card.</p> : null}
+        {!activeTeamKey ? <p className="text-[10px] text-neutral-500">Choose a team to replace the sample offseason card.</p> : null}
       </div>
 
       <div className="space-y-1">
@@ -200,6 +201,15 @@ export default function NflTeamContextCardWidget(props: WidgetCommonProps) {
 
       {data ? (
         <div className="space-y-2">
+          {!advanced ? (
+            <div className="rounded border border-blue-800 bg-blue-950/35 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300">What to watch</p>
+              <p className="mt-1 text-neutral-300">
+                Check whether the team has a real next game, a bye-week pause, or only the last completed season to review.
+              </p>
+            </div>
+          ) : null}
+
           <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -258,8 +268,9 @@ export default function NflTeamContextCardWidget(props: WidgetCommonProps) {
         </div>
       ) : null}
 
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} />
       </div>
 
       <button

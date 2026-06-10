@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import StatLabel from "@/components/stats/StatLabel";
+import SourceChips from "@/components/widgets/shared/SourceChips";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type StandingRow = {
@@ -66,8 +67,10 @@ function ConferenceTable({
                 }`}
               >
                 <span className="text-neutral-300">
-                  <span className="mr-1.5 tabular-nums text-neutral-600">{row.rank}.</span>
-                  {row.team}
+                              <span className="mr-1.5 tabular-nums text-neutral-600">
+                                <StatLabel label={`${row.rank}.`} statKey="playoff_seed" sport="NBA" mode={mode} />
+                              </span>
+                              {row.team}
                   {advanced && row.key ? (
                     <span className="ml-1.5 text-[10px] text-neutral-600">{row.key}</span>
                   ) : null}
@@ -94,6 +97,8 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
   const [loading, setLoading] = useState(false);
   const [endpoint, setEndpoint] = useState("");
   const advanced = props.mode === "ADVANCED";
+  const eastLeader = data?.east[0]?.team;
+  const westLeader = data?.west[0]?.team;
 
   const load = useCallback(async () => {
     const mode = props.mode.toLowerCase();
@@ -135,9 +140,13 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
       </div>
 
       {!advanced && data ? (
-        <p className="text-neutral-500">
-          Top 5 teams per conference. The top 6 in each make the playoffs.
-        </p>
+        <div className="rounded border border-blue-800 bg-blue-950/35 p-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-300">Beginner takeaway</p>
+          <p className="mt-1 text-neutral-300">
+            {eastLeader && westLeader ? `${eastLeader} and ${westLeader} set the pace. ` : ""}
+            Top 6 teams make the playoffs; ranks 7-10 are fighting for play-in spots.
+          </p>
+        </div>
       ) : null}
 
       {loading ? <p className="text-neutral-400">Loading standings...</p> : null}
@@ -151,9 +160,9 @@ export default function NbaStandingsWidget(props: WidgetCommonProps) {
       ) : null}
 
       {meta?.warning ? <p className="text-amber-300">{meta.warning}</p> : null}
-      <div className="text-[10px] text-neutral-500">
-        Updated {meta ? to12h(meta.updatedAt) : "-"} - Source{" "}
-        {meta ? meta.sourceUsed.toUpperCase() : "-"}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-500">
+        <span>Updated {meta ? to12h(meta.updatedAt) : "-"}</span>
+        <SourceChips meta={meta} />
       </div>
 
       <button
