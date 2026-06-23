@@ -20,6 +20,10 @@ import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidge
 import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
 import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
 import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
+import NbaNext7GamesWidget from "@/components/widgets/NbaNext7GamesWidget";
+import NbaRecentFormWidget from "@/components/widgets/NbaRecentFormWidget";
+import NbaOffDefBreakdownWidget from "@/components/widgets/NbaOffDefBreakdownWidget";
+import NbaPlayoffPictureWidget from "@/components/widgets/NbaPlayoffPictureWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -88,6 +92,10 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
+  nba_next_7_games: (props) => <NbaNext7GamesWidget {...props} />,
+  nba_recent_form: (props) => <NbaRecentFormWidget {...props} />,
+  nba_offensive_defensive_breakdown: (props) => <NbaOffDefBreakdownWidget {...props} />,
+  nba_playoff_picture: (props) => <NbaPlayoffPictureWidget {...props} />,
 };
 
 function to12h(value: string): string {

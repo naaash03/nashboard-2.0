@@ -15,9 +15,19 @@ describe("widget metadata trust labels", () => {
     expect(widget?.stability).toBe("stable");
   });
 
-  it("registers mlb-series-tracker under MLB category", () => {
-    const widget = WIDGET_DEFINITIONS.find((entry) => entry.key === "mlb-series-tracker");
+  it("registers mlb_series_tracker under MLB category", () => {
+    const widget = WIDGET_DEFINITIONS.find((entry) => entry.key === "mlb_series_tracker");
     expect(widget?.sportCategory).toBe("MLB");
     expect(widget?.audience).toBe("mixed");
+  });
+
+  it("registers the four NBA analytics widgets", () => {
+    const keys = WIDGET_DEFINITIONS.map((entry) => entry.key);
+    expect(keys).toEqual(expect.arrayContaining([
+      "nba_next_7_games",
+      "nba_recent_form",
+      "nba_offensive_defensive_breakdown",
+      "nba_playoff_picture",
+    ]));
   });
 });
