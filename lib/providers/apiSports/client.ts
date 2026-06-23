@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getApiSportsConfig, resolveApiSportsKey } from "@/lib/providers/apiSports/config";
@@ -47,6 +47,43 @@ function stableParams(params: FetchOptions["params"]): string {
 
 function cacheKeyFor(sport: SportKey, endpoint: string, params: FetchOptions["params"]): string {
   return `${sport}:${endpoint}:${stableParams(params)}`;
+}
+
+function hashParams(sport: SportKey, params: FetchOptions["params"]): string {
+  return createHash("sha256").update(`${sport}:${stableParams(params)}`).digest("hex");
+}
+
+// The Prisma DataSource enum only models ESPN/FIXTURE/DEMO/CACHE, so — like the
+// MLB client — apiSports live responses are stored under the generic "ESPN"
+// marker while the provider column keeps them namespaced as "apiSports".
+async function storePersistentCache<T>(endpoint: string, sport: SportKey, params: FetchOptions["params"], payload: T, requestId: string, ttlSeconds: number): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    return;
+  }
+  const { prisma } = await import("@/lib/db/prisma");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
+  const paramsHash = hashParams(sport, params);
+  await prisma.cachedResponse.upsert({
+    where: { provider_endpoint_paramsHash: { provider: "apiSports", endpoint, paramsHash } },
+    update: { payload: payload as never, fetchedAt: now, expiresAt, sourceUsed: "ESPN" as never, requestId },
+    create: { provider: "apiSports", endpoint, paramsHash, payload: payload as never, fetchedAt: now, expiresAt, sourceUsed: "ESPN" as never, requestId },
+  });
+}
+
+async function readPersistentCache<T>(endpoint: string, sport: SportKey, params: FetchOptions["params"]): Promise<{ payload: T; ageSeconds: number } | null> {
+  if (!process.env.DATABASE_URL) {
+    return null;
+  }
+  const { prisma } = await import("@/lib/db/prisma");
+  const item = await prisma.cachedResponse.findUnique({
+    where: { provider_endpoint_paramsHash: { provider: "apiSports", endpoint, paramsHash: hashParams(sport, params) } },
+  });
+  if (!item) {
+    return null;
+  }
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - item.fetchedAt.getTime()) / 1000));
+  return { payload: item.payload as T, ageSeconds };
 }
 
 function resolveCacheBustToken(value: FetchOptions["cacheBust"]): string | undefined {
@@ -184,54 +221,89 @@ export async function fetchApiSportsJson<T>(options: FetchOptions): Promise<{ da
     throw new Error(message);
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  let lastError: unknown;
+  let lastStatus: number | undefined;
 
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: controller.signal,
-      headers: {
-        "x-rapidapi-key": apiKey,
-        "x-apisports-key": apiKey,
-        accept: "application/json",
-      },
-    });
-    clearTimeout(timeout);
-    if (!response.ok) {
-      const text = (await response.text()).slice(0, 300);
-      const message = `API-Sports ${response.status}: ${text}`;
-      trackError(options.endpoint, url, response.status, message);
-      throw new Error(message);
-    }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
-    const payload = (await response.json()) as T;
-    const updatedAt = new Date().toISOString();
-    inMemory.set(key, {
-      payload,
-      updatedAt,
-      expiresAtMs: Date.now() + ttlSeconds * 1000,
-    });
-    trackSuccess(options.endpoint, "apiSports", url, response.status, false, 0);
-    return {
-      data: payload,
-      meta: {
-        sourceUsed: "apiSports",
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "x-rapidapi-key": apiKey,
+          "x-apisports-key": apiKey,
+          accept: "application/json",
+        },
+      });
+      clearTimeout(timeout);
+      lastStatus = response.status;
+
+      if (!response.ok) {
+        const text = (await response.text()).slice(0, 300);
+        const message = `API-Sports ${response.status}: ${text}`;
+        trackError(options.endpoint, url, response.status, message);
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as T;
+      const updatedAt = new Date().toISOString();
+      inMemory.set(key, {
+        payload,
         updatedAt,
-        requestId,
-        endpointUrl: url,
-        upstreamStatus: response.status,
-        cacheHit: false,
-        warning: bypassCache ? "Cache bypass requested via cacheBust." : undefined,
-        dataMode: mode,
-        dataModeEffective: mode,
-      },
-    };
-  } catch (error) {
-    clearTimeout(timeout);
-    trackError(options.endpoint, url, undefined, String(error));
-    throw error;
+        expiresAtMs: Date.now() + ttlSeconds * 1000,
+      });
+      await storePersistentCache(options.endpoint, options.sport, options.params, payload, requestId, ttlSeconds);
+      trackSuccess(options.endpoint, "apiSports", url, response.status, false, 0);
+      return {
+        data: payload,
+        meta: {
+          sourceUsed: "apiSports",
+          updatedAt,
+          requestId,
+          endpointUrl: url,
+          upstreamStatus: response.status,
+          cacheHit: false,
+          warning: bypassCache ? "Cache bypass requested via cacheBust." : undefined,
+          dataMode: mode,
+          dataModeEffective: mode,
+        },
+      };
+    } catch (error) {
+      clearTimeout(timeout);
+      lastError = error;
+    }
   }
+
+  // All live attempts failed — fall back to the last persisted response so a
+  // transient API-Sports outage degrades gracefully instead of 500-ing.
+  if (!bypassCache) {
+    const cached = await readPersistentCache<T>(options.endpoint, options.sport, options.params);
+    if (cached) {
+      trackSuccess(options.endpoint, "cache", url, lastStatus ?? 200, true, cached.ageSeconds);
+      return {
+        data: cached.payload,
+        meta: {
+          sourceUsed: "cache",
+          updatedAt: new Date(Date.now() - cached.ageSeconds * 1000).toISOString(),
+          requestId,
+          endpointUrl: url,
+          upstreamStatus: lastStatus,
+          upstreamMessage: String(lastError),
+          warning: "Using last cached response because API-Sports is currently unavailable.",
+          cacheHit: true,
+          cacheAgeSeconds: cached.ageSeconds,
+          dataMode: mode,
+          dataModeEffective: mode,
+        },
+      };
+    }
+  }
+
+  trackError(options.endpoint, url, lastStatus, String(lastError));
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 export function getApiSportsHealthSnapshot(): Record<string, EndpointHealth> {
