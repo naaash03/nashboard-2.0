@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
+import { gameTypeFromSeasonType, parseRecord, toCompactDate } from "@/lib/providers/espn/shared";
 import type { Meta, Player, PlayerSearchResult, SlateGame } from "@/lib/providers/types";
 
 type ModeArg = "auto" | "live" | "fixture";
@@ -123,24 +124,6 @@ const ATHLETE_INDEX_ENDPOINTS = [
   "https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes?limit=20000",
   "https://sports.core.api.espn.com/v3/sports/football/nfl/athletes?limit=20000",
 ] as const;
-
-function toCompactDate(dateISO: string): string {
-  return dateISO.replaceAll("-", "");
-}
-
-function gameTypeFromSeasonType(type?: number): string | undefined {
-  if (type === 1) return "preseason";
-  if (type === 2) return "regular";
-  if (type === 3) return "postseason";
-  return undefined;
-}
-
-function parseRecord(summary?: string): { wins: number; losses: number } | undefined {
-  if (!summary) return undefined;
-  const [w, l] = summary.split("-").map((value) => Number(value.trim()));
-  if (!Number.isFinite(w) || !Number.isFinite(l)) return undefined;
-  return { wins: w, losses: l };
-}
 
 function normalizeGames(data: EspnScoreboard): SlateGame[] {
   const events = data.events ?? [];

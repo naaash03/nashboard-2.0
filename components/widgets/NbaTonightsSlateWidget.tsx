@@ -19,8 +19,11 @@ type SlateItem = {
 
 type NbaSlateResponse = {
   data?: {
+    state?: "today" | "next_slate" | "offseason";
     dateUsed: string;
+    nextDate?: string | null;
     games: SlateItem[];
+    historical?: { date: string; games: SlateItem[] } | null;
     userFacingMessage: string;
   };
   meta?: WidgetMeta;
@@ -92,7 +95,11 @@ export default function NbaTonightsSlateWidget(props: WidgetCommonProps) {
     void load();
   }, [load, props.refreshTick]);
 
-  const games = data?.games ?? [];
+  const state = data?.state ?? "today";
+  const isOffseason = state === "offseason";
+  // When the league is off-season (or between slates with no games today), fall
+  // back to the most recent real slate so the widget is never just "empty".
+  const games = data?.games?.length ? data.games : data?.historical?.games ?? [];
 
   return (
     <div className="space-y-2 text-xs">
@@ -109,7 +116,15 @@ export default function NbaTonightsSlateWidget(props: WidgetCommonProps) {
         </select>
       </div>
 
-      {!advanced && games.length > 0 ? (
+      {isOffseason ? (
+        <span className="inline-block rounded border border-amber-700 bg-amber-950 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-300">
+          Out of season
+        </span>
+      ) : null}
+
+      {data?.userFacingMessage ? (
+        <p className="text-neutral-400">{data.userFacingMessage}</p>
+      ) : !advanced && games.length > 0 && state === "today" ? (
         <p className="text-neutral-500">
           Today&apos;s NBA games. Each card shows tip-off time, team records, and TV coverage.
         </p>
@@ -193,7 +208,9 @@ export default function NbaTonightsSlateWidget(props: WidgetCommonProps) {
 
       {!loading && !error && games.length === 0 ? (
         <div className="rounded border border-neutral-800 bg-neutral-950 p-2.5">
-          <p className="text-neutral-400">No NBA games scheduled today.</p>
+          <p className="text-neutral-400">
+            {data?.userFacingMessage ?? "No NBA games to show right now."}
+          </p>
         </div>
       ) : null}
 

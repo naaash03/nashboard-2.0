@@ -1,4 +1,6 @@
-﻿import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
+﻿import { randomUUID } from "node:crypto";
+import { fetchEspnJson, getDataMode } from "@/lib/providers/espn/client";
+import { gameTypeFromSeasonType, parseRecord, toCompactDate } from "@/lib/providers/espn/shared";
 import type { Meta, Mode, SlateGame } from "@/lib/providers/types";
 
 type ModeArg = "auto" | "live" | "fixture";
@@ -64,30 +66,6 @@ export type NbaStandingsSnapshot = {
 
 const SCOREBOARD_ENDPOINT = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
 const STANDINGS_ENDPOINT = "https://site.api.espn.com/apis/v2/sports/basketball/nba/standings";
-
-function toCompactDate(dateISO: string): string {
-  return dateISO.replaceAll("-", "");
-}
-
-function gameTypeFromSeasonType(type?: number): string | undefined {
-  if (type === 1) return "preseason";
-  if (type === 2) return "regular";
-  if (type === 3) return "postseason";
-  return undefined;
-}
-
-function parseRecord(summary?: string): { wins: number; losses: number } | undefined {
-  if (!summary) {
-    return undefined;
-  }
-
-  const [wins, losses] = summary.split("-").map((value) => Number(value.trim()));
-  if (!Number.isFinite(wins) || !Number.isFinite(losses)) {
-    return undefined;
-  }
-
-  return { wins, losses };
-}
 
 function normalizeScoreboardGames(payload: EspnScoreboard): SlateGame[] {
   return (payload.events ?? []).map((event) => {
@@ -189,24 +167,145 @@ function normalizeStandings(payload: EspnStandingsResponse, mode: Mode): NbaStan
   };
 }
 
-export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ games: SlateGame[]; meta: Meta; dateUsed: string }> {
+function fixtureScenario(): string {
+  return (process.env.NASHBOARD_FIXTURE_SCENARIO ?? "default").toLowerCase();
+}
+
+/**
+ * Fetch the NBA scoreboard for a single date. In fixture mode, the
+ * "offseason"/"slate_empty_today" scenarios return an empty slate so the
+ * out-of-season fallback ladder can be exercised deterministically.
+ */
+export async function getScoreboardForDate(
+  dateISO: string,
+  dataMode?: ModeArg,
+  cacheBust?: CacheBustArg,
+): Promise<{ games: SlateGame[]; meta: Meta }> {
   const resolved = getDataMode(dataMode);
-  const dateUsed = new Date().toISOString().slice(0, 10);
+  const scenario = fixtureScenario();
+  const fixtureFile = resolved === "fixture"
+    ? scenario === "offseason" || scenario === "slate_empty_today"
+      ? "scoreboard_empty.json"
+      : "scoreboard.json"
+    : undefined;
 
   const response = await fetchEspnJson<EspnScoreboard>({
     endpoint: SCOREBOARD_ENDPOINT,
-    params: { dates: toCompactDate(dateUsed) },
-    fixtureFile: "scoreboard.json",
+    params: { dates: toCompactDate(dateISO) },
+    fixtureFile,
     fixtureSubdir: "nba",
     ttlSeconds: 90,
     dataMode: resolved,
     cacheBust,
   });
 
+  return { games: normalizeScoreboardGames(response.data), meta: response.meta };
+}
+
+export async function getTodaysSlate(mode: Mode, dataMode?: ModeArg, cacheBust?: CacheBustArg): Promise<{ games: SlateGame[]; meta: Meta; dateUsed: string }> {
+  const dateUsed = new Date().toISOString().slice(0, 10);
+  const slate = await getScoreboardForDate(dateUsed, dataMode, cacheBust);
+  return { games: slate.games, meta: slate.meta, dateUsed };
+}
+
+/**
+ * Walk backwards up to maxDays to find the most recent date that had NBA
+ * games — used to show the last real slate when the league is off-season.
+ */
+export async function getMostRecentSlateBefore(
+  dateISO: string,
+  dataMode?: ModeArg,
+  maxDays = 120,
+  cacheBust?: CacheBustArg,
+): Promise<{ dateISO: string | null; games: SlateGame[]; meta: Meta }> {
+  const mode = getDataMode(dataMode);
+
+  if (mode === "fixture") {
+    // In fixture mode the games fixture stands in for "the last real slate".
+    const slate = await fetchEspnJson<EspnScoreboard>({
+      endpoint: SCOREBOARD_ENDPOINT,
+      params: { dates: toCompactDate(dateISO) },
+      fixtureFile: "scoreboard.json",
+      fixtureSubdir: "nba",
+      ttlSeconds: 90,
+      dataMode: mode,
+      cacheBust,
+    });
+    const games = normalizeScoreboardGames(slate.data);
+    return { dateISO: games[0]?.date?.slice(0, 10) ?? null, games, meta: slate.meta };
+  }
+
+  const start = new Date(dateISO);
+  for (let i = 1; i <= maxDays; i += 1) {
+    const probe = new Date(start);
+    probe.setUTCDate(probe.getUTCDate() - i);
+    const probeIso = probe.toISOString().slice(0, 10);
+    const slate = await getScoreboardForDate(probeIso, mode, cacheBust);
+    if (slate.games.length > 0) {
+      return { dateISO: probeIso, games: slate.games, meta: slate.meta };
+    }
+  }
+
   return {
-    games: normalizeScoreboardGames(response.data),
-    meta: response.meta,
-    dateUsed,
+    dateISO: null,
+    games: [],
+    meta: {
+      sourceUsed: mode === "fixture" ? "fixture" : "espn",
+      updatedAt: new Date().toISOString(),
+      requestId: randomUUID(),
+      warning: "No recent NBA slate found in the lookback window.",
+      dataMode: mode,
+    },
+  };
+}
+
+/**
+ * Walk forwards up to maxDays to find the next date with NBA games — used to
+ * show the next scheduled slate between game days.
+ */
+export async function getNextLeagueSlateAfter(
+  dateISO: string,
+  dataMode?: ModeArg,
+  maxDays = 21,
+  cacheBust?: CacheBustArg,
+): Promise<{ nextDateISO: string | null; games: SlateGame[]; meta: Meta }> {
+  const mode = getDataMode(dataMode);
+
+  if (mode === "fixture") {
+    // No "next slate" in fixture mode; callers fall through to historical.
+    return {
+      nextDateISO: null,
+      games: [],
+      meta: {
+        sourceUsed: "fixture",
+        updatedAt: new Date().toISOString(),
+        requestId: randomUUID(),
+        dataMode: mode,
+      },
+    };
+  }
+
+  const start = new Date(dateISO);
+  for (let i = 1; i <= maxDays; i += 1) {
+    const probe = new Date(start);
+    probe.setUTCDate(probe.getUTCDate() + i);
+    const probeIso = probe.toISOString().slice(0, 10);
+    const slate = await getScoreboardForDate(probeIso, mode, cacheBust);
+    if (slate.games.length > 0) {
+      return { nextDateISO: probeIso, games: slate.games, meta: slate.meta };
+    }
+  }
+
+  return {
+    nextDateISO: null,
+    games: [],
+    meta: {
+      sourceUsed: "espn",
+      updatedAt: new Date().toISOString(),
+      requestId: randomUUID(),
+      warning: "No upcoming NBA slate found in the lookahead window.",
+      dataMode: mode,
+    },
   };
 }
 
