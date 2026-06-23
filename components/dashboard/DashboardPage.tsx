@@ -184,6 +184,33 @@ export default function DashboardPage({
     }
   }, []);
 
+  // When a guest signs in, carry any widgets they built in this browser session
+  // into their persistent account dashboard, then clear the guest copy. The
+  // server enforces de-duplication, so re-runs are harmless.
+  const migrateGuestWidgets = useCallback(async () => {
+    const guest = getGuestDashboard();
+    if (guest.widgets.length === 0) {
+      return;
+    }
+    for (const widget of guest.widgets) {
+      try {
+        await fetch("/api/dashboard/widgets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widgetType: widget.widgetType,
+            sport,
+            mode: widget.mode,
+            config: widget.config ?? {},
+          }),
+        });
+      } catch {
+        // Best-effort migration; skip widgets that fail to copy.
+      }
+    }
+    clearGuestDashboard();
+  }, [sport]);
+
   useEffect(() => {
     if (!authConfigured) {
       setMode("forced_guest");
@@ -202,6 +229,7 @@ export default function DashboardPage({
 
         if (session.user?.id) {
           setMode("signed_in");
+          await migrateGuestWidgets();
           await loadServerDashboard();
           return;
         }
@@ -218,7 +246,7 @@ export default function DashboardPage({
     return () => {
       cancelled = true;
     };
-  }, [authConfigured, loadGuest, loadServerDashboard]);
+  }, [authConfigured, loadGuest, loadServerDashboard, migrateGuestWidgets]);
 
   const addWidget = async (widgetType: string) => {
     if (isGuestMode) {
