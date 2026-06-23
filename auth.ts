@@ -6,6 +6,12 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 import { isCoreAuthConfigured, isDbConfigured, isGoogleConfigured } from "@/lib/config/env";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/security/rateLimit";
+
+// Throttle credential sign-in attempts to blunt brute-force / credential
+// stuffing against bcrypt-hashed passwords.
+const LOGIN_LIMIT = 10;
+const LOGIN_WINDOW_MS = 5 * 60_000;
 
 const dbConfigured = isDbConfigured();
 const coreAuthConfigured = isCoreAuthConfigured();
@@ -36,10 +42,15 @@ if (dbConfigured) {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email = typeof credentials?.email === "string" ? credentials.email.trim().toLowerCase() : "";
         const password = typeof credentials?.password === "string" ? credentials.password : "";
         if (!email || !password) {
+          return null;
+        }
+
+        const ip = request instanceof Request ? clientIpFromRequest(request) : "unknown";
+        if (!checkRateLimit(`login:${email}|${ip}`, LOGIN_LIMIT, LOGIN_WINDOW_MS).ok) {
           return null;
         }
 

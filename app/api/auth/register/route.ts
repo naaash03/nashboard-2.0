@@ -1,14 +1,28 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { isDbConfigured } from "@/lib/config/env";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/security/rateLimit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Registration is expensive (bcrypt) and a prime target for abuse — cap new
+// account attempts per client IP.
+const REGISTER_LIMIT = 5;
+const REGISTER_WINDOW_MS = 60_000;
 
 export async function POST(req: Request) {
   if (!isDbConfigured()) {
     return NextResponse.json(
       { error: "Account creation is unavailable because the database is not configured." },
       { status: 503 },
+    );
+  }
+
+  const rate = checkRateLimit(`register:${clientIpFromRequest(req)}`, REGISTER_LIMIT, REGISTER_WINDOW_MS);
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: "Too many sign-up attempts. Please wait a moment and try again." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } },
     );
   }
 

@@ -31,6 +31,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Shared dashboard not found" }, { status: 404 });
     }
 
+    // INVITED_EMAILS is restricted: the token alone is not enough — the viewer
+    // must be signed in with an email on the invite list. LINK_VIEW stays open
+    // to anyone holding the token.
+    if (shared.shareScope === "INVITED_EMAILS") {
+      const viewer = await getViewer();
+      const invited = Array.isArray(shared.invitedEmails) ? (shared.invitedEmails as string[]) : [];
+      const allowed = Boolean(viewer.email && invited.includes(viewer.email));
+      if (!allowed) {
+        return NextResponse.json({ error: "Shared dashboard not found" }, { status: 404 });
+      }
+    }
+
     return NextResponse.json({ dashboard: shared, widgets: shared.widgetInstances, viewOnly: true });
   }
 
