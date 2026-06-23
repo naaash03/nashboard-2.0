@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveCacheBustToken, resolveEnvDataMode, sha256, stableParams } from "@/lib/providers/fetchShared";
 import type { Meta } from "@/lib/providers/types";
 
 type MlbSource = "mlb" | "fixture" | "cache" | "demo";
@@ -28,40 +29,12 @@ type InMemoryCacheEntry = {
 const MLB_BASE = "https://statsapi.mlb.com/api/v1";
 const inMemory = new Map<string, InMemoryCacheEntry>();
 
-function stableParams(params: FetchOptions["params"]): string {
-  const entries = Object.entries(params ?? {})
-    .filter(([, value]) => value !== undefined && value !== null)
-    .sort(([a], [b]) => a.localeCompare(b));
-  return JSON.stringify(entries);
-}
-
 function keyFor(endpoint: string, params: FetchOptions["params"]): string {
   return `${endpoint}?${stableParams(params)}`;
 }
 
 function hashParams(params: FetchOptions["params"]): string {
-  return createHash("sha256").update(stableParams(params)).digest("hex");
-}
-
-function resolvedDataMode(override?: "auto" | "live" | "fixture"): "live" | "fixture" {
-  if (override === "live" || override === "fixture") {
-    return override;
-  }
-  if (override === "auto") {
-    return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
-  }
-  return (process.env.NASHBOARD_DATA_MODE ?? "live").toLowerCase() === "fixture" ? "fixture" : "live";
-}
-
-function resolveCacheBustToken(value: FetchOptions["cacheBust"]): string | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value);
-  }
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  return sha256(stableParams(params));
 }
 
 function baseUrl(endpoint: string): string {
@@ -167,7 +140,7 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
   const requestId = randomUUID();
   const ttlSeconds = options.ttlSeconds ?? 300;
   const cacheKey = keyFor(options.endpoint, options.params);
-  const dataMode = resolvedDataMode(options.dataMode);
+  const dataMode = resolveEnvDataMode(options.dataMode);
   const cacheBustToken = resolveCacheBustToken(options.cacheBust);
   const bypassCache = typeof cacheBustToken === "string";
 
@@ -293,5 +266,5 @@ export async function fetchMlbJson<T>(options: FetchOptions): Promise<FetchResul
 }
 
 export function getMlbDataMode(override?: "auto" | "live" | "fixture"): "live" | "fixture" {
-  return resolvedDataMode(override);
+  return resolveEnvDataMode(override);
 }

@@ -1,7 +1,8 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getApiSportsConfig, resolveApiSportsKey } from "@/lib/providers/apiSports/config";
+import { resolveCacheBustToken, sha256, stableParams } from "@/lib/providers/fetchShared";
 import type { Meta } from "@/lib/providers/types";
 import type { SportKey } from "@/lib/types/players";
 
@@ -38,19 +39,12 @@ type EndpointHealth = {
 const inMemory = new Map<string, CacheEntry>();
 const endpointHealth = new Map<string, EndpointHealth>();
 
-function stableParams(params: FetchOptions["params"]): string {
-  const entries = Object.entries(params ?? {})
-    .filter(([, value]) => value !== undefined && value !== null)
-    .sort(([left], [right]) => left.localeCompare(right));
-  return JSON.stringify(entries);
-}
-
 function cacheKeyFor(sport: SportKey, endpoint: string, params: FetchOptions["params"]): string {
   return `${sport}:${endpoint}:${stableParams(params)}`;
 }
 
 function hashParams(sport: SportKey, params: FetchOptions["params"]): string {
-  return createHash("sha256").update(`${sport}:${stableParams(params)}`).digest("hex");
+  return sha256(`${sport}:${stableParams(params)}`);
 }
 
 // The Prisma DataSource enum only models ESPN/FIXTURE/DEMO/CACHE, so — like the
@@ -84,17 +78,6 @@ async function readPersistentCache<T>(endpoint: string, sport: SportKey, params:
   }
   const ageSeconds = Math.max(0, Math.floor((Date.now() - item.fetchedAt.getTime()) / 1000));
   return { payload: item.payload as T, ageSeconds };
-}
-
-function resolveCacheBustToken(value: FetchOptions["cacheBust"]): string | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value);
-  }
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function trackSuccess(
