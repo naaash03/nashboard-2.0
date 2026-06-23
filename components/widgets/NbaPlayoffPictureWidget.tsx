@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
+import StatLabel from "@/components/stats/StatLabel";
+import type { WidgetCommonProps, WidgetMeta, WidgetMode } from "@/components/widgets/types";
 
 type SeedRow = {
   rank: number;
@@ -30,11 +31,16 @@ function seedClasses(label: SeedRow["seedLabel"]): string {
   return "text-neutral-500";
 }
 
-function Conference({ title, rows, advanced }: { title: string; rows: SeedRow[]; advanced: boolean }) {
+function Conference({ title, rows, advanced, mode }: { title: string; rows: SeedRow[]; advanced: boolean; mode: WidgetMode }) {
   const visible = advanced ? rows : rows.slice(0, 10);
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold uppercase text-neutral-400">{title}</p>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase text-neutral-400">{title}</p>
+        <span className="text-[10px] uppercase tracking-wide text-neutral-600">
+          <StatLabel label="W-L" statKey="w_l_record" sport="NBA" mode={mode} />
+        </span>
+      </div>
       {visible.map((row) => (
         <div key={row.key} className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-2 rounded border border-neutral-800 bg-neutral-950 px-2 py-1">
           <span className={`font-bold ${seedClasses(row.seedLabel)}`}>{row.rank}</span>
@@ -106,8 +112,8 @@ export default function NbaPlayoffPictureWidget(props: WidgetCommonProps) {
 
       {data && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Conference title="East" rows={data.east} advanced={advanced} />
-          <Conference title="West" rows={data.west} advanced={advanced} />
+          <Conference title="East" rows={data.east} advanced={advanced} mode={props.mode} />
+          <Conference title="West" rows={data.west} advanced={advanced} mode={props.mode} />
         </div>
       )}
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
+import StatLabel from "@/components/stats/StatLabel";
+import type { WidgetCommonProps, WidgetMeta, WidgetMode } from "@/components/widgets/types";
 
 type StatProfile = {
   teamKey: string;
@@ -19,10 +20,24 @@ function to12h(value: string): string {
   return date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function Row({ label, value, suffix }: { label: string; value?: number; suffix?: string }) {
+function Row({
+  label,
+  value,
+  suffix,
+  statKey,
+  mode,
+}: {
+  label: string;
+  value?: number;
+  suffix?: string;
+  statKey?: string;
+  mode: WidgetMode;
+}) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-neutral-500">{label}</span>
+      <span className="text-neutral-500">
+        {statKey ? <StatLabel label={label} statKey={statKey} sport="NBA" mode={mode} /> : label}
+      </span>
       <span className="text-neutral-200">{typeof value === "number" ? `${value}${suffix ?? ""}` : "—"}</span>
     </div>
   );
@@ -112,18 +127,18 @@ export default function NbaOffDefBreakdownWidget(props: WidgetCommonProps) {
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded border border-emerald-900 bg-emerald-950/30 p-2">
               <p className="mb-1 text-[10px] font-bold uppercase text-emerald-400">Offense</p>
-              <Row label="Points/G" value={data.pointsFor} />
-              {advanced && <Row label="Assists/G" value={data.assistsPerGame} />}
-              {advanced && <Row label="FG%" value={data.fieldGoalPct} suffix="%" />}
+              <Row label="Points/G" statKey="ppg" mode={props.mode} value={data.pointsFor} />
+              {advanced && <Row label="Assists/G" statKey="apg" mode={props.mode} value={data.assistsPerGame} />}
+              {advanced && <Row label="FG%" statKey="fg_pct" mode={props.mode} value={data.fieldGoalPct} suffix="%" />}
             </div>
             <div className="rounded border border-red-900 bg-red-950/30 p-2">
               <p className="mb-1 text-[10px] font-bold uppercase text-red-400">Defense</p>
-              <Row label="Opp Pts/G" value={data.pointsAgainst} />
-              {advanced && <Row label="Rebounds/G" value={data.reboundsPerGame} />}
+              <Row label="Opp Pts/G" statKey="opp_ppg" mode={props.mode} value={data.pointsAgainst} />
+              {advanced && <Row label="Rebounds/G" statKey="rpg" mode={props.mode} value={data.reboundsPerGame} />}
             </div>
           </div>
           <div className="rounded border border-neutral-800 bg-neutral-950 p-2">
-            <Row label="Net rating (Pts − Opp Pts)" value={data.netRating} />
+            <Row label="Net rating (Pts − Opp Pts)" statKey="net_rating" mode={props.mode} value={data.netRating} />
             {!advanced && (
               <p className="mt-1 text-[10px] text-neutral-500">
                 A positive net rating means this team outscores opponents on average.

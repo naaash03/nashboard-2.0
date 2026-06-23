@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type ScheduleGame = {
@@ -124,11 +125,18 @@ export default function NbaRecentFormWidget(props: WidgetCommonProps) {
 
       {data && data.games.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-medium">{data.teamKey}</span>
             <RatingBadge rating={data.rating} />
             <span className="text-neutral-400">
-              {data.record.wins}-{data.record.losses} · {(data.winPct * 100).toFixed(0)}% · Streak {data.streak}
+              <StatLabel label="W-L" statKey="w_l_record" sport="NBA" mode={props.mode} />{" "}
+              {data.record.wins}-{data.record.losses}
+              {" · "}
+              <StatLabel label="Win%" statKey="win_pct" sport="NBA" mode={props.mode} />{" "}
+              {(data.winPct * 100).toFixed(0)}%
+              {" · "}
+              <StatLabel label="Streak" statKey="streak" sport="NBA" mode={props.mode} />{" "}
+              {data.streak}
             </span>
           </div>
 
