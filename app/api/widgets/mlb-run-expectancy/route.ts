@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { warnMissingContractFields } from "@/lib/api/widgetRoute";
 import { resolveDataModeFromRequest } from "@/lib/config/env";
 import { toWidgetPayload } from "@/lib/sports/resolvers/contracts";
 import type { Meta } from "@/lib/providers/types";
@@ -27,16 +28,6 @@ export async function GET(req: Request) {
     requestId: randomUUID(),
   };
   const contract = toWidgetPayload({ data, error: null, meta, primaryProvider: "mlb" });
-  if (process.env.NODE_ENV === "development") {
-    const missing: string[] = [];
-    if (contract.ok === undefined || contract.ok === null) missing.push("ok");
-    if (!contract.source?.provider) missing.push("source.provider");
-    if (!contract.source?.mode) missing.push("source.mode");
-    if (!contract.source?.fetchedAt) missing.push("source.fetchedAt");
-    if (!contract.debug?.requestId) missing.push("debug.requestId");
-    if (missing.length > 0) {
-      console.warn(`[contract] mlb-run-expectancy missing fields: ${missing.join(", ")}`);
-    }
-  }
+  warnMissingContractFields("mlb-run-expectancy", contract);
   return NextResponse.json({ data, meta, contract });
 }

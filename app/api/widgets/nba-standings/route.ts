@@ -17,6 +17,17 @@ function fallbackMeta(mode: "auto" | "live" | "fixture", warning: string): Meta 
   };
 }
 
+// The NBA regular season runs ~late Oct through mid-April, with playoffs into
+// June. July–September is the off-season, when ESPN still serves the final
+// standings — so we label them as final rather than live.
+function offseasonNote(now = new Date()): string | undefined {
+  const month = now.getUTCMonth(); // 0 = Jan
+  const isOffseason = month >= 6 && month <= 8; // Jul–Sep
+  return isOffseason
+    ? "NBA is out of season. Showing the final standings from the most recent season."
+    : undefined;
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const mode = (searchParams.get("mode") ?? "beginner").toLowerCase() === "advanced" ? "advanced" : "beginner";
@@ -53,15 +64,17 @@ export async function GET(req: Request) {
         return normalized;
       }),
     ];
+    const note = offseasonNote();
+    const meta = note ? { ...standings.meta, warning: standings.meta.warning ?? note } : standings.meta;
     const contract = toWidgetPayload({
       data: canonicalRows,
-      meta: standings.meta,
+      meta,
       primaryProvider: "espn",
     });
 
     return NextResponse.json({
       data: shapeNbaStandings(standings.data, mode),
-      meta: standings.meta,
+      meta,
       contract,
       error: null,
     });

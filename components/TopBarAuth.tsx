@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { signIn, signOut, useSession } from "next-auth/react";
+import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { useAuthMode } from "@/components/context/AuthModeContext";
 
 function AuthEnabledControls() {
@@ -28,14 +29,19 @@ function AuthEnabledControls() {
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="text-neutral-400">Guest mode: data resets each browser session.</span>
-      <button
-        onClick={() => signIn()}
-        className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-semibold text-neutral-900 hover:bg-white disabled:opacity-60"
-        disabled={isLoading}
-        type="button"
+      <Link
+        href="/register"
+        className="rounded-full border border-neutral-600 px-3 py-1 text-[11px] font-semibold text-neutral-200 hover:bg-neutral-800"
+      >
+        Create account
+      </Link>
+      <Link
+        href="/signin"
+        aria-disabled={isLoading}
+        className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-semibold text-neutral-900 hover:bg-white"
       >
         Sign in to save
-      </button>
+      </Link>
     </div>
   );
 }

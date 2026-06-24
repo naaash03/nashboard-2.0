@@ -1,0 +1,23 @@
+{
+  "results": {
+    "stats": {
+      "categories": [
+        {
+          "name": "offensive",
+          "stats": [
+            { "name": "avgPoints", "displayName": "Points Per Game", "value": 116.4, "displayValue": "116.4" },
+            { "name": "avgRebounds", "displayName": "Rebounds Per Game", "value": 44.2, "displayValue": "44.2" },
+            { "name": "avgAssists", "displayName": "Assists Per Game", "value": 26.8, "displayValue": "26.8" },
+            { "name": "fieldGoalPct", "displayName": "Field Goal Percentage", "value": 48.1, "displayValue": "48.1" }
+          ]
+        },
+        {
+          "name": "defensive",
+          "stats": [
+            { "name": "avgPointsAgainst", "displayName": "Opponent Points Per Game", "value": 109.7, "displayValue": "109.7" }
+          ]
+        }
+      ]
+    }
+  }
+}

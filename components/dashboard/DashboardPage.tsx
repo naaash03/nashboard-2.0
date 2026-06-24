@@ -20,6 +20,11 @@ import MlbBullpenFatigueWidget from "@/components/widgets/MlbBullpenFatigueWidge
 import MlbRunExpectancyWidget from "@/components/widgets/MlbRunExpectancyWidget";
 import NbaTonightsSlateWidget from "@/components/widgets/NbaTonightsSlateWidget";
 import NbaStandingsWidget from "@/components/widgets/NbaStandingsWidget";
+import NbaNext7GamesWidget from "@/components/widgets/NbaNext7GamesWidget";
+import NbaRecentFormWidget from "@/components/widgets/NbaRecentFormWidget";
+import NbaOffDefBreakdownWidget from "@/components/widgets/NbaOffDefBreakdownWidget";
+import NbaPlayoffPictureWidget from "@/components/widgets/NbaPlayoffPictureWidget";
+import LeaderboardsWidget from "@/components/widgets/LeaderboardsWidget";
 import TopBarAuth from "@/components/TopBarAuth";
 import type { WidgetCommonProps } from "@/components/widgets/types";
 import {
@@ -88,6 +93,11 @@ const WIDGET_COMPONENTS: Record<string, (props: WidgetCommonProps) => JSX.Elemen
   mlb_run_expectancy: (props) => <MlbRunExpectancyWidget {...props} />,
   nba_tonights_slate: (props) => <NbaTonightsSlateWidget {...props} />,
   nba_standings: (props) => <NbaStandingsWidget {...props} />,
+  nba_next_7_games: (props) => <NbaNext7GamesWidget {...props} />,
+  nba_recent_form: (props) => <NbaRecentFormWidget {...props} />,
+  nba_offensive_defensive_breakdown: (props) => <NbaOffDefBreakdownWidget {...props} />,
+  nba_playoff_picture: (props) => <NbaPlayoffPictureWidget {...props} />,
+  leaderboards: (props) => <LeaderboardsWidget {...props} />,
 };
 
 function to12h(value: string): string {
@@ -176,6 +186,33 @@ export default function DashboardPage({
     }
   }, []);
 
+  // When a guest signs in, carry any widgets they built in this browser session
+  // into their persistent account dashboard, then clear the guest copy. The
+  // server enforces de-duplication, so re-runs are harmless.
+  const migrateGuestWidgets = useCallback(async () => {
+    const guest = getGuestDashboard();
+    if (guest.widgets.length === 0) {
+      return;
+    }
+    for (const widget of guest.widgets) {
+      try {
+        await fetch("/api/dashboard/widgets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widgetType: widget.widgetType,
+            sport,
+            mode: widget.mode,
+            config: widget.config ?? {},
+          }),
+        });
+      } catch {
+        // Best-effort migration; skip widgets that fail to copy.
+      }
+    }
+    clearGuestDashboard();
+  }, [sport]);
+
   useEffect(() => {
     if (!authConfigured) {
       setMode("forced_guest");
@@ -194,6 +231,7 @@ export default function DashboardPage({
 
         if (session.user?.id) {
           setMode("signed_in");
+          await migrateGuestWidgets();
           await loadServerDashboard();
           return;
         }
@@ -210,7 +248,7 @@ export default function DashboardPage({
     return () => {
       cancelled = true;
     };
-  }, [authConfigured, loadGuest, loadServerDashboard]);
+  }, [authConfigured, loadGuest, loadServerDashboard, migrateGuestWidgets]);
 
   const addWidget = async (widgetType: string) => {
     if (isGuestMode) {

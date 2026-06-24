@@ -20,7 +20,14 @@ export async function GET() {
     return NextResponse.json({ terms: fallback, warning: "DATABASE_URL is not configured." });
   }
 
-  const { prisma } = await import("@/lib/db/prisma");
-  const terms = await prisma.glossaryTerm.findMany({ orderBy: { label: "asc" } });
-  return NextResponse.json({ terms: mergeGlossaryTerms(terms.length > 0 ? terms : fallback) });
+  try {
+    const { prisma } = await import("@/lib/db/prisma");
+    const terms = await prisma.glossaryTerm.findMany({ orderBy: { label: "asc" } });
+    return NextResponse.json({ terms: mergeGlossaryTerms(terms.length > 0 ? terms : fallback) });
+  } catch (error) {
+    return NextResponse.json({
+      terms: fallback,
+      warning: `Glossary database lookup failed; serving built-in terms. ${String(error)}`,
+    });
+  }
 }

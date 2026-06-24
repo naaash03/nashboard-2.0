@@ -1,0 +1,70 @@
+{
+  "events": [
+    {
+      "id": "401800101",
+      "date": "2026-04-01T23:00:00Z",
+      "competitions": [{
+        "status": { "type": { "completed": true, "description": "Final" } },
+        "competitors": [
+          { "homeAway": "home", "winner": true, "score": { "value": 112 }, "team": { "abbreviation": "NYK", "displayName": "New York Knicks" } },
+          { "homeAway": "away", "winner": false, "score": { "value": 104 }, "team": { "abbreviation": "BOS", "displayName": "Boston Celtics" } }
+        ]
+      }]
+    },
+    {
+      "id": "401800102",
+      "date": "2026-04-03T23:30:00Z",
+      "competitions": [{
+        "status": { "type": { "completed": true, "description": "Final" } },
+        "competitors": [
+          { "homeAway": "away", "winner": true, "score": { "value": 120 }, "team": { "abbreviation": "NYK", "displayName": "New York Knicks" } },
+          { "homeAway": "home", "winner": false, "score": { "value": 118 }, "team": { "abbreviation": "MIA", "displayName": "Miami Heat" } }
+        ]
+      }]
+    },
+    {
+      "id": "401800103",
+      "date": "2026-04-05T20:00:00Z",
+      "competitions": [{
+        "status": { "type": { "completed": true, "description": "Final" } },
+        "competitors": [
+          { "homeAway": "home", "winner": false, "score": { "value": 99 }, "team": { "abbreviation": "NYK", "displayName": "New York Knicks" } },
+          { "homeAway": "away", "winner": true, "score": { "value": 109 }, "team": { "abbreviation": "MIL", "displayName": "Milwaukee Bucks" } }
+        ]
+      }]
+    },
+    {
+      "id": "401800104",
+      "date": "2026-04-08T23:00:00Z",
+      "competitions": [{
+        "status": { "type": { "completed": true, "description": "Final" } },
+        "competitors": [
+          { "homeAway": "home", "winner": true, "score": { "value": 115 }, "team": { "abbreviation": "NYK", "displayName": "New York Knicks" } },
+          { "homeAway": "away", "winner": false, "score": { "value": 101 }, "team": { "abbreviation": "ORL", "displayName": "Orlando Magic" } }
+        ]
+      }]
+    },
+    {
+      "id": "401800105",
+      "date": "2026-04-10T23:30:00Z",
+      "competitions": [{
+        "status": { "type": { "completed": true, "description": "Final" } },
+        "competitors": [
+          { "homeAway": "away", "winner": true, "score": { "value": 108 }, "team": { "abbreviation": "NYK", "displayName": "New York Knicks" } },
+          { "homeAway": "home", "winner": false, "score": { "value": 100 }, "team": { "abbreviation": "PHI", "displayName": "Philadelphia 76ers" } }
+        ]
+      }]
+    },
+    {
+      "id": "401800106",
+      "date": "2026-04-12T20:00:00Z",
+      "competitions": [{
+        "status": { "type": { "completed": true, "description": "Final" } },
+        "competitors": [
+          { "homeAway": "home", "winner": true, "score": { "value": 124 }, "team": { "abbreviation": "NYK", "displayName": "New York Knicks" } },
+          { "homeAway": "away", "winner": false, "score": { "value": 117 }, "team": { "abbreviation": "CLE", "displayName": "Cleveland Cavaliers" } }
+        ]
+      }]
+    }
+  ]
+}

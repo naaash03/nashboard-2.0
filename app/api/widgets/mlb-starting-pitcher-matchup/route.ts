@@ -127,31 +127,48 @@ export async function GET(req: Request) {
     }, { status: 400 });
   }
 
-  const result = await resolveMlbStartingPitcherMatchup({
-    teamKey,
-    gameId,
-    pitcherId,
-    mode,
-    dataMode: resolvedDataMode,
-    cacheBust,
-  });
+  try {
+    const result = await resolveMlbStartingPitcherMatchup({
+      teamKey,
+      gameId,
+      pitcherId,
+      mode,
+      dataMode: resolvedDataMode,
+      cacheBust,
+    });
 
-  const meta = toContractMeta(result.meta, resolvedDataMode);
-  const contractData = toContractData(result.data);
-  const error = result.error?.message ?? null;
-  const state: MatchupState = result.data?.state ?? result.meta.state;
-  const status = statusCode(result.error?.code, state);
+    const meta = toContractMeta(result.meta, resolvedDataMode);
+    const contractData = toContractData(result.data);
+    const error = result.error?.message ?? null;
+    const state: MatchupState = result.data?.state ?? result.meta.state;
+    const status = statusCode(result.error?.code, state);
 
-  return NextResponse.json({
-    data: result.data,
-    meta: result.meta,
-    contract: toWidgetPayload({
-      data: contractData,
+    return NextResponse.json({
+      data: result.data,
+      meta: result.meta,
+      contract: toWidgetPayload({
+        data: contractData,
+        error,
+        meta,
+        primaryProvider: "apiSports",
+        notes: result.data?.notes,
+      }),
       error,
+    }, { status });
+  } catch (caught) {
+    const message = "Failed to load MLB starting pitcher matchup";
+    const meta: Meta = {
+      sourceUsed: resolvedDataMode === "fixture" ? "fixture" : "apiSports",
+      updatedAt: new Date().toISOString(),
+      requestId: randomUUID(),
+      warning: `${message}: ${String(caught)}`,
+      dataMode: resolvedDataMode,
+    };
+    return NextResponse.json({
+      data: null,
       meta,
-      primaryProvider: "apiSports",
-      notes: result.data?.notes,
-    }),
-    error,
-  }, { status });
+      contract: toWidgetPayload({ data: null, error: message, meta, primaryProvider: "apiSports" }),
+      error: message,
+    }, { status: 502 });
+  }
 }

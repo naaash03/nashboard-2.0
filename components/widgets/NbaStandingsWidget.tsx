@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import StatLabel from "@/components/stats/StatLabel";
 import type { WidgetCommonProps, WidgetMeta } from "@/components/widgets/types";
 
 type StandingRow = {
@@ -45,6 +46,20 @@ function ConferenceTable({
     <div>
       <p className="mb-1.5 text-[10px] uppercase tracking-wide text-neutral-500">{title}</p>
       <div className="rounded border border-neutral-800 bg-neutral-950">
+        {rows.length > 0 ? (
+          <div className="flex items-center justify-between border-b border-neutral-800/60 px-2.5 py-1 text-[10px] uppercase tracking-wide text-neutral-600">
+            <span>Team</span>
+            <span>
+              <StatLabel label="W-L" statKey="w_l_record" sport="NBA" mode={mode} />
+              {advanced ? (
+                <>
+                  {" · "}
+                  <StatLabel label="PCT" statKey="win_pct" sport="NBA" mode={mode} />
+                </>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
         {rows.length === 0 ? (
           <p className="p-2.5 text-neutral-400">No standings data.</p>
         ) : (

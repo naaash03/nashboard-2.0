@@ -32,12 +32,13 @@ NextAuth v5, Tailwind v4, Vitest
 - rb_vs_dline — RB matchup
 
 ### NBA (lib/providers/espn/nba.ts)
-- nba_tonights_slate — ESPN scoreboard
-- nba_standings — ESPN standings
-- nba_next_7_games — team schedule (IN PROGRESS)
-- nba_recent_form — weighted W-L (IN PROGRESS)
-- nba_offensive_defensive_breakdown — team comparison (IN PROGRESS)
-- nba_playoff_picture — seeding context (IN PROGRESS)
+- nba_tonights_slate — ESPN scoreboard, today→next-slate→off-season ladder
+- nba_standings — ESPN standings (off-season note Jul–Sep)
+- nba_next_7_games — ESPN team schedule; falls back to recent results off-season
+- nba_recent_form — Hot/Warm/Cool/Cold from last 10 completed games
+- nba_offensive_defensive_breakdown — scoring offense/defense + net rating
+- nba_playoff_picture — East/West seeding with playoff/play-in context
+NBA team→ESPN id map: lib/providers/espn/nbaTeams.ts
 
 ### MLB (lib/providers/mlb/index.ts + lib/providers/mlb/client.ts)
 ALL CONFIRMED WORKING WITH LIVE DATA:
@@ -72,18 +73,25 @@ UTA=26, WAS=27, TOR=28, MEM=29, CHA=30
 - NBA: 2025-26 season ~75% done, playoffs April 2026
 - NFL: Offseason
 
+## Auth & Accounts
+- Email/password + Google (NextAuth JWT sessions + Prisma adapter): auth.ts
+- Register: app/api/auth/register/route.ts (bcrypt); UI: app/register, app/signin
+- passwordHash on User model; guest widgets migrate to account on sign-in
+- DEV_ADMIN_ENABLED (admin/admin) is dev-only — keep it off in production
+
 ## Known Issues / In Progress
 - MLB pitcher arsenal: needs 2025 season fallback when 2026 empty
-- NBA widgets: 4 new widgets partially built, may have conflicts
 - Widget Library: needs scrollable category rows (not flat grid)
 - Stat Explainer popup: planned but not started
 - Recurring merge conflicts: always run git grep for markers after edits
 
 ## Key File Locations
 - Widget registry: lib/widgets/registry.ts
+- Shared widget-route factory + error helpers: lib/api/widgetRoute.ts
 - Dashboard component: components/dashboard/DashboardPage.tsx
 - Widget Library UI: components/widgets/WidgetLibrary.tsx
 - ESPN client: lib/providers/espn/client.ts
+- ESPN shared utils (NFL+NBA): lib/providers/espn/shared.ts
 - MLB client: lib/providers/mlb/client.ts
 - MLB provider: lib/providers/mlb/index.ts
 - Fixture files: tests/fixtures/espn/ and tests/fixtures/mlb/
