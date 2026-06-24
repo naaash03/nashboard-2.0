@@ -128,6 +128,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     audience: "mixed",
   },
   {
+    key: "leaderboards",
+    name: "MLB Leaderboards",
+    description: "Browse league leaders by stat category (ERA, AVG, OPS, run differential, and more).",
+    sportCategory: "MLB",
+    defaultSize: { w: 1, h: 1 },
+    stability: "stable",
+    audience: "mixed",
+  },
+  {
     key: "nba_tonights_slate",
     name: "NBA Tonight's Slate",
     description: "Today-first NBA slate using ESPN scoreboard data.",

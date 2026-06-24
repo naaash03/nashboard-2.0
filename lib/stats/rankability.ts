@@ -137,6 +137,29 @@ export function getRankabilityRule(statKey: string, sport: string): StatRankabil
   return REGISTRY[`${statKey}:${sport}`] ?? null;
 }
 
+export type RankableStat = {
+  statKey: string;
+  sport: "MLB" | "NBA" | "NFL";
+  entityType: RankingEntityType;
+  scopeLabel: string;
+};
+
+/**
+ * Enumerate every stat that supports a live leaderboard for a sport. Used to
+ * populate the standalone Leaderboards widget's category picker.
+ */
+export function listRankableStats(sport: string): RankableStat[] {
+  const upper = sport.trim().toUpperCase();
+  return Object.entries(REGISTRY)
+    .filter(([, rule]) => rule.sport === upper)
+    .map(([key, rule]) => ({
+      statKey: key.split(":")[0],
+      sport: rule.sport,
+      entityType: rule.entityType,
+      scopeLabel: rule.scopeLabel,
+    }));
+}
+
 /**
  * Returns true when a stat supports live ranking data.
  * Optionally filters by entityType so that, e.g., "avg" is only rankable
